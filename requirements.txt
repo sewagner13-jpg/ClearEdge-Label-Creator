@@ -1,0 +1,48 @@
+# Web Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# Data Validation
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# Google APIs
+google-auth==2.27.0
+google-auth-oauthlib==1.2.0
+google-auth-httplib2==0.2.0
+google-api-python-client==2.116.0
+google-generativeai==0.3.2
+
+# PDF Processing
+pdfplumber==0.10.3
+pypdf==3.17.4
+pdf2image==1.17.0
+
+# OCR
+pytesseract==0.3.10
+Pillow==10.2.0
+
+# SVG and PDF Generation
+svgwrite==1.4.3
+cairosvg==2.7.1
+Jinja2==3.1.3
+
+# HTTP Client
+httpx==0.26.0
+requests==2.31.0
+
+# Utilities
+python-dotenv==1.0.1
+qrcode[pil]==7.4.2
+hashlib-additional==1.0.0
+
+# CLI
+click==8.1.7
+rich==13.7.0
+
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+pytest-mock==3.12.0
