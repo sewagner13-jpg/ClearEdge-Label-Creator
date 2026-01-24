@@ -3,7 +3,7 @@ Configuration management for the label pipeline.
 Loads settings from environment variables with validation.
 """
 
-from typing import List
+from typing import List, Optional
 from pydantic import Field, validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -29,9 +29,13 @@ class Settings(BaseSettings):
         default="0APFlqBVg60o6Uk9PVA",
         description="Shared Drive ID"
     )
-    google_service_account_file: str = Field(
-        ...,
-        description="Path to service account JSON key file"
+    google_service_account_file: Optional[str] = Field(
+        default=None,
+        description="Path to service account JSON key file (local development)"
+    )
+    google_service_account_json: Optional[str] = Field(
+        default=None,
+        description="Service account JSON as string (Cloud Run/production)"
     )
     root_folder_name: str = Field(
         default="Product Labels",

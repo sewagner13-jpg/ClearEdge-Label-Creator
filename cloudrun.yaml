@@ -1,0 +1,99 @@
+# Cloud Run service configuration
+# Deploy with: gcloud run services replace cloudrun.yaml
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: clearedge-pipeline
+  labels:
+    app: clearedge-pipeline
+    environment: production
+spec:
+  template:
+    metadata:
+      annotations:
+        # Auto-scaling configuration
+        autoscaling.knative.dev/minScale: '0'
+        autoscaling.knative.dev/maxScale: '10'
+
+        # CPU is always allocated (better for consistent performance)
+        run.googleapis.com/cpu-throttling: 'false'
+
+        # Startup probe for health checks
+        run.googleapis.com/startup-cpu-boost: 'true'
+
+    spec:
+      # Container timeout (max: 3600s = 1 hour)
+      timeoutSeconds: 3600
+
+      # Service account (replace with your service account email)
+      # serviceAccountName: clearedge-pipeline@PROJECT_ID.iam.gserviceaccount.com
+
+      containers:
+      - name: clearedge-pipeline
+        image: gcr.io/PROJECT_ID/clearedge-pipeline:latest
+
+        ports:
+        - name: http1
+          containerPort: 8080
+
+        # Resource limits
+        resources:
+          limits:
+            cpu: '2'
+            memory: 2Gi
+          requests:
+            cpu: '1'
+            memory: 1Gi
+
+        # Environment variables (non-sensitive)
+        env:
+        - name: ENV
+          value: production
+        - name: LOG_LEVEL
+          value: INFO
+        - name: API_PORT
+          value: '8080'
+        - name: SHARED_DRIVE_ID
+          value: '0APFlqBVg60o6Uk9PVA'
+        - name: ROOT_FOLDER_NAME
+          value: 'Product Labels'
+        - name: GEMINI_MODEL
+          value: 'gemini-1.5-pro'
+        - name: TESSERACT_CMD
+          value: '/usr/bin/tesseract'
+
+        # Secrets from Secret Manager
+        # - name: GEMINI_API_KEY
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: gemini-api-key
+        #       key: latest
+        # - name: GOOGLE_SERVICE_ACCOUNT_JSON
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: service-account-key
+        #       key: latest
+
+        # Health check
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 10
+
+  traffic:
+  - percent: 100
+    latestRevision: true

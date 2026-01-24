@@ -11,23 +11,39 @@ This system automates the complete lifecycle of chemical product labels:
 
 ---
 
+## 🚀 Quick Start
+
+**Want to deploy to production right now?**
+
+```bash
+# One-command deployment to Google Cloud Run
+./deploy.sh YOUR_PROJECT_ID us-central1
+```
+
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** for complete deployment guide.
+
+**For local development:** See **[QUICKSTART.md](QUICKSTART.md)** (10-minute setup).
+
+---
+
 ## Table of Contents
 
 1. [Features](#features)
 2. [Architecture](#architecture)
-3. [Prerequisites](#prerequisites)
-4. [Installation](#installation)
-5. [Google Cloud Setup](#google-cloud-setup)
-6. [Gemini API Setup](#gemini-api-setup)
-7. [Google Drive Setup](#google-drive-setup)
-8. [Configuration](#configuration)
-9. [Running the System](#running-the-system)
-10. [API Endpoints](#api-endpoints)
-11. [CLI Usage](#cli-usage)
-12. [Folder Structure](#folder-structure)
-13. [Compliance Modes](#compliance-modes)
-14. [Testing](#testing)
-15. [Troubleshooting](#troubleshooting)
+3. [Deployment](#deployment)
+4. [Prerequisites](#prerequisites)
+5. [Installation](#installation)
+6. [Google Cloud Setup](#google-cloud-setup)
+7. [Gemini API Setup](#gemini-api-setup)
+8. [Google Drive Setup](#google-drive-setup)
+9. [Configuration](#configuration)
+10. [Running the System](#running-the-system)
+11. [API Endpoints](#api-endpoints)
+12. [CLI Usage](#cli-usage)
+13. [Folder Structure](#folder-structure)
+14. [Compliance Modes](#compliance-modes)
+15. [Testing](#testing)
+16. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -128,6 +144,63 @@ This system automates the complete lifecycle of chemical product labels:
 - Google Drive API v3
 - pdfplumber + Tesseract OCR
 - svgwrite + CairoSVG
+
+---
+
+## Deployment
+
+### Production Deployment (Google Cloud Run)
+
+**Recommended for production use.** Fully automated deployment in 5 minutes.
+
+```bash
+# 1. Setup secrets (first time only)
+./setup-secrets.sh YOUR_PROJECT_ID
+
+# 2. Deploy to Cloud Run
+./deploy.sh YOUR_PROJECT_ID us-central1
+
+# 3. Verify deployment
+./verify-deployment.sh https://YOUR-SERVICE-URL
+```
+
+**Advantages:**
+- ✅ Auto-scaling (0 to 10 instances)
+- ✅ Pay only for actual usage (~$5-20/month)
+- ✅ Built-in HTTPS and SSL
+- ✅ 60-minute request timeouts
+- ✅ Managed infrastructure
+
+**Complete guide:** [DEPLOYMENT.md](DEPLOYMENT.md)
+**Quick reference:** [DEPLOY-QUICK-REF.md](DEPLOY-QUICK-REF.md)
+
+### Local Development
+
+For local testing and development:
+
+```bash
+# Setup environment
+cp .env.example .env
+# Edit .env with your credentials
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run locally
+python -m app.main
+```
+
+**Local setup guide:** [QUICKSTART.md](QUICKSTART.md)
+
+### Alternative Platforms
+
+This application can also deploy to:
+- **Railway**: One-click deploy ([deploy script included](#))
+- **Render**: Connect GitHub repo
+- **Fly.io**: Docker-based deployment
+- **Any Docker host**: Use included Dockerfile
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for platform-specific instructions.
 
 ---
 

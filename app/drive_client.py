@@ -38,10 +38,27 @@ class DriveClient:
     def _build_service(self):
         """Build Google Drive API service."""
         try:
-            credentials = service_account.Credentials.from_service_account_file(
-                settings.google_service_account_file,
-                scopes=self.SCOPES
-            )
+            # Support both file path (local) and JSON string (Cloud Run)
+            if settings.google_service_account_json:
+                # Cloud Run: credentials from Secret Manager as JSON string
+                logger.info("Loading service account from JSON string (production)")
+                service_account_info = json.loads(settings.google_service_account_json)
+                credentials = service_account.Credentials.from_service_account_info(
+                    service_account_info,
+                    scopes=self.SCOPES
+                )
+            elif settings.google_service_account_file:
+                # Local: credentials from file
+                logger.info("Loading service account from file (development)")
+                credentials = service_account.Credentials.from_service_account_file(
+                    settings.google_service_account_file,
+                    scopes=self.SCOPES
+                )
+            else:
+                raise ValueError(
+                    "Either GOOGLE_SERVICE_ACCOUNT_FILE or GOOGLE_SERVICE_ACCOUNT_JSON must be set"
+                )
+
             return build('drive', 'v3', credentials=credentials)
         except Exception as e:
             logger.error(f"Failed to build Drive service: {e}")
