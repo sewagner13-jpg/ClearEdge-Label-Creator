@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
+import google.auth
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
@@ -38,7 +39,7 @@ class DriveClient:
     def _build_service(self):
         """Build Google Drive API service."""
         try:
-            # Support both file path (local) and JSON string (Cloud Run)
+            # Support multiple authentication methods
             if settings.google_service_account_json:
                 # Cloud Run: credentials from Secret Manager as JSON string
                 logger.info("Loading service account from JSON string (production)")
@@ -55,9 +56,10 @@ class DriveClient:
                     scopes=self.SCOPES
                 )
             else:
-                raise ValueError(
-                    "Either GOOGLE_SERVICE_ACCOUNT_FILE or GOOGLE_SERVICE_ACCOUNT_JSON must be set"
-                )
+                # Cloud Run with Application Default Credentials (no keys needed)
+                logger.info("Using Application Default Credentials (Cloud Run default service account)")
+                credentials, project = google.auth.default(scopes=self.SCOPES)
+                logger.info(f"Authenticated with project: {project}")
 
             return build('drive', 'v3', credentials=credentials)
         except Exception as e:
