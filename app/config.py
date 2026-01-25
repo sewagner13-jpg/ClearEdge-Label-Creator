@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     )
 
     # Gemini AI
-    gemini_api_key: str = Field(..., description="Gemini API key from Google AI Studio")
+    gemini_api_key: Optional[str] = Field(default=None, description="Gemini API key from Google AI Studio")
     gemini_model: str = Field(default="gemini-1.5-pro", description="Gemini model name")
     gemini_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     gemini_max_retries: int = Field(default=3, ge=1, le=10)
