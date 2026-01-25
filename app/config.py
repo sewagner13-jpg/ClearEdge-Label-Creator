@@ -25,9 +25,13 @@ class Settings(BaseSettings):
     gemini_max_retries: int = Field(default=3, ge=1, le=10)
 
     # Google Drive
-    shared_drive_id: str = Field(
-        default="0APFlqBVg60o6Uk9PVA",
-        description="Shared Drive ID"
+    root_folder_id: str = Field(
+        default="1dIThii6ccCgWg5UlnT-x0-Gd8RmY_knr",
+        description="Root folder ID (Product Labels folder)"
+    )
+    shared_drive_id: Optional[str] = Field(
+        default=None,
+        description="Shared Drive ID (optional, only if using Shared Drive)"
     )
     google_service_account_file: Optional[str] = Field(
         default=None,
@@ -39,7 +43,7 @@ class Settings(BaseSettings):
     )
     root_folder_name: str = Field(
         default="Product Labels",
-        description="Root folder name in Shared Drive"
+        description="Root folder name"
     )
 
     # Application

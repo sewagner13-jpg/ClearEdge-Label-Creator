@@ -31,10 +31,10 @@ class DriveClient:
 
     def __init__(self):
         """Initialize Drive client with service account credentials."""
+        self.root_folder_id = settings.root_folder_id
         self.shared_drive_id = settings.shared_drive_id
         self.root_folder_name = settings.root_folder_name
         self.service = self._build_service()
-        self.root_folder_id: Optional[str] = None
 
     def _build_service(self):
         """Build Google Drive API service."""
@@ -67,36 +67,9 @@ class DriveClient:
             raise
 
     def _get_root_folder(self) -> str:
-        """Get or cache the root 'Product Labels' folder ID."""
-        if self.root_folder_id:
-            return self.root_folder_id
-
-        try:
-            query = (
-                f"name='{self.root_folder_name}' and "
-                f"mimeType='application/vnd.google-apps.folder' and "
-                f"trashed=false"
-            )
-            results = self.service.files().list(
-                q=query,
-                corpora='drive',
-                driveId=self.shared_drive_id,
-                includeItemsFromAllDrives=True,
-                supportsAllDrives=True,
-                fields='files(id, name)'
-            ).execute()
-
-            files = results.get('files', [])
-            if not files:
-                raise ValueError(f"Root folder '{self.root_folder_name}' not found in Shared Drive")
-
-            self.root_folder_id = files[0]['id']
-            logger.info(f"Found root folder '{self.root_folder_name}': {self.root_folder_id}")
-            return self.root_folder_id
-
-        except HttpError as e:
-            logger.error(f"Drive API error finding root folder: {e}")
-            raise
+        """Get the root 'Product Labels' folder ID."""
+        logger.info(f"Using root folder ID: {self.root_folder_id}")
+        return self.root_folder_id
 
     def find_product_folder(self, product_name: str) -> Optional[str]:
         """Find product folder by exact name match. Returns folder ID or None."""
@@ -108,14 +81,20 @@ class DriveClient:
                 f"mimeType='application/vnd.google-apps.folder' and "
                 f"trashed=false"
             )
-            results = self.service.files().list(
-                q=query,
-                corpora='drive',
-                driveId=self.shared_drive_id,
-                includeItemsFromAllDrives=True,
-                supportsAllDrives=True,
-                fields='files(id, name)'
-            ).execute()
+
+            # Build list parameters - include Shared Drive params only if configured
+            list_params = {
+                'q': query,
+                'includeItemsFromAllDrives': True,
+                'supportsAllDrives': True,
+                'fields': 'files(id, name)'
+            }
+
+            if self.shared_drive_id:
+                list_params['corpora'] = 'drive'
+                list_params['driveId'] = self.shared_drive_id
+
+            results = self.service.files().list(**list_params).execute()
 
             files = results.get('files', [])
             if not files:
@@ -184,14 +163,20 @@ class DriveClient:
                 f"mimeType='application/vnd.google-apps.folder' and "
                 f"trashed=false"
             )
-            results = self.service.files().list(
-                q=query,
-                corpora='drive',
-                driveId=self.shared_drive_id,
-                includeItemsFromAllDrives=True,
-                supportsAllDrives=True,
-                fields='files(id, name)'
-            ).execute()
+
+            # Build list parameters - include Shared Drive params only if configured
+            list_params = {
+                'q': query,
+                'includeItemsFromAllDrives': True,
+                'supportsAllDrives': True,
+                'fields': 'files(id, name)'
+            }
+
+            if self.shared_drive_id:
+                list_params['corpora'] = 'drive'
+                list_params['driveId'] = self.shared_drive_id
+
+            results = self.service.files().list(**list_params).execute()
 
             files = results.get('files', [])
             return files[0]['id'] if files else None
@@ -306,15 +291,20 @@ class DriveClient:
 
             query = " and ".join(query_parts)
 
-            results = self.service.files().list(
-                q=query,
-                corpora='drive',
-                driveId=self.shared_drive_id,
-                includeItemsFromAllDrives=True,
-                supportsAllDrives=True,
-                fields='files(id, name, mimeType, size, createdTime, modifiedTime)',
-                orderBy='modifiedTime desc'
-            ).execute()
+            # Build list parameters - include Shared Drive params only if configured
+            list_params = {
+                'q': query,
+                'includeItemsFromAllDrives': True,
+                'supportsAllDrives': True,
+                'fields': 'files(id, name, mimeType, size, createdTime, modifiedTime)',
+                'orderBy': 'modifiedTime desc'
+            }
+
+            if self.shared_drive_id:
+                list_params['corpora'] = 'drive'
+                list_params['driveId'] = self.shared_drive_id
+
+            results = self.service.files().list(**list_params).execute()
 
             return results.get('files', [])
 
@@ -345,15 +335,21 @@ class DriveClient:
                 f"mimeType='application/vnd.google-apps.folder' and "
                 f"trashed=false"
             )
-            results = self.service.files().list(
-                q=query,
-                corpora='drive',
-                driveId=self.shared_drive_id,
-                includeItemsFromAllDrives=True,
-                supportsAllDrives=True,
-                fields='files(name)',
-                orderBy='name'
-            ).execute()
+
+            # Build list parameters - include Shared Drive params only if configured
+            list_params = {
+                'q': query,
+                'includeItemsFromAllDrives': True,
+                'supportsAllDrives': True,
+                'fields': 'files(name)',
+                'orderBy': 'name'
+            }
+
+            if self.shared_drive_id:
+                list_params['corpora'] = 'drive'
+                list_params['driveId'] = self.shared_drive_id
+
+            results = self.service.files().list(**list_params).execute()
 
             return [f['name'] for f in results.get('files', [])]
 
