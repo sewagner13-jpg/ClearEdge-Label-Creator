@@ -12,11 +12,11 @@ import tempfile
 import os
 from pathlib import Path
 
-from .pdf_extract import PDFExtractor
-from .gemini_client import GeminiClient
-from .schema import ExtractedData
-from .label_stub import LabelGenerator
-from .config import settings
+from app.pdf_extract import PDFExtractor
+from app.gemini_client import GeminiClient
+from app.schema import ExtractedData
+from app.label_stub import LabelGenerator
+from app.config import settings
 
 app = FastAPI(
     title="CLEAR EDGE Label Creator",
