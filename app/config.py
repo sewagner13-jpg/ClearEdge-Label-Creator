@@ -18,7 +18,13 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
-    # OpenAI (ChatGPT)
+    # Google Gemini AI (FREE tier available!)
+    gemini_api_key: Optional[str] = Field(default=None, description="Google Gemini API key from aistudio.google.com")
+    gemini_model: str = Field(default="gemini-1.5-flash", description="Gemini model (gemini-1.5-flash, gemini-1.5-pro)")
+    gemini_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
+    gemini_max_retries: int = Field(default=3, ge=1, le=10)
+
+    # OpenAI (ChatGPT) - Legacy support
     openai_api_key: Optional[str] = Field(default=None, description="OpenAI API key from platform.openai.com")
     openai_model: str = Field(default="gpt-4o", description="OpenAI model name (gpt-4o, gpt-4-turbo, gpt-3.5-turbo)")
     openai_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
