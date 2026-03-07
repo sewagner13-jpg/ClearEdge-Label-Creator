@@ -3,6 +3,7 @@ PDF text extraction with automatic OCR fallback.
 Extracts text from PDFs page-by-page with quality detection.
 """
 
+import io
 import logging
 from typing import List, Tuple
 import pdfplumber
@@ -101,8 +102,6 @@ class PDFExtractor:
         use_ocr_fallback: bool
     ) -> List[ExtractedTextPage]:
         """Fallback extraction using pypdf."""
-        import io
-
         pages_data = []
         reader = PdfReader(io.BytesIO(pdf_bytes))
 
@@ -125,14 +124,9 @@ class PDFExtractor:
 
     def get_page_count(self, pdf_bytes: bytes) -> int:
         """Get total number of pages in PDF."""
-        import io
         try:
             with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
                 return len(pdf.pages)
         except Exception:
             reader = PdfReader(io.BytesIO(pdf_bytes))
             return len(reader.pages)
-
-
-# Add missing import
-import io

@@ -21,104 +21,213 @@ class LabelGenerator:
     """Generate SVG and PDF labels from extracted product data."""
 
     SVG_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
-<svg width="{{ width }}" height="{{ height }}" xmlns="http://www.w3.org/2000/svg">
+<svg width="{{ width }}" height="{{ height }}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
   <!-- Background -->
-  <rect width="{{ width }}" height="{{ height }}" fill="white" stroke="black" stroke-width="2"/>
+  <rect width="{{ width }}" height="{{ height }}" fill="white"/>
+  <rect x="5" y="5" width="{{ width - 10 }}" height="{{ height - 10 }}" fill="none" stroke="black" stroke-width="3"/>
 
-  <!-- Header with logo area -->
-  <rect x="10" y="10" width="{{ width - 20 }}" height="80" fill="{{ header_color }}" rx="5"/>
-  <text x="{{ width // 2 }}" y="50" font-size="24" font-weight="bold" fill="white" text-anchor="middle">
+  <!-- CLEAR EDGE Header with Logo Area -->
+  <rect x="10" y="10" width="{{ width - 20 }}" height="90" fill="{{ header_color }}" rx="8"/>
+
+  <!-- Logo placeholder (left side) -->
+  <rect x="20" y="20" width="70" height="70" fill="white" rx="5"/>
+  <text x="55" y="50" font-size="10" font-weight="bold" fill="{{ header_color }}" text-anchor="middle">CLEAR</text>
+  <text x="55" y="65" font-size="10" font-weight="bold" fill="{{ header_color }}" text-anchor="middle">EDGE</text>
+  <text x="55" y="80" font-size="7" fill="{{ header_color }}" text-anchor="middle">FILTRATION</text>
+
+  <!-- Product Name (center/right) -->
+  <text x="{{ width // 2 + 20 }}" y="45" font-size="22" font-weight="bold" fill="white" text-anchor="middle">
     {{ product_name }}
   </text>
-  <text x="{{ width // 2 }}" y="75" font-size="12" fill="white" text-anchor="middle">
+  <text x="{{ width // 2 + 20 }}" y="75" font-size="11" fill="white" text-anchor="middle">
     CLEAR EDGE FILTRATION PRODUCTS
   </text>
+  <text x="{{ width - 30 }}" y="90" font-size="9" fill="white" text-anchor="end">
+    {{ size_label }}
+  </text>
 
-  <!-- Signal Word -->
+  <!-- Signal Word (if present) -->
   {% if signal_word %}
-  <rect x="10" y="100" width="{{ width - 20 }}" height="40" fill="#FFD700" stroke="black" stroke-width="2"/>
-  <text x="{{ width // 2 }}" y="125" font-size="20" font-weight="bold" text-anchor="middle">
-    {{ signal_word }}
+  <rect x="10" y="110" width="{{ width - 20 }}" height="55"
+        fill="{{ '#DC143C' if signal_word == 'Danger' else '#FFA500' }}"
+        stroke="black" stroke-width="3" rx="5"/>
+  <text x="{{ width // 2 }}" y="145"
+        font-size="32" font-weight="bold"
+        fill="white" text-anchor="middle"
+        style="text-transform: uppercase;">
+    ⚠ {{ signal_word }} ⚠
   </text>
+  {% set y_offset = 175 %}
+  {% else %}
+  {% set y_offset = 110 %}
   {% endif %}
 
-  <!-- GHS Pictograms -->
+  <!-- GHS Pictograms Section -->
   {% if pictograms %}
-  <text x="20" y="{{ 160 if signal_word else 120 }}" font-size="14" font-weight="bold">
-    Hazard Pictograms:
-  </text>
-  <!-- Placeholder for pictogram images -->
-  {% for pictogram in pictograms %}
-  <rect x="{{ 20 + loop.index0 * 60 }}" y="{{ 170 if signal_word else 130 }}"
-        width="50" height="50" fill="#E8E8E8" stroke="black"/>
-  <text x="{{ 45 + loop.index0 * 60 }}" y="{{ 200 if signal_word else 160 }}"
-        font-size="10" text-anchor="middle">{{ pictogram }}</text>
-  {% endfor %}
+  <g id="pictograms">
+    <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="100"
+          fill="#F5F5F5" stroke="#5A2D82" stroke-width="2" rx="5"/>
+    <text x="20" y="{{ y_offset + 20 }}" font-size="13" font-weight="bold" fill="#333">
+      HAZARD PICTOGRAMS:
+    </text>
+
+    <!-- Pictogram boxes -->
+    {% for pictogram in pictograms[:8] %}
+    <g transform="translate({{ 20 + (loop.index0 % 4) * 140 }}, {{ y_offset + 30 + (loop.index0 // 4) * 55 }})">
+      <rect width="55" height="55" fill="white" stroke="#E74C3C" stroke-width="3"
+            transform="rotate(45 27.5 27.5)"/>
+      <text x="27.5" y="32" font-size="9" font-weight="bold"
+            fill="#E74C3C" text-anchor="middle">{{ pictogram }}</text>
+    </g>
+    {% endfor %}
+  </g>
+  {% set y_offset = y_offset + 110 %}
   {% endif %}
 
-  <!-- Hazard Statements -->
+  <!-- Hazard Statements Section -->
   {% if hazard_statements %}
-  <text x="20" y="{{ 250 if signal_word else 210 }}" font-size="14" font-weight="bold">
-    Hazard Statements:
-  </text>
-  {% for statement in hazard_statements[:5] %}
-  <text x="30" y="{{ (270 if signal_word else 230) + loop.index0 * 20 }}" font-size="11">
-    {{ statement.code or '•' }}: {{ statement.text[:80] }}...
-  </text>
-  {% endfor %}
+  <g id="hazard-statements">
+    <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="auto"
+          fill="#FFF3CD" stroke="#856404" stroke-width="2" rx="5"/>
+    <text x="20" y="{{ y_offset + 20 }}" font-size="13" font-weight="bold" fill="#856404">
+      HAZARD STATEMENTS (H):
+    </text>
+    {% for statement in hazard_statements[:6] %}
+    <text x="25" y="{{ y_offset + 40 + loop.index0 * 16 }}" font-size="10" fill="#333">
+      <tspan font-weight="bold">{{ statement.code or '•' }}:</tspan> {{ statement.text[:65] }}{% if statement.text|length > 65 %}...{% endif %}
+    </text>
+    {% endfor %}
+  </g>
+  {% set y_offset = y_offset + 40 + (hazard_statements[:6]|length * 16) + 15 %}
   {% endif %}
 
-  <!-- DOT Shipping Information (if shipped_dot mode) -->
+  <!-- Precautionary Statements Section -->
+  {% if precautionary_statements %}
+  <g id="precautionary-statements">
+    <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="auto"
+          fill="#D1ECF1" stroke="#0C5460" stroke-width="2" rx="5"/>
+    <text x="20" y="{{ y_offset + 20 }}" font-size="13" font-weight="bold" fill="#0C5460">
+      PRECAUTIONARY STATEMENTS (P):
+    </text>
+    {% for statement in precautionary_statements[:6] %}
+    <text x="25" y="{{ y_offset + 40 + loop.index0 * 16 }}" font-size="10" fill="#333">
+      <tspan font-weight="bold">{{ statement.code or '•' }}:</tspan> {{ statement.text[:65] }}{% if statement.text|length > 65 %}...{% endif %}
+    </text>
+    {% endfor %}
+  </g>
+  {% set y_offset = y_offset + 40 + (precautionary_statements[:6]|length * 16) + 15 %}
+  {% endif %}
+
+  <!-- DOT TRANSPORT INFORMATION (if shipped_dot mode and UN number present) -->
   {% if mode == 'shipped_dot' and un_number %}
-  <rect x="10" y="{{ height - 200 }}" width="{{ width - 20 }}" height="120"
-        fill="#FFF3CD" stroke="#FF0000" stroke-width="3"/>
-  <text x="20" y="{{ height - 180 }}" font-size="16" font-weight="bold" fill="#CC0000">
-    TRANSPORT INFORMATION
-  </text>
-  <text x="30" y="{{ height - 155 }}" font-size="12">UN {{ un_number }}</text>
-  <text x="30" y="{{ height - 135 }}" font-size="11">{{ shipping_name[:50] }}</text>
-  <text x="30" y="{{ height - 115 }}" font-size="11">Hazard Class: {{ hazard_class }}</text>
-  {% if packing_group %}
-  <text x="30" y="{{ height - 95 }}" font-size="11">Packing Group: {{ packing_group }}</text>
-  {% endif %}
+  <g id="transport-info">
+    <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="130"
+          fill="#FFF" stroke="#DC143C" stroke-width="4" rx="5"/>
+
+    <!-- Header -->
+    <rect x="15" y="{{ y_offset + 5 }}" width="{{ width - 30 }}" height="30"
+          fill="#DC143C" rx="3"/>
+    <text x="{{ width // 2 }}" y="{{ y_offset + 25 }}"
+          font-size="16" font-weight="bold" fill="white" text-anchor="middle">
+      ⚠ DOT TRANSPORT INFORMATION ⚠
+    </text>
+
+    <!-- UN Number (large and prominent) -->
+    <rect x="20" y="{{ y_offset + 45 }}" width="160" height="70"
+          fill="#FFE5E5" stroke="#DC143C" stroke-width="3" rx="5"/>
+    <text x="100" y="{{ y_offset + 70 }}" font-size="14" font-weight="bold"
+          fill="#DC143C" text-anchor="middle">UN NUMBER:</text>
+    <text x="100" y="{{ y_offset + 100 }}" font-size="28" font-weight="bold"
+          fill="#DC143C" text-anchor="middle">{{ un_number }}</text>
+
+    <!-- Shipping Details -->
+    <g transform="translate(190, {{ y_offset + 45 }})">
+      <text x="0" y="15" font-size="11" fill="#333">
+        <tspan font-weight="bold">Proper Shipping Name:</tspan>
+      </text>
+      <text x="0" y="32" font-size="10" fill="#333">{{ shipping_name[:45] }}</text>
+
+      <text x="0" y="50" font-size="11" fill="#333">
+        <tspan font-weight="bold">Hazard Class:</tspan> {{ hazard_class or 'N/A' }}
+      </text>
+
+      {% if packing_group %}
+      <text x="0" y="68" font-size="11" fill="#333">
+        <tspan font-weight="bold">Packing Group:</tspan> {{ packing_group }}
+      </text>
+      {% endif %}
+    </g>
+  </g>
+  {% set y_offset = y_offset + 140 %}
   {% endif %}
 
-  <!-- Supplier Information -->
-  <text x="20" y="{{ height - 60 }}" font-size="10">{{ supplier_name or 'Clear Edge' }}</text>
-  {% if emergency_phone %}
-  <text x="20" y="{{ height - 45 }}" font-size="10" font-weight="bold">
-    Emergency: {{ emergency_phone }}
-  </text>
-  {% endif %}
+  <!-- Footer Section -->
+  <g id="footer">
+    <line x1="10" y1="{{ height - 110 }}" x2="{{ width - 10 }}" y2="{{ height - 110 }}"
+          stroke="#5A2D82" stroke-width="2"/>
 
-  <!-- QR Code Placeholder -->
-  <rect x="{{ width - 90 }}" y="{{ height - 90 }}" width="70" height="70"
-        fill="white" stroke="black"/>
-  <text x="{{ width - 55 }}" y="{{ height - 50 }}" font-size="8" text-anchor="middle">
-    SCAN FOR
-  </text>
-  <text x="{{ width - 55 }}" y="{{ height - 40 }}" font-size="8" text-anchor="middle">
-    SDS
-  </text>
+    <!-- Supplier Information -->
+    <text x="20" y="{{ height - 90 }}" font-size="11" font-weight="bold" fill="#333">
+      {{ supplier_name or 'Clear Edge Filtration' }}
+    </text>
+    {% if supplier_address %}
+    <text x="20" y="{{ height - 75 }}" font-size="9" fill="#666">
+      {{ supplier_address[:60] }}
+    </text>
+    {% endif %}
+    {% if supplier_phone %}
+    <text x="20" y="{{ height - 60 }}" font-size="10" fill="#666">
+      Tel: {{ supplier_phone }}
+    </text>
+    {% endif %}
 
-  <!-- Revision Date -->
-  {% if revision_date %}
-  <text x="{{ width // 2 }}" y="{{ height - 15 }}" font-size="9" text-anchor="middle">
-    Rev. {{ revision_date }}
-  </text>
-  {% endif %}
+    <!-- Emergency Contact (prominent) -->
+    {% if emergency_phone %}
+    <rect x="20" y="{{ height - 50 }}" width="240" height="30"
+          fill="#DC143C" rx="5"/>
+    <text x="30" y="{{ height - 30 }}" font-size="11" font-weight="bold" fill="white">
+      24-HR EMERGENCY: {{ emergency_phone }}
+    </text>
+    {% endif %}
+
+    <!-- QR Code Placeholder (right side) -->
+    <rect x="{{ width - 95 }}" y="{{ height - 95 }}" width="80" height="80"
+          fill="white" stroke="#5A2D82" stroke-width="2" rx="5"/>
+    <text x="{{ width - 55 }}" y="{{ height - 50 }}" font-size="9"
+          text-anchor="middle" fill="#5A2D82" font-weight="bold">
+      SCAN FOR
+    </text>
+    <text x="{{ width - 55 }}" y="{{ height - 38 }}" font-size="9"
+          text-anchor="middle" fill="#5A2D82" font-weight="bold">
+      FULL SDS
+    </text>
+
+    <!-- Revision Date -->
+    {% if revision_date %}
+    <text x="{{ width // 2 }}" y="{{ height - 15 }}" font-size="9"
+          text-anchor="middle" fill="#666">
+      Revised: {{ revision_date }}
+    </text>
+    {% endif %}
+  </g>
 </svg>
 """
 
     def __init__(self):
-        self.width = settings.default_label_width
-        self.height = settings.default_label_height
         self.header_color = settings.purple_header_color
+
+        # Label sizes in points (1 inch = 72 points)
+        # Standard 8.5" x 11" = 612 x 792 points
+        self.sizes = {
+            "pail": {"width": 612, "height": 792, "name": "Pail Label"},
+            "drum": {"width": 612, "height": 792, "name": "Drum Label"}
+        }
 
     def generate_svg(
         self,
         data: ExtractedData,
         mode: str = "shipped_dot",
+        size: str = "pail",
         template_name: str = "default"
     ) -> str:
         """
@@ -127,29 +236,39 @@ class LabelGenerator:
         Args:
             data: Extracted product data
             mode: "shipped_dot" or "workplace"
+            size: "pail" or "drum"
             template_name: Template identifier
 
         Returns:
             SVG content as string
         """
-        logger.info(f"Generating SVG label for '{data.product.name}' in {mode} mode")
+        logger.info(f"Generating SVG label for '{data.product.name}' in {mode} mode, {size} size")
+
+        # Get dimensions for selected size
+        size_config = self.sizes.get(size, self.sizes["pail"])
+        width = size_config["width"]
+        height = size_config["height"]
+        size_label = size_config["name"]
 
         # Prepare template context
         context = {
-            "width": self.width,
-            "height": self.height,
+            "width": width,
+            "height": height,
             "header_color": self.header_color,
             "mode": mode,
+            "size_label": size_label,
             "product_name": data.product.name,
             "signal_word": data.ghs.signal_word,
-            "pictograms": data.ghs.pictograms[:6],  # Max 6 pictograms
+            "pictograms": data.ghs.pictograms,
             "hazard_statements": data.ghs.hazard_statements,
             "precautionary_statements": data.ghs.precautionary_statements,
             "un_number": data.transport.un_number,
-            "shipping_name": data.transport.proper_shipping_name,
+            "shipping_name": data.transport.proper_shipping_name or "N/A",
             "hazard_class": data.transport.hazard_class,
             "packing_group": data.transport.packing_group,
             "supplier_name": data.product.supplier_name,
+            "supplier_address": data.product.supplier_address,
+            "supplier_phone": data.product.supplier_phone,
             "emergency_phone": data.product.emergency_phone,
             "revision_date": data.product.revision_date
         }
@@ -158,7 +277,7 @@ class LabelGenerator:
         template = Template(self.SVG_TEMPLATE)
         svg_content = template.render(**context)
 
-        logger.info(f"Generated SVG ({len(svg_content)} bytes)")
+        logger.info(f"Generated SVG ({len(svg_content)} bytes) for {size} label")
         return svg_content
 
     def generate_pdf(self, svg_content: str) -> bytes:

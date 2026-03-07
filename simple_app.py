@@ -8,8 +8,12 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, List
+from enum import Enum
 import tempfile
 import os
+import re
+import uuid
+import secrets
 from pathlib import Path
 
 from app.pdf_extract import PDFExtractor
@@ -17,6 +21,18 @@ from app.gemini_client import GeminiClient
 from app.schema import ExtractedData
 from app.label_stub import LabelGenerator
 from app.config import settings
+
+class LabelMode(str, Enum):
+    """Label mode options."""
+    SHIPPED_DOT = "shipped_dot"
+    WORKPLACE = "workplace"
+
+
+class LabelSize(str, Enum):
+    """Label size options."""
+    PAIL = "pail"
+    DRUM = "drum"
+
 
 app = FastAPI(
     title="CLEAR EDGE Label Creator",
@@ -294,11 +310,29 @@ async def home():
                 <div class="file-list" id="fileList"></div>
 
                 <div style="margin-top: 20px;">
-                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Label Mode:</label>
-                    <select id="labelMode" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; max-width: 300px;">
-                        <option value="shipped_dot">Shipped/DOT (Transport)</option>
-                        <option value="workplace">Workplace Container</option>
-                    </select>
+                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Product Name (Your Branding):</label>
+                    <input type="text" id="productName" placeholder="Enter your product name (e.g., Clear Edge Pro Filter)"
+                           style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; max-width: 500px; font-size: 1em;">
+                    <p style="color: #666; font-size: 0.9em; margin-top: 5px;">
+                        The SDS may have a different name - enter YOUR product name here
+                    </p>
+                </div>
+
+                <div style="margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 500px;">
+                    <div>
+                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Label Size:</label>
+                        <select id="labelSize" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%;">
+                            <option value="pail">Pail (8.5" x 11")</option>
+                            <option value="drum">Drum (8.5" x 11")</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Label Mode:</label>
+                        <select id="labelMode" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%;">
+                            <option value="shipped_dot">Shipped/DOT (Transport)</option>
+                            <option value="workplace">Workplace Container</option>
+                        </select>
+                    </div>
                 </div>
 
                 <button id="generateBtn" class="btn" style="margin-top: 20px;" disabled>Generate Label</button>
@@ -321,6 +355,8 @@ async def home():
             const loading = document.getElementById('loading');
             const result = document.getElementById('result');
             const labelMode = document.getElementById('labelMode');
+            const labelSize = document.getElementById('labelSize');
+            const productName = document.getElementById('productName');
 
             let selectedFiles = [];
 
@@ -380,11 +416,21 @@ async def home():
             generateBtn.addEventListener('click', async () => {
                 if (selectedFiles.length === 0) return;
 
+                // Validate product name
+                const prodName = productName.value.trim();
+                if (!prodName) {
+                    alert('Please enter your product name');
+                    productName.focus();
+                    return;
+                }
+
                 const formData = new FormData();
                 selectedFiles.forEach(file => {
                     formData.append('files', file);
                 });
+                formData.append('product_name', prodName);
                 formData.append('mode', labelMode.value);
+                formData.append('size', labelSize.value);
 
                 generateBtn.disabled = true;
                 loading.classList.add('show');
@@ -484,22 +530,35 @@ async def home():
 @app.post("/api/generate-label")
 async def generate_label(
     files: List[UploadFile] = File(...),
-    mode: str = Form("shipped_dot")
+    product_name: str = Form(...),
+    mode: LabelMode = Form(LabelMode.SHIPPED_DOT),
+    size: LabelSize = Form(LabelSize.PAIL)
 ):
-    """Generate label from uploaded PDFs."""
+    """Generate label from uploaded PDFs with user-specified product name."""
+    temp_files = []
+
     try:
-        # Save uploaded files temporarily
-        temp_files = []
+        # Validate product name
+        product_name = product_name.strip()
+        if not product_name or len(product_name) < 2:
+            raise HTTPException(status_code=400, detail="Product name is required")
+
+        if len(product_name) > 100:
+            raise HTTPException(status_code=400, detail="Product name too long (max 100 chars)")
+
         sds_text = None
         tds_text = None
-        product_name = "Unknown Product"
 
+        # Process uploaded files
         for file in files:
-            if not file.filename.endswith('.pdf'):
+            if not file.filename or not file.filename.endswith('.pdf'):
                 continue
 
             content = await file.read()
-            temp_path = LABELS_DIR / file.filename
+
+            # Security: Use secure random filename instead of user-provided filename
+            temp_filename = f"{secrets.token_hex(8)}.pdf"
+            temp_path = LABELS_DIR / temp_filename
             temp_path.write_bytes(content)
             temp_files.append(temp_path)
 
@@ -515,15 +574,26 @@ async def generate_label(
         if not sds_text and not tds_text:
             raise HTTPException(status_code=400, detail="No valid PDF files provided")
 
-        # Extract with Gemini
+        # Extract with Gemini using user-provided product name
         extracted_data = gemini_client.extract_from_documents(sds_text, tds_text, product_name)
 
-        # Generate label
-        svg_content = label_generator.generate_svg(extracted_data, mode)
+        # Override product name with user's branding
+        extracted_data.product.name = product_name
+
+        # Generate label with size parameter
+        svg_content = label_generator.generate_svg(
+            extracted_data,
+            mode=mode.value,
+            size=size.value
+        )
         pdf_content = label_generator.generate_pdf(svg_content)
 
+        # Security: Sanitize product name for filename + add unique ID
+        safe_product_name = re.sub(r'[^a-zA-Z0-9_-]', '', product_name[:50])
+        unique_id = uuid.uuid4().hex[:8]
+        label_id = f"label_{safe_product_name}_{unique_id}"
+
         # Save label
-        label_id = f"label_{extracted_data.product.name.replace(' ', '_')}"
         label_path = LABELS_DIR / f"{label_id}.pdf"
         label_path.write_bytes(pdf_content)
 
@@ -537,14 +607,43 @@ async def generate_label(
             "extracted": extracted_data.model_dump(mode='json')
         }
 
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions as-is
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid data: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Log full error but don't expose internals to user
+        print(f"Label generation error: {e}")
+        raise HTTPException(status_code=500, detail="Label generation failed")
+    finally:
+        # Ensure cleanup even if error occurs
+        for temp_file in temp_files:
+            temp_file.unlink(missing_ok=True)
 
 
 @app.get("/api/download-label/{label_id}")
 async def download_label(label_id: str):
-    """Download generated label PDF."""
-    label_path = LABELS_DIR / f"{label_id}.pdf"
+    """Download generated label PDF with path traversal protection."""
+    # Security: Sanitize label_id - only allow alphanumeric, underscore, dash
+    safe_id = re.sub(r'[^a-zA-Z0-9_-]', '', label_id)
+
+    if not safe_id or safe_id != label_id:
+        raise HTTPException(status_code=400, detail="Invalid label ID")
+
+    if len(safe_id) > 100:
+        raise HTTPException(status_code=400, detail="Label ID too long")
+
+    label_path = LABELS_DIR / f"{safe_id}.pdf"
+
+    # Security: Verify path is within LABELS_DIR (prevent path traversal)
+    try:
+        label_path_resolved = label_path.resolve()
+        labels_dir_resolved = LABELS_DIR.resolve()
+
+        if not str(label_path_resolved).startswith(str(labels_dir_resolved)):
+            raise HTTPException(status_code=403, detail="Access denied")
+    except Exception:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     if not label_path.exists():
         raise HTTPException(status_code=404, detail="Label not found")
@@ -552,7 +651,7 @@ async def download_label(label_id: str):
     return FileResponse(
         label_path,
         media_type="application/pdf",
-        filename=f"{label_id}.pdf"
+        filename=f"{safe_id}.pdf"
     )
 
 
