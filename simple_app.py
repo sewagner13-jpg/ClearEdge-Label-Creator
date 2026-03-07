@@ -17,7 +17,7 @@ import secrets
 from pathlib import Path
 
 from app.pdf_extract import PDFExtractor
-from app.gemini_client import GeminiClient
+from app.openai_client import OpenAIClient
 from app.schema import ExtractedData
 from app.label_stub import LabelGenerator
 from app.config import settings
@@ -54,7 +54,7 @@ app.add_middleware(
 
 # Initialize services
 pdf_extractor = PDFExtractor()
-gemini_client = GeminiClient()
+openai_client = OpenAIClient()
 label_generator = LabelGenerator()
 
 # Temp directory for generated labels
@@ -577,8 +577,8 @@ async def generate_label(
         if not sds_text and not tds_text:
             raise HTTPException(status_code=400, detail="No valid PDF files provided")
 
-        # Extract with Gemini using user-provided product name
-        extracted_data = gemini_client.extract_from_documents(sds_text, tds_text, product_name)
+        # Extract with OpenAI (ChatGPT) using user-provided product name
+        extracted_data = openai_client.extract_from_documents(sds_text, tds_text, product_name)
 
         # Override product name with user's branding
         extracted_data.product.name = product_name

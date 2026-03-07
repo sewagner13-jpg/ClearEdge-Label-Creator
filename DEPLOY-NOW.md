@@ -23,8 +23,8 @@
 2. Click "**+ New Variable**"
 3. Add:
    ```
-   GEMINI_API_KEY
-   AIzaSyBs9RRCTZYT99JgLpP3I7raixF3yJJwvO0
+   OPENAI_API_KEY
+   YOUR_OPENAI_API_KEY_HERE
    ```
 4. Click "**Add**"
 
@@ -183,7 +183,7 @@ git push
 
 ### Backend crashes:
 1. Check Railway logs for errors
-2. Verify GEMINI_API_KEY is set
+2. Verify OPENAI_API_KEY is set
 3. Check dependencies installed correctly
 
 ### Label generation fails:
@@ -197,7 +197,7 @@ git push
 
 - [ ] Railway account created
 - [ ] Backend deployed to Railway
-- [ ] GEMINI_API_KEY added to Railway
+- [ ] OPENAI_API_KEY added to Railway
 - [ ] Railway domain generated
 - [ ] API URL updated in app.js
 - [ ] Code committed and pushed

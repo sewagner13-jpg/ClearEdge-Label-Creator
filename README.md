@@ -4,7 +4,7 @@
 
 This system automates the complete lifecycle of chemical product labels:
 - **Ingestion** from Google Drive Shared Drive or controlled web sources
-- **Extraction** of structured data from SDS/TDS PDFs using Gemini AI
+- **Extraction** of structured data from SDS/TDS PDFs using OpenAI (ChatGPT)
 - **Validation** against DOT and OSHA compliance requirements
 - **Generation** of SVG/PDF labels with audit trails
 - **Storage** in Google Workspace Shared Drive as system of record
@@ -34,7 +34,7 @@ See **[DEPLOYMENT.md](DEPLOYMENT.md)** for complete deployment guide.
 4. [Prerequisites](#prerequisites)
 5. [Installation](#installation)
 6. [Google Cloud Setup](#google-cloud-setup)
-7. [Gemini API Setup](#gemini-api-setup)
+7. [OpenAI API Setup](#openai-api-setup)
 8. [Google Drive Setup](#google-drive-setup)
 9. [Configuration](#configuration)
 10. [Running the System](#running-the-system)

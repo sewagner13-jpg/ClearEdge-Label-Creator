@@ -7,12 +7,14 @@ python-multipart==0.0.6
 pydantic==2.5.3
 pydantic-settings==2.1.0
 
-# Google APIs
+# OpenAI API
+openai==1.51.0
+
+# Google APIs (for Drive integration if needed)
 google-auth==2.27.0
 google-auth-oauthlib==1.2.0
 google-auth-httplib2==0.2.0
 google-api-python-client==2.116.0
-google-generativeai==0.3.2
 
 # PDF Processing
 pdfplumber==0.10.3
