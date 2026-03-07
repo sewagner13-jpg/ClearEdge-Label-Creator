@@ -31,16 +31,16 @@ class LabelGenerator:
 
   <!-- Logo placeholder (left side) -->
   <rect x="20" y="20" width="70" height="70" fill="white" rx="5"/>
-  <text x="55" y="50" font-size="10" font-weight="bold" fill="{{ header_color }}" text-anchor="middle">CLEAR</text>
-  <text x="55" y="65" font-size="10" font-weight="bold" fill="{{ header_color }}" text-anchor="middle">EDGE</text>
-  <text x="55" y="80" font-size="7" fill="{{ header_color }}" text-anchor="middle">FILTRATION</text>
+  <text x="55" y="48" font-size="11" font-weight="bold" fill="{{ header_color }}" text-anchor="middle">CLEAR</text>
+  <text x="55" y="62" font-size="11" font-weight="bold" fill="{{ header_color }}" text-anchor="middle">EDGE</text>
+  <text x="55" y="78" font-size="8" fill="{{ header_color }}" text-anchor="middle">SOLUTIONS</text>
 
   <!-- Product Name (center/right) -->
   <text x="{{ width // 2 + 20 }}" y="45" font-size="22" font-weight="bold" fill="white" text-anchor="middle">
     {{ product_name }}
   </text>
   <text x="{{ width // 2 + 20 }}" y="75" font-size="11" fill="white" text-anchor="middle">
-    CLEAR EDGE FILTRATION PRODUCTS
+    CLEAREDGE SOLUTIONS
   </text>
   <text x="{{ width - 30 }}" y="90" font-size="9" fill="white" text-anchor="end">
     {{ size_label }}
@@ -168,18 +168,14 @@ class LabelGenerator:
 
     <!-- Supplier Information -->
     <text x="20" y="{{ height - 90 }}" font-size="11" font-weight="bold" fill="#333">
-      {{ supplier_name or 'Clear Edge Filtration' }}
+      {{ supplier_name or 'ClearEdge Solutions' }}
     </text>
-    {% if supplier_address %}
     <text x="20" y="{{ height - 75 }}" font-size="9" fill="#666">
-      {{ supplier_address[:60] }}
+      {{ supplier_address or '14301 CR Koon Highway, Newberry, SC 29108' }}
     </text>
-    {% endif %}
-    {% if supplier_phone %}
     <text x="20" y="{{ height - 60 }}" font-size="10" fill="#666">
-      Tel: {{ supplier_phone }}
+      {{ supplier_phone or 'www.clear-edge.net' }}
     </text>
-    {% endif %}
 
     <!-- Emergency Contact (prominent) -->
     {% if emergency_phone %}
