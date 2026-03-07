@@ -40,10 +40,13 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Enable CORS for local access
+# CORS configuration - allows Netlify frontend to call this API
+# Set ALLOWED_ORIGINS environment variable in Railway with your Netlify URL
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[origin.strip() for origin in allowed_origins],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
