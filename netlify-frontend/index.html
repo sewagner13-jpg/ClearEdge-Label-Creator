@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CLEAR EDGE Label Creator</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏷️ CLEAR EDGE Label Creator</h1>
+            <p class="subtitle">AI-Powered DOT/OSHA Compliant Chemical Product Labels</p>
+        </div>
+
+        <div class="card">
+            <h2>Upload SDS/TDS Documents</h2>
+            <p style="color: #666; margin: 10px 0 20px 0;">
+                Upload your Safety Data Sheet (SDS) and/or Technical Data Sheet (TDS) as PDF files.
+                Our AI will automatically extract all required information.
+            </p>
+
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📄</div>
+                <h3>Drop PDF files here or click to browse</h3>
+                <p style="color: #666; margin-top: 10px;">Supports SDS and TDS documents</p>
+                <input type="file" id="fileInput" class="file-input" accept=".pdf" multiple>
+            </div>
+
+            <div class="file-list" id="fileList"></div>
+
+            <div style="margin-top: 20px;">
+                <label style="font-weight: 600; margin-bottom: 10px; display: block;">Product Name (Your Branding):</label>
+                <input type="text" id="productName" placeholder="Enter your product name (e.g., Clear Edge Pro Filter)"
+                       style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; max-width: 500px; font-size: 1em;">
+                <p style="color: #666; font-size: 0.9em; margin-top: 5px;">
+                    The SDS may have a different name - enter YOUR product name here
+                </p>
+            </div>
+
+            <div style="margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 500px;">
+                <div>
+                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Label Size:</label>
+                    <select id="labelSize" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%;">
+                        <option value="pail">Pail (8.5" x 11")</option>
+                        <option value="drum">Drum (8.5" x 11")</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Label Mode:</label>
+                    <select id="labelMode" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%;">
+                        <option value="shipped_dot">Shipped/DOT (Transport)</option>
+                        <option value="workplace">Workplace Container</option>
+                    </select>
+                </div>
+            </div>
+
+            <button id="generateBtn" class="btn" style="margin-top: 20px;" disabled>Generate Label</button>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p><strong>Processing PDFs with AI...</strong></p>
+                <p style="color: #666;">This may take 30-60 seconds</p>
+            </div>
+
+            <div class="result" id="result"></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
