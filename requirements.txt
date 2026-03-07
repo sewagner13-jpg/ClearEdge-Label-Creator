@@ -40,7 +40,6 @@ requests==2.31.0
 # Utilities
 python-dotenv==1.0.1
 qrcode[pil]==7.4.2
-hashlib-additional==1.0.0
 
 # CLI
 click==8.1.7
