@@ -26,7 +26,7 @@ pdf2image==1.17.0
 
 # OCR
 pytesseract==0.3.10
-Pillow==10.2.0
+Pillow==10.4.0
 
 # SVG and PDF Generation
 svgwrite==1.4.3
@@ -45,8 +45,5 @@ qrcode[pil]==7.4.2
 click==8.1.7
 rich==13.7.0
 
-# Testing
-pytest==7.4.4
-pytest-asyncio==0.23.3
-pytest-cov==4.1.0
-pytest-mock==3.12.0
+# Testing — install via: pip install -r requirements-dev.txt
+# (kept here only as a reference; production deploys should use requirements-dev.txt)

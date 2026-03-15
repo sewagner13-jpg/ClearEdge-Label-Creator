@@ -1,0 +1,23 @@
+# Root-level Netlify config — deploys the static frontend only.
+# Without this file Netlify auto-detects requirements.txt and tries to run
+# pip install against the backend, which is not what we want here.
+
+[build]
+  publish = "netlify-frontend"
+  command  = "echo 'Static site — no build step required'"
+
+[build.environment]
+  # Belt-and-suspenders: also tell Netlify which Python to use if it needs one
+  PYTHON_VERSION = "3.11"
+
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options        = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy        = "no-referrer"
