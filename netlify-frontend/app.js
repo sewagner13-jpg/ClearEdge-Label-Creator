@@ -1,7 +1,7 @@
 // API endpoint - will be set via environment variable
 const API_URL = window.location.hostname === 'localhost'
     ? 'http://localhost:8000'  // Local development
-    : 'https://YOUR-RAILWAY-APP.railway.app';  // Production - UPDATE THIS
+    : 'https://clearedge-label-creator-production.up.railway.app';  // Production
 
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
