@@ -53,26 +53,29 @@ class ComplianceValidator:
                 severity="error"
             ))
 
-        # Mode-specific validations
-        if mode == "shipped_dot":
-            self._validate_shipping(data, errors, warnings)
-        elif mode == "workplace":
-            self._validate_workplace(data, errors, warnings)
-        else:
+        is_valid_mode = mode in {"shipped_dot", "workplace"}
+        normalized_mode = mode if is_valid_mode else "shipped_dot"
+
+        if not is_valid_mode:
             errors.append(ValidationError(
                 field="mode",
                 message=f"Invalid validation mode: {mode}",
                 severity="error"
             ))
 
+        # Mode-specific validations
+        if normalized_mode == "shipped_dot":
+            self._validate_shipping(data, errors, warnings)
+        elif normalized_mode == "workplace":
+            self._validate_workplace(data, errors, warnings)
         # Check for DOT/GHS pictogram overlap
-        if mode == "shipped_dot" and data.transport.hazard_class:
+        if normalized_mode == "shipped_dot" and data.transport.hazard_class:
             self._check_pictogram_overlap(data, warnings)
 
         passed = len(errors) == 0
 
         return ValidationResult(
-            mode=mode,
+            mode=normalized_mode,
             passed=passed,
             errors=errors,
             warnings=warnings
