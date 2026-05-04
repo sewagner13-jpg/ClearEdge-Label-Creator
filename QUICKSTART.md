@@ -127,3 +127,27 @@ Check API key in `.env` is correct.
 ## Need Help?
 
 See full README.md for detailed documentation.
+
+## Fast local start helper
+
+Use the helper script to start backend + print health/docs URLs:
+
+```bash
+./run-local.sh
+```
+
+Optional env overrides:
+
+```bash
+HOST=127.0.0.1 PORT=8000 ./run-local.sh
+```
+
+## Desktop icon launcher (Linux)
+
+To add a clickable desktop icon:
+
+```bash
+./install-desktop-icon.sh
+```
+
+This installs `ClearEdge-Label-Creator.desktop` to your Desktop and launches `run-local.sh` in a terminal.

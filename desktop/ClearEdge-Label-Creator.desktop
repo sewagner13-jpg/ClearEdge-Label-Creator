@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=ClearEdge Label Creator
+Comment=Start the ClearEdge Label Creator backend and open API docs
+Exec=bash -lc 'cd /workspace/ClearEdge-Label-Creator && ./run-local.sh'
+Terminal=true
+Icon=applications-science
+Categories=Utility;Development;
+StartupNotify=true
