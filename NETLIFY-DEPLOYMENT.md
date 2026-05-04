@@ -23,7 +23,7 @@ Deploy your Label Creator with:
 1. In Railway project, go to "**Variables**"
 2. Add these:
    ```
-   GEMINI_API_KEY=AIzaSyBs9RRCTZYT99JgLpP3I7raixF3yJJwvO0
+   GEMINI_API_KEY=your_gemini_api_key_here
    PORT=8000
    ```
 
@@ -44,12 +44,10 @@ ALLOWED_ORIGINS=https://your-netlify-site.netlify.app,http://localhost:8000
 ## Part 2: Deploy Frontend to Netlify (3 minutes)
 
 ### Step 1: Update API URL
-1. Open `netlify-frontend/app.js`
-2. Replace line 4 with your Railway URL:
+1. Open `netlify-frontend/config.js`
+2. Set your Railway URL:
    ```javascript
-   const API_URL = window.location.hostname === 'localhost'
-       ? 'http://localhost:8000'
-       : 'https://YOUR-RAILWAY-APP.railway.app';  // ← UPDATE THIS
+   window.CLEAREDGE_API_URL = 'https://YOUR-RAILWAY-APP.railway.app';
    ```
 
 ### Step 2: Create Netlify Account

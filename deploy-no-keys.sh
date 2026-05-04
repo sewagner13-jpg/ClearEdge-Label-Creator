@@ -34,7 +34,7 @@ NC='\033[0m' # No Color
 PROJECT_ID="${1:-}"
 REGION="${2:-us-central1}"
 SERVICE_NAME="clearedge-pipeline"
-GEMINI_API_KEY="AIzaSyBs9RRCTZYT99JgLpP3I7raixF3yJJwvO0"
+GEMINI_API_KEY="${GEMINI_API_KEY:-}"
 
 # Functions
 log_info() {
@@ -135,6 +135,12 @@ get_service_account() {
 
 setup_secrets() {
     log_step "Step 5/7: Setting Up Secrets"
+
+    if [ -z "$GEMINI_API_KEY" ]; then
+        log_error "GEMINI_API_KEY is required. Export it before deploying:"
+        echo "  export GEMINI_API_KEY='your_gemini_api_key_here'"
+        exit 1
+    fi
 
     # Check if Gemini secret exists
     if gcloud secrets describe gemini-api-key --project="${PROJECT_ID}" &> /dev/null; then

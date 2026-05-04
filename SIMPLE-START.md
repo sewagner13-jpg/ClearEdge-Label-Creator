@@ -51,7 +51,7 @@ sudo apt-get install tesseract-ocr poppler-utils
 2. Click "Get API Key"
 3. Copy the key
 
-The startup script already has your key configured! (AIzaSyBs9RRCTZYT99JgLpP3I7raixF3yJJwvO0)
+Add your Gemini API key to `.env` before using live extraction.
 
 ---
 

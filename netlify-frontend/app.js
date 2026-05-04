@@ -1,7 +1,10 @@
-// API endpoint - will be set via environment variable
-const API_URL = window.location.hostname === 'localhost'
-    ? 'http://localhost:8000'  // Local development
-    : 'https://clearedge-label-creator-production.up.railway.app';  // Production
+// API endpoint. For production, set window.CLEAREDGE_API_URL in config.js
+// or replace the fallback URL after Railway generates the backend domain.
+const API_URL = window.CLEAREDGE_API_URL || (
+    window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'http://localhost:8000'
+        : 'https://clearedge-label-creator-production.up.railway.app'
+);
 
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');

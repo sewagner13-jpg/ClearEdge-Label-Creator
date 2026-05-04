@@ -25,8 +25,8 @@ echo ""
 if [ ! -f .env ]; then
     echo -e "${YELLOW}Creating .env file...${NC}"
     cat > .env << 'EOF'
-# Gemini AI API Key (REQUIRED)
-GEMINI_API_KEY=AIzaSyBs9RRCTZYT99JgLpP3I7raixF3yJJwvO0
+# Gemini AI API Key (REQUIRED for live extraction)
+GEMINI_API_KEY=
 
 # Application
 ENV=development

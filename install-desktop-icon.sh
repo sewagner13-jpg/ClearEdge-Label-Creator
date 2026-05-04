@@ -2,12 +2,22 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SOURCE_FILE="$REPO_DIR/desktop/ClearEdge-Label-Creator.desktop"
 TARGET_DIR="$HOME/Desktop"
 TARGET_FILE="$TARGET_DIR/ClearEdge-Label-Creator.desktop"
 
 mkdir -p "$TARGET_DIR"
-cp "$SOURCE_FILE" "$TARGET_FILE"
+cat > "$TARGET_FILE" <<EOF
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=ClearEdge Label Creator
+Comment=Start the ClearEdge Label Creator backend
+Exec=bash -lc 'cd "$REPO_DIR" && ./run-local.sh'
+Terminal=true
+Icon=applications-science
+Categories=Utility;Development;
+StartupNotify=true
+EOF
 chmod +x "$TARGET_FILE"
 
 echo "✅ Desktop icon installed at: $TARGET_FILE"

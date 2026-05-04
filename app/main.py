@@ -9,6 +9,7 @@ from typing import Optional, List, Dict
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from .config import settings
@@ -21,7 +22,7 @@ from .web_retrieval import WebRetriever
 from .label_stub import LabelGenerator
 from .schema import ExtractedData, ValidationResult
 
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from enum import Enum
 from pathlib import Path
 import tempfile
@@ -46,6 +47,7 @@ gemini_client: Optional[GeminiClient] = None
 validator: Optional[ComplianceValidator] = None
 web_retriever: Optional[WebRetriever] = None
 label_generator: Optional[LabelGenerator] = None
+startup_errors: Dict[str, str] = {}
 
 
 class LabelMode(str, Enum):
@@ -95,12 +97,12 @@ def _save_label_metadata_store() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize and cleanup shared resources."""
-    global drive_client, pdf_extractor, gemini_client, validator, web_retriever, label_generator
+    global drive_client, pdf_extractor, gemini_client, validator, web_retriever, label_generator, startup_errors
 
     logger.info("Initializing CLEAR EDGE Label Pipeline...")
+    startup_errors = {}
 
     try:
-        drive_client = DriveClient()
         pdf_extractor = PDFExtractor()
         gemini_client = GeminiClient()
         validator = ComplianceValidator()
@@ -108,7 +110,14 @@ async def lifespan(app: FastAPI):
         label_generator = LabelGenerator()
         _load_label_metadata_store()
 
-        logger.info("All clients initialized successfully")
+        try:
+            drive_client = DriveClient()
+        except Exception as exc:
+            drive_client = None
+            startup_errors["drive_client"] = str(exc)
+            logger.warning("Drive client unavailable; Drive-backed routes will be degraded: %s", exc)
+
+        logger.info("Core clients initialized successfully")
     except Exception as e:
         logger.error(f"Initialization failed: {e}")
         raise
@@ -124,6 +133,20 @@ app = FastAPI(
     description="Production-grade DOT/OSHA-compliant chemical product label automation",
     version="1.0.0",
     lifespan=lifespan
+)
+
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000").split(",")
+    if origin.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -222,10 +245,17 @@ def _readiness_payload() -> dict:
         "status": status,
         "timestamp": datetime.utcnow().isoformat(),
         "checks": checks,
+        "startup_errors": startup_errors,
     }
 
 
 # Endpoints
+
+@app.get("/", include_in_schema=False)
+async def root():
+    """Send browser users to the interactive API docs."""
+    return RedirectResponse(url="/docs")
+
 
 @app.get("/health")
 @app.get("/api/v1/health")

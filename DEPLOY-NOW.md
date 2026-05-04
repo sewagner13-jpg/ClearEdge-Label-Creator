@@ -23,8 +23,8 @@
 2. Click "**+ New Variable**"
 3. Add:
    ```
-   OPENAI_API_KEY
-   YOUR_OPENAI_API_KEY_HERE
+   GEMINI_API_KEY
+   YOUR_GEMINI_API_KEY_HERE
    ```
 4. Click "**Add**"
 
@@ -41,21 +41,15 @@
 ## Part 2: Update Frontend Code (2 min)
 
 ### 1. Update API URL
-Open `netlify-frontend/app.js` and change line 4:
+Open `netlify-frontend/config.js` and set your Railway backend URL:
 
-**Replace:**
 ```javascript
-: 'https://YOUR-RAILWAY-APP.railway.app';
-```
-
-**With your Railway URL:**
-```javascript
-: 'https://clearedge-label-creator-production.up.railway.app';
+window.CLEAREDGE_API_URL = 'https://clearedge-label-creator-production.up.railway.app';
 ```
 
 ### 2. Commit the Change
 ```bash
-git add netlify-frontend/app.js
+git add netlify-frontend/config.js
 git commit -m "config: set Railway API URL"
 git push
 ```
@@ -183,7 +177,7 @@ git push
 
 ### Backend crashes:
 1. Check Railway logs for errors
-2. Verify OPENAI_API_KEY is set
+2. Verify GEMINI_API_KEY is set
 3. Check dependencies installed correctly
 
 ### Label generation fails:
@@ -197,7 +191,7 @@ git push
 
 - [ ] Railway account created
 - [ ] Backend deployed to Railway
-- [ ] OPENAI_API_KEY added to Railway
+- [ ] GEMINI_API_KEY added to Railway
 - [ ] Railway domain generated
 - [ ] API URL updated in app.js
 - [ ] Code committed and pushed

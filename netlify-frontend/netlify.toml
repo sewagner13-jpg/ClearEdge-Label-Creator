@@ -3,6 +3,11 @@
   command = "echo 'No build needed - static site'"
 
 [[redirects]]
+  from = "/config.js"
+  to = "/config.example.js"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
