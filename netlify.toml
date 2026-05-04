@@ -1,5 +1,5 @@
 [build]
-  publish = "."
+  publish = "netlify-frontend"
   command = "echo 'No build needed - static site'"
 
 [[redirects]]
