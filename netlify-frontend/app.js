@@ -93,7 +93,7 @@ generateBtn.addEventListener('click', async () => {
     result.innerHTML = '';
 
     try {
-        const response = await fetch(`${API_URL}/api/generate-label`, {
+        const response = await fetch(`${API_URL}/api/v1/labels/generate`, {
             method: 'POST',
             body: formData
         });
@@ -159,11 +159,55 @@ generateBtn.addEventListener('click', async () => {
             </div>
 
             <div style="margin-top: 20px;">
-                <a href="${API_URL}/api/download-label/${data.label_id}" download style="text-decoration: none;">
+                ${data.label?.download_url ? `
+                <a href="${API_URL}${data.label.download_url}" download style="text-decoration: none;">
                     <button class="btn">📥 Download Label PDF</button>
                 </a>
+                ` : `
+                <div class="error-message">
+                    <strong>Download blocked:</strong> Validation failed. Fix required compliance issues first.
+                </div>
+                <div style="margin-top: 12px; display: grid; gap: 8px; max-width: 500px;">
+                    <input id="overrideApprover" placeholder="Approver name" style="padding:8px; border:1px solid #ccc; border-radius:4px;" />
+                    <textarea id="overrideReason" placeholder="Override reason (required)" rows="3" style="padding:8px; border:1px solid #ccc; border-radius:4px;"></textarea>
+                    <button class="btn" id="overrideBtn" style="max-width: 260px;">Approve Override & Enable Download</button>
+                </div>
+                `}
             </div>
         `;
+
+        const overrideBtn = document.getElementById('overrideBtn');
+        if (overrideBtn) {
+            overrideBtn.addEventListener('click', async () => {
+                const approver = document.getElementById('overrideApprover')?.value?.trim();
+                const reason = document.getElementById('overrideReason')?.value?.trim();
+
+                if (!approver || !reason) {
+                    alert('Approver and reason are required for override approval.');
+                    return;
+                }
+
+                try {
+                    const overrideResponse = await fetch(`${API_URL}/api/v1/labels/${data.label_id}/override-approval`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ approver, reason })
+                    });
+
+                    if (!overrideResponse.ok) {
+                        const err = await overrideResponse.text();
+                        throw new Error(err || 'Override request failed');
+                    }
+
+                    const overrideData = await overrideResponse.json();
+                    if (overrideData.download_url) {
+                        window.location.href = `${API_URL}${overrideData.download_url}`;
+                    }
+                } catch (overrideError) {
+                    alert(`Override failed: ${overrideError.message}`);
+                }
+            });
+        }
 
     } catch (error) {
         loading.classList.remove('show');

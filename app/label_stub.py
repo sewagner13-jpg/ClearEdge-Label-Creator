@@ -21,7 +21,7 @@ class LabelGenerator:
     """Generate SVG and PDF labels from extracted product data."""
 
     SVG_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
-<svg width="{{ width }}" height="{{ height }}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg width="{{ width }}" height="{{ height }}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" font-family="{{ body_font }}">
   <!-- Background -->
   <rect width="{{ width }}" height="{{ height }}" fill="white"/>
   <rect x="5" y="5" width="{{ width - 10 }}" height="{{ height - 10 }}" fill="none" stroke="black" stroke-width="3"/>
@@ -32,7 +32,7 @@ class LabelGenerator:
   <!-- Logo placeholder (left side) -->
   <rect x="20" y="20" width="70" height="70" fill="white" rx="5"/>
   <text x="55" y="48" font-size="11" font-weight="bold" fill="{{ header_color }}" text-anchor="middle">CLEAR</text>
-  <text x="55" y="62" font-size="11" font-weight="bold" fill="{{ header_color }}" text-anchor="middle">EDGE</text>
+  <text x="55" y="62" font-size="11" font-weight="bold" fill="{{ accent_color }}" text-anchor="middle">e</text>
   <text x="55" y="78" font-size="8" fill="{{ header_color }}" text-anchor="middle">SOLUTIONS</text>
 
   <!-- Product Name (center/right) -->
@@ -67,7 +67,7 @@ class LabelGenerator:
   <g id="pictograms">
     <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="100"
           fill="#F5F5F5" stroke="#5A2D82" stroke-width="2" rx="5"/>
-    <text x="20" y="{{ y_offset + 20 }}" font-size="13" font-weight="bold" fill="#333">
+    <text x="20" y="{{ y_offset + 20 }}" font-size="13" font-weight="bold" fill="{{ text_color }}">
       HAZARD PICTOGRAMS:
     </text>
 
@@ -93,8 +93,8 @@ class LabelGenerator:
       HAZARD STATEMENTS (H):
     </text>
     {% for statement in hazard_statements[:6] %}
-    <text x="25" y="{{ y_offset + 40 + loop.index0 * 16 }}" font-size="10" fill="#333">
-      <tspan font-weight="bold">{{ statement.code or '•' }}:</tspan> {{ statement.text[:65] }}{% if statement.text|length > 65 %}...{% endif %}
+    <text x="25" y="{{ y_offset + 40 + loop.index0 * 16 }}" font-size="10" fill="{{ text_color }}">
+      <tspan font-weight="bold">{{ statement.code }}:</tspan> {{ statement.text }}
     </text>
     {% endfor %}
   </g>
@@ -110,8 +110,8 @@ class LabelGenerator:
       PRECAUTIONARY STATEMENTS (P):
     </text>
     {% for statement in precautionary_statements[:6] %}
-    <text x="25" y="{{ y_offset + 40 + loop.index0 * 16 }}" font-size="10" fill="#333">
-      <tspan font-weight="bold">{{ statement.code or '•' }}:</tspan> {{ statement.text[:65] }}{% if statement.text|length > 65 %}...{% endif %}
+    <text x="25" y="{{ y_offset + 40 + loop.index0 * 16 }}" font-size="10" fill="{{ text_color }}">
+      <tspan font-weight="bold">{{ statement.code }}:</tspan> {{ statement.text }}
     </text>
     {% endfor %}
   </g>
@@ -142,17 +142,17 @@ class LabelGenerator:
 
     <!-- Shipping Details -->
     <g transform="translate(190, {{ y_offset + 45 }})">
-      <text x="0" y="15" font-size="11" fill="#333">
+      <text x="0" y="15" font-size="11" fill="{{ text_color }}">
         <tspan font-weight="bold">Proper Shipping Name:</tspan>
       </text>
-      <text x="0" y="32" font-size="10" fill="#333">{{ shipping_name[:45] }}</text>
+      <text x="0" y="32" font-size="10" fill="{{ text_color }}">{{ shipping_name[:45] }}</text>
 
-      <text x="0" y="50" font-size="11" fill="#333">
+      <text x="0" y="50" font-size="11" fill="{{ text_color }}">
         <tspan font-weight="bold">Hazard Class:</tspan> {{ hazard_class or 'N/A' }}
       </text>
 
       {% if packing_group %}
-      <text x="0" y="68" font-size="11" fill="#333">
+      <text x="0" y="68" font-size="11" fill="{{ text_color }}">
         <tspan font-weight="bold">Packing Group:</tspan> {{ packing_group }}
       </text>
       {% endif %}
@@ -167,13 +167,13 @@ class LabelGenerator:
           stroke="#5A2D82" stroke-width="2"/>
 
     <!-- Supplier Information -->
-    <text x="20" y="{{ height - 90 }}" font-size="11" font-weight="bold" fill="#333">
+    <text x="20" y="{{ height - 90 }}" font-size="11" font-weight="bold" fill="{{ text_color }}">
       {{ supplier_name or 'ClearEdge Solutions' }}
     </text>
-    <text x="20" y="{{ height - 75 }}" font-size="9" fill="#666">
+    <text x="20" y="{{ height - 75 }}" font-size="9" fill="{{ text_color }}" opacity="0.75">
       {{ supplier_address or '14301 CR Koon Highway, Newberry, SC 29108' }}
     </text>
-    <text x="20" y="{{ height - 60 }}" font-size="10" fill="#666">
+    <text x="20" y="{{ height - 60 }}" font-size="10" fill="{{ text_color }}" opacity="0.75">
       {{ supplier_phone or 'www.clear-edge.net' }}
     </text>
 
@@ -201,7 +201,7 @@ class LabelGenerator:
     <!-- Revision Date -->
     {% if revision_date %}
     <text x="{{ width // 2 }}" y="{{ height - 15 }}" font-size="9"
-          text-anchor="middle" fill="#666">
+          text-anchor="middle" fill="{{ text_color }}" opacity="0.75">
       Revised: {{ revision_date }}
     </text>
     {% endif %}
@@ -211,20 +211,123 @@ class LabelGenerator:
 
     def __init__(self):
         self.header_color = settings.purple_header_color
-
-        # Label sizes in points (1 inch = 72 points)
-        # Standard 8.5" x 11" = 612 x 792 points
-        self.sizes = {
-            "pail": {"width": 612, "height": 792, "name": "Pail Label"},
-            "drum": {"width": 612, "height": 792, "name": "Drum Label"}
+        self.default_template_id = "clearedge_pail_v1"
+        self.brand_palette = {
+            "primary": "#1B006E",
+            "accent": "#B67CFF",
+            "text": "#222222",
+            "muted": "#666666"
         }
+
+        # Phase 2: template registry (print area + brand token map)
+        self.templates = {
+            "clearedge_pail_v1": {
+                "size": "pail",
+                "width": 612,
+                "height": 792,
+                "name": "Pail Label",
+                "safe_margin": 10,
+                "header_height": 90,
+                "max_product_name_chars": 36,
+                "brand": {
+                    "header_color": self.brand_palette["primary"],
+                    "accent_color": self.brand_palette["accent"],
+                    "body_font": "Arial, sans-serif",
+                    "text_color": self.brand_palette["text"]
+                }
+            },
+            "clearedge_drum_v1": {
+                "size": "drum",
+                "width": 648,
+                "height": 864,
+                "name": "Drum Label",
+                "safe_margin": 12,
+                "header_height": 100,
+                "max_product_name_chars": 42,
+                "brand": {
+                    "header_color": self.brand_palette["primary"],
+                    "accent_color": self.brand_palette["accent"],
+                    "body_font": "Arial, sans-serif",
+                    "text_color": self.brand_palette["text"]
+                }
+            }
+        }
+
+    def get_template_config(self, template_id: Optional[str], size: str) -> dict:
+        """Return Phase 2 template configuration by template ID or size."""
+        if template_id and template_id in self.templates:
+            return self.templates[template_id]
+
+        for tid, config in self.templates.items():
+            if config["size"] == size:
+                return config
+
+        logger.warning(f"Unknown size '{size}', using default template '{self.default_template_id}'")
+        return self.templates[self.default_template_id]
+
+    @staticmethod
+    def _fit_text(text: Optional[str], max_chars: int, fallback: str = "N/A") -> str:
+        """Simple deterministic text fitting with truncation."""
+        if not text:
+            return fallback
+        clean = " ".join(str(text).split())
+        if len(clean) <= max_chars:
+            return clean
+        return clean[: max_chars - 3].rstrip() + "..."
+
+
+
+    @staticmethod
+    def _wrap_lines(text: Optional[str], line_width: int = 40, max_lines: int = 2) -> list[str]:
+        """Deterministic word wrapping with max lines and ellipsis."""
+        if not text:
+            return []
+
+        words = " ".join(str(text).split()).split(" ")
+        lines: list[str] = []
+        current = ""
+
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            if len(candidate) <= line_width:
+                current = candidate
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+                if len(lines) >= max_lines:
+                    break
+
+        if current and len(lines) < max_lines:
+            lines.append(current)
+
+        overflow = len(" ".join(words)) > len(" ".join(lines))
+        if overflow and lines:
+            lines[-1] = (lines[-1][: max(1, line_width - 3)].rstrip() + "...")
+
+        return lines
+
+
+    def _format_statements(self, statements, line_width: int = 65, max_items: int = 6):
+        """Normalize hazard/precautionary statements with deterministic clipping."""
+        formatted = []
+        for statement in (statements or [])[:max_items]:
+            code = getattr(statement, "code", None)
+            text = getattr(statement, "text", "")
+            wrapped = self._wrap_lines(text, line_width=line_width, max_lines=2)
+            formatted.append({
+                "code": code or "•",
+                "text": " ".join(wrapped) if wrapped else ""
+            })
+        return formatted
 
     def generate_svg(
         self,
         data: ExtractedData,
         mode: str = "shipped_dot",
         size: str = "pail",
-        template_name: str = "default"
+        template_name: str = "default",
+        template_id: Optional[str] = None
     ) -> str:
         """
         Generate SVG label from extracted data.
@@ -240,33 +343,42 @@ class LabelGenerator:
         """
         logger.info(f"Generating SVG label for '{data.product.name}' in {mode} mode, {size} size")
 
-        # Get dimensions for selected size
-        size_config = self.sizes.get(size, self.sizes["pail"])
-        width = size_config["width"]
-        height = size_config["height"]
-        size_label = size_config["name"]
+        template_key = template_id if template_id in self.templates else None
+        if not template_key and template_name in self.templates:
+            template_key = template_name
+        template_config = self.get_template_config(template_key, size)
+
+        width = template_config["width"]
+        height = template_config["height"]
+        size_label = template_config["name"]
+        brand = template_config["brand"]
+        max_product_name_chars = template_config["max_product_name_chars"]
 
         # Prepare template context
         context = {
             "width": width,
             "height": height,
-            "header_color": self.header_color,
+            "header_color": brand["header_color"],
+            "accent_color": brand["accent_color"],
+            "text_color": brand["text_color"],
+            "body_font": brand["body_font"],
             "mode": mode,
             "size_label": size_label,
-            "product_name": data.product.name,
+            "product_name": self._fit_text(data.product.name, max_product_name_chars, "UNNAMED PRODUCT"),
             "signal_word": data.ghs.signal_word,
             "pictograms": data.ghs.pictograms,
-            "hazard_statements": data.ghs.hazard_statements,
-            "precautionary_statements": data.ghs.precautionary_statements,
+            "hazard_statements": self._format_statements(data.ghs.hazard_statements, line_width=65, max_items=6),
+            "precautionary_statements": self._format_statements(data.ghs.precautionary_statements, line_width=65, max_items=6),
             "un_number": data.transport.un_number,
-            "shipping_name": data.transport.proper_shipping_name or "N/A",
+            "shipping_name": self._fit_text(data.transport.proper_shipping_name, 45),
             "hazard_class": data.transport.hazard_class,
             "packing_group": data.transport.packing_group,
-            "supplier_name": data.product.supplier_name,
-            "supplier_address": data.product.supplier_address,
-            "supplier_phone": data.product.supplier_phone,
+            "supplier_name": self._fit_text(data.product.supplier_name, 50, "ClearEdge Solutions"),
+            "supplier_address": self._fit_text(data.product.supplier_address, 70, "14301 CR Koon Highway, Newberry, SC 29108"),
+            "supplier_phone": self._fit_text(data.product.supplier_phone, 35, "www.clear-edge.net"),
             "emergency_phone": data.product.emergency_phone,
-            "revision_date": data.product.revision_date
+            "revision_date": data.product.revision_date,
+            "template_id": template_key or self.default_template_id,
         }
 
         # Render template
