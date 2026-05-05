@@ -13,9 +13,8 @@ async def no_lifespan(app):
 def _set_deps(healthy: bool):
     main.app.router.lifespan_context = no_lifespan
     sentinel = object() if healthy else None
-    main.drive_client = sentinel
     main.pdf_extractor = sentinel
-    main.gemini_client = sentinel
+    main.openai_client = sentinel
     main.validator = sentinel
     main.web_retriever = sentinel
     main.label_generator = sentinel
@@ -32,14 +31,12 @@ def test_readiness_contract_includes_expected_checks_and_status_ready():
         assert payload['status'] in {'ready', 'degraded'}
         checks = payload['checks']
         expected_keys = {
-            'drive_client_initialized',
             'pdf_extractor_initialized',
-            'gemini_client_initialized',
+            'openai_client_initialized',
             'validator_initialized',
             'web_retriever_initialized',
             'label_generator_initialized',
-            'gemini_api_key_present',
-            'shared_drive_id_present',
+            'openai_api_key_present',
         }
         assert expected_keys.issubset(checks.keys())
 
@@ -52,4 +49,4 @@ def test_readiness_status_degraded_when_dependencies_missing():
         assert res.status_code == 200
         payload = res.json()
         assert payload['status'] == 'degraded'
-        assert payload['checks']['drive_client_initialized'] is False
+        assert payload['checks']['openai_client_initialized'] is False

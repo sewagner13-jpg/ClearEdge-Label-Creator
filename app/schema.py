@@ -205,10 +205,10 @@ class ExtractionMeta(BaseModel):
 
     product_name: str
     extraction_timestamp: datetime = Field(default_factory=datetime.utcnow)
-    gemini_model: str
-    sds_file_id: Optional[str] = Field(None, description="Drive file ID")
+    ai_model: str
+    sds_source_id: Optional[str] = Field(None, description="Source file ID")
     sds_sha256: Optional[str] = Field(None, description="SHA-256 hash")
-    tds_file_id: Optional[str] = Field(None, description="Drive file ID")
+    tds_source_id: Optional[str] = Field(None, description="Source file ID")
     tds_sha256: Optional[str] = Field(None, description="SHA-256 hash")
     source_urls: Optional[List[str]] = Field(None, description="URLs if web-retrieved")
     extraction_duration_seconds: Optional[float] = None
@@ -235,7 +235,7 @@ class ProductManifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     product_name: str
-    drive_folder_id: str
+    storage_path: str
     latest_extraction_date: Optional[str] = None
     latest_label_date: Optional[str] = None
     sds_files: List[dict] = Field(default_factory=list)  # [{id, name, sha256, uploaded}]

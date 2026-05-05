@@ -438,27 +438,27 @@ class LabelGenerator:
 
     def save_label_files(
         self,
-        drive_client,
+        storage_client,
         product_folder_id: str,
         date_folder: str,
         svg_content: str,
         pdf_bytes: bytes
     ) -> tuple[str, str]:
         """
-        Save SVG and PDF labels to Drive.
+        Save SVG and PDF labels to the configured storage backend.
 
         Returns:
             Tuple of (svg_file_id, pdf_file_id)
         """
         # Find or create Labels/{date} folder
-        labels_folder_id = drive_client.find_subfolder(product_folder_id, "Labels")
+        labels_folder_id = storage_client.find_subfolder(product_folder_id, "Labels")
         if not labels_folder_id:
             raise ValueError("Labels folder not found")
 
-        dated_folder_id = drive_client.create_dated_folder(labels_folder_id, date_folder)
+        dated_folder_id = storage_client.create_dated_folder(labels_folder_id, date_folder)
 
         # Upload SVG
-        svg_id = drive_client.upload_file(
+        svg_id = storage_client.upload_file(
             svg_content.encode('utf-8'),
             "label.svg",
             dated_folder_id,
@@ -467,7 +467,7 @@ class LabelGenerator:
         logger.info(f"Uploaded label.svg: {svg_id}")
 
         # Upload PDF
-        pdf_id = drive_client.upload_file(
+        pdf_id = storage_client.upload_file(
             pdf_bytes,
             "label.pdf",
             dated_folder_id,

@@ -18,9 +18,6 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 
-[project.scripts]
-pipeline-cli = "pipeline_cli:main"
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

@@ -11,7 +11,7 @@ class FakePDFExtractor:
         return type("Text", (), {"doc": doc_type, "pages": [1]})()
 
 
-class FakeGeminiClient:
+class FakeOpenAIClient:
     def extract_from_documents(self, sds_text, tds_text, product_name: str):
         raise AssertionError("Should not be called in error-path tests")
 
@@ -39,7 +39,7 @@ def setup_fakes(tmp_path: Path):
     main.LABELS_DIR = tmp_path
     main.label_metadata_store = {}
     main.pdf_extractor = FakePDFExtractor()
-    main.gemini_client = FakeGeminiClient()
+    main.openai_client = FakeOpenAIClient()
     main.validator = FakeValidator()
     main.label_generator = FakeLabelGenerator()
 

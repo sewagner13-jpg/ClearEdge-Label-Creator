@@ -17,8 +17,8 @@ Liveness endpoint for load balancers and uptime checks.
   "status": "healthy",
   "version": "1.0.0",
   "timestamp": "2026-05-04T00:00:00Z",
-  "gemini_model": "...",
-  "shared_drive_id": "..."
+  "ai_provider": "openai",
+  "openai_model": "gpt-4o"
 }
 ```
 
@@ -31,27 +31,21 @@ Dependency-oriented readiness endpoint for deployment diagnostics.
   "status": "ready",
   "timestamp": "2026-05-04T00:00:00Z",
   "checks": {
-    "drive_client_initialized": true,
     "pdf_extractor_initialized": true,
-    "gemini_client_initialized": true,
+    "openai_client_initialized": true,
     "validator_initialized": true,
     "web_retriever_initialized": true,
     "label_generator_initialized": true,
-    "gemini_api_key_present": true,
-    "shared_drive_id_present": true
+    "openai_api_key_present": true
   }
 }
 ```
 
 If one or more checks fail, status returns `degraded`.
 
-## Legacy compatibility
-Existing non-versioned endpoints remain available during migration:
+## Compatibility
+Existing health endpoint remains available:
 - `/health`
-- `/products`
-- `/ingest/drive`
-- `/ingest/url`
-- `/extract/{product_name}`
 
 ## Phase 1 preview
 Phase 1 will add and stabilize:

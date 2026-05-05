@@ -33,16 +33,16 @@ class TestAuditLogger:
         """Test extraction metadata creation."""
         meta = AuditLogger.create_extraction_meta(
             product_name="Test Product",
-            gemini_model="gemini-1.5-pro",
-            sds_file_id="file123",
+            ai_model="gpt-4o",
+            sds_source_id="file123",
             sds_bytes=b"test sds data",
             duration_seconds=45.2
         )
 
         assert isinstance(meta, ExtractionMeta)
         assert meta.product_name == "Test Product"
-        assert meta.gemini_model == "gemini-1.5-pro"
-        assert meta.sds_file_id == "file123"
+        assert meta.ai_model == "gpt-4o"
+        assert meta.sds_source_id == "file123"
         assert meta.sds_sha256 is not None
         assert len(meta.sds_sha256) == 64
         assert meta.extraction_duration_seconds == 45.2
@@ -51,7 +51,7 @@ class TestAuditLogger:
         """Test extraction metadata with source URLs."""
         meta = AuditLogger.create_extraction_meta(
             product_name="Web Product",
-            gemini_model="gemini-1.5-pro",
+            ai_model="gpt-4o",
             source_urls=["https://example.com/sds.pdf"]
         )
 
@@ -82,7 +82,7 @@ class TestAuditLogger:
         """Test that timestamps are automatically set."""
         meta = AuditLogger.create_extraction_meta(
             product_name="Test",
-            gemini_model="test-model"
+            ai_model="test-model"
         )
 
         assert isinstance(meta.extraction_timestamp, datetime)

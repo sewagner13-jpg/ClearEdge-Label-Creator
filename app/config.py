@@ -18,39 +18,11 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
-    # Google Gemini AI (FREE tier available!)
-    gemini_api_key: Optional[str] = Field(default=None, description="Google Gemini API key from aistudio.google.com")
-    gemini_model: str = Field(default="gemini-1.5-flash", description="Gemini model (gemini-1.5-flash, gemini-1.5-pro)")
-    gemini_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
-    gemini_max_retries: int = Field(default=3, ge=1, le=10)
-
-    # OpenAI (ChatGPT) - Legacy support
+    # OpenAI
     openai_api_key: Optional[str] = Field(default=None, description="OpenAI API key from platform.openai.com")
-    openai_model: str = Field(default="gpt-4o", description="OpenAI model name (gpt-4o, gpt-4-turbo, gpt-3.5-turbo)")
+    openai_model: str = Field(default="gpt-4o", description="OpenAI model name")
     openai_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     openai_max_retries: int = Field(default=3, ge=1, le=10)
-
-    # Google Drive
-    root_folder_id: str = Field(
-        default="1dIThii6ccCgWg5UlnT-x0-Gd8RmY_knr",
-        description="Root folder ID (Product Labels folder)"
-    )
-    shared_drive_id: Optional[str] = Field(
-        default=None,
-        description="Shared Drive ID (optional, only if using Shared Drive)"
-    )
-    google_service_account_file: Optional[str] = Field(
-        default=None,
-        description="Path to service account JSON key file (local development)"
-    )
-    google_service_account_json: Optional[str] = Field(
-        default=None,
-        description="Service account JSON as string (Cloud Run/production)"
-    )
-    root_folder_name: str = Field(
-        default="Product Labels",
-        description="Root folder name"
-    )
 
     # Application
     env: str = Field(default="development", pattern="^(development|production|testing)$")

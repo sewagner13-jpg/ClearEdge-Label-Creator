@@ -19,9 +19,10 @@ def test_health_contract_fields_and_timestamp_format():
         assert response.status_code == 200
 
         payload = response.json()
-        for key in ['status', 'version', 'timestamp', 'gemini_model', 'shared_drive_id']:
+        for key in ['status', 'version', 'timestamp', 'ai_provider', 'openai_model']:
             assert key in payload
 
         assert payload['status'] == 'healthy'
+        assert payload['ai_provider'] == 'openai'
         # Validate ISO-ish timestamp parseability
         datetime.fromisoformat(payload['timestamp'])

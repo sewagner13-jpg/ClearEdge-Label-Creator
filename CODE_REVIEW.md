@@ -226,4 +226,4 @@ for file in files:
 ---
 
 **Report Generated:** $(date)
-**Files Reviewed:** simple_app.py, pdf_extract.py, gemini_client.py, label_stub.py
+**Files Reviewed:** app/main.py, app/openai_client.py, app/pdf_extract.py, app/label_stub.py

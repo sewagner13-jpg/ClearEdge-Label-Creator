@@ -21,7 +21,7 @@ class FakePDFExtractor:
         return type("Text", (), {"doc": doc_type, "pages": [1]})()
 
 
-class FakeGeminiClient:
+class FakeOpenAIClient:
     def extract_from_documents(self, sds_text, tds_text, product_name: str):
         return ExtractedData(
             product=ProductInfo(name=product_name, supplier_name="ClearEdge"),
@@ -62,9 +62,8 @@ def setup_fakes(tmp_path: Path):
     main.app.router.lifespan_context = no_lifespan
     main.LABELS_DIR = tmp_path
     main.label_metadata_store = {}
-    main.drive_client = object()
     main.pdf_extractor = FakePDFExtractor()
-    main.gemini_client = FakeGeminiClient()
+    main.openai_client = FakeOpenAIClient()
     main.validator = FakeValidatorBlocked()
     main.web_retriever = object()
     main.label_generator = FakeLabelGenerator()
@@ -129,9 +128,8 @@ def setup_fakes_approved(tmp_path: Path):
     main.app.router.lifespan_context = no_lifespan
     main.LABELS_DIR = tmp_path
     main.label_metadata_store = {}
-    main.drive_client = object()
     main.pdf_extractor = FakePDFExtractor()
-    main.gemini_client = FakeGeminiClient()
+    main.openai_client = FakeOpenAIClient()
     main.validator = FakeValidatorApproved()
     main.web_retriever = object()
     main.label_generator = FakeLabelGenerator()

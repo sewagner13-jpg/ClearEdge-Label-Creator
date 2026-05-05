@@ -1,4 +1,4 @@
-# Multi-stage build for optimized Cloud Run deployment
+# Multi-stage build for hosted deployment
 FROM python:3.11-slim as builder
 
 # Install build dependencies
@@ -53,7 +53,7 @@ COPY --chown=appuser:appuser . .
 # Switch to non-root user
 USER appuser
 
-# Expose port (Cloud Run uses PORT env var)
+# Expose port
 EXPOSE 8080
 
 # Health check

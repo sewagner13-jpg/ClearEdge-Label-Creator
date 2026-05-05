@@ -18,16 +18,10 @@ printf "   Port: %s\n" "$PORT"
 printf "   Python: %s\n" "$PYTHON_BIN"
 printf "\n🔎 Quick preflight:\n"
 
-if [[ -z "${GEMINI_API_KEY:-${GOOGLE_API_KEY:-}}" ]]; then
-  echo "  ⚠️  No GEMINI_API_KEY/GOOGLE_API_KEY detected. Live extraction may fail."
+if [[ -z "${OPENAI_API_KEY:-}" ]]; then
+  echo "  ⚠️  No OPENAI_API_KEY detected. Live extraction will be unavailable."
 else
-  echo "  ✅ API key detected."
-fi
-
-if [[ -z "${SHARED_DRIVE_ID:-}" ]]; then
-  echo "  ⚠️  SHARED_DRIVE_ID not set. Drive-backed flows may be unavailable."
-else
-  echo "  ✅ SHARED_DRIVE_ID detected."
+  echo "  ✅ OPENAI_API_KEY detected."
 fi
 
 if [[ ! -d "$VENV_DIR" ]]; then
