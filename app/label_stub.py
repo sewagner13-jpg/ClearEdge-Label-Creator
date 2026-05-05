@@ -5,6 +5,8 @@ Generates DOT/OSHA-compliant labels from extracted data.
 
 import io
 import logging
+import base64
+from pathlib import Path
 from typing import Optional
 import svgwrite
 from jinja2 import Template
@@ -29,17 +31,22 @@ class LabelGenerator:
   <!-- CLEAR EDGE Header with Logo Area -->
   <rect x="10" y="10" width="{{ width - 20 }}" height="90" fill="{{ header_color }}" rx="8"/>
 
-  <!-- Logo placeholder (left side) -->
-  <rect x="20" y="20" width="70" height="70" fill="white" rx="5"/>
-  <text x="55" y="48" font-size="11" font-weight="bold" fill="{{ header_color }}" text-anchor="middle">CLEAR</text>
-  <text x="55" y="62" font-size="11" font-weight="bold" fill="{{ accent_color }}" text-anchor="middle">e</text>
-  <text x="55" y="78" font-size="8" fill="{{ header_color }}" text-anchor="middle">SOLUTIONS</text>
+  <!-- Brand logo -->
+  <rect x="20" y="25" width="{{ logo_panel_width }}" height="52" fill="white" rx="5"/>
+  {% if logo_data_uri %}
+  <image x="28" y="32" width="{{ logo_panel_width - 16 }}" height="38"
+         href="{{ logo_data_uri }}" xlink:href="{{ logo_data_uri }}"
+         preserveAspectRatio="xMidYMid meet"/>
+  {% else %}
+  <text x="{{ 20 + logo_panel_width // 2 }}" y="55" font-size="18" font-weight="bold"
+        fill="{{ header_color }}" text-anchor="middle">ClearEdge</text>
+  {% endif %}
 
   <!-- Product Name (center/right) -->
-  <text x="{{ width // 2 + 20 }}" y="45" font-size="22" font-weight="bold" fill="white" text-anchor="middle">
+  <text x="{{ product_text_x }}" y="45" font-size="22" font-weight="bold" fill="white" text-anchor="middle">
     {{ product_name }}
   </text>
-  <text x="{{ width // 2 + 20 }}" y="75" font-size="11" fill="white" text-anchor="middle">
+  <text x="{{ product_text_x }}" y="75" font-size="11" fill="white" text-anchor="middle">
     CLEAREDGE SOLUTIONS
   </text>
   <text x="{{ width - 30 }}" y="90" font-size="9" fill="white" text-anchor="end">
@@ -212,6 +219,7 @@ class LabelGenerator:
     def __init__(self):
         self.header_color = settings.purple_header_color
         self.default_template_id = "clearedge_pail_v1"
+        self.logo_data_uri = self._load_logo_data_uri()
         self.brand_palette = {
             "primary": "#1B006E",
             "accent": "#B67CFF",
@@ -228,7 +236,7 @@ class LabelGenerator:
                 "name": "Pail Label",
                 "safe_margin": 10,
                 "header_height": 90,
-                "max_product_name_chars": 36,
+                "max_product_name_chars": 30,
                 "brand": {
                     "header_color": self.brand_palette["primary"],
                     "accent_color": self.brand_palette["accent"],
@@ -243,7 +251,7 @@ class LabelGenerator:
                 "name": "Drum Label",
                 "safe_margin": 12,
                 "header_height": 100,
-                "max_product_name_chars": 42,
+                "max_product_name_chars": 34,
                 "brand": {
                     "header_color": self.brand_palette["primary"],
                     "accent_color": self.brand_palette["accent"],
@@ -252,6 +260,16 @@ class LabelGenerator:
                 }
             }
         }
+
+    @staticmethod
+    def _load_logo_data_uri() -> Optional[str]:
+        """Load the packaged ClearEdge logo as an SVG-safe data URI."""
+        logo_path = Path(__file__).resolve().parent.parent / "High Res Logo (2).png"
+        if not logo_path.exists():
+            logger.warning("ClearEdge logo asset not found: %s", logo_path)
+            return None
+        encoded = base64.b64encode(logo_path.read_bytes()).decode("ascii")
+        return f"data:image/png;base64,{encoded}"
 
     def get_template_config(self, template_id: Optional[str], size: str) -> dict:
         """Return Phase 2 template configuration by template ID or size."""
@@ -353,6 +371,7 @@ class LabelGenerator:
         size_label = template_config["name"]
         brand = template_config["brand"]
         max_product_name_chars = template_config["max_product_name_chars"]
+        logo_panel_width = 190 if width <= 612 else 210
 
         # Prepare template context
         context = {
@@ -364,6 +383,9 @@ class LabelGenerator:
             "body_font": brand["body_font"],
             "mode": mode,
             "size_label": size_label,
+            "logo_data_uri": self.logo_data_uri,
+            "logo_panel_width": logo_panel_width,
+            "product_text_x": (width + logo_panel_width) // 2,
             "product_name": self._fit_text(data.product.name, max_product_name_chars, "UNNAMED PRODUCT"),
             "signal_word": data.ghs.signal_word,
             "pictograms": data.ghs.pictograms,
