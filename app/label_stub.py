@@ -32,13 +32,13 @@ class LabelGenerator:
   <rect x="10" y="10" width="{{ width - 20 }}" height="90" fill="{{ header_color }}" rx="8"/>
 
   <!-- Brand logo -->
-  <rect x="20" y="25" width="{{ logo_panel_width }}" height="52" fill="white" rx="5"/>
+  <rect x="10" y="10" width="{{ logo_panel_width }}" height="90" fill="white"/>
   {% if logo_data_uri %}
-  <image x="28" y="32" width="{{ logo_panel_width - 16 }}" height="38"
+  <image x="20" y="22" width="{{ logo_panel_width - 20 }}" height="66"
          href="{{ logo_data_uri }}" xlink:href="{{ logo_data_uri }}"
          preserveAspectRatio="xMidYMid meet"/>
   {% else %}
-  <text x="{{ 20 + logo_panel_width // 2 }}" y="55" font-size="18" font-weight="bold"
+  <text x="{{ 10 + logo_panel_width // 2 }}" y="60" font-size="18" font-weight="bold"
         fill="{{ header_color }}" text-anchor="middle">ClearEdge</text>
   {% endif %}
 
@@ -264,7 +264,7 @@ class LabelGenerator:
     @staticmethod
     def _load_logo_data_uri() -> Optional[str]:
         """Load the packaged ClearEdge logo as an SVG-safe data URI."""
-        logo_path = Path(__file__).resolve().parent.parent / "High Res Logo (2).png"
+        logo_path = Path(__file__).resolve().parent.parent / "High Res Logo.png"
         if not logo_path.exists():
             logger.warning("ClearEdge logo asset not found: %s", logo_path)
             return None
@@ -371,7 +371,7 @@ class LabelGenerator:
         size_label = template_config["name"]
         brand = template_config["brand"]
         max_product_name_chars = template_config["max_product_name_chars"]
-        logo_panel_width = 190 if width <= 612 else 210
+        logo_panel_width = 220 if width <= 612 else 245
 
         # Prepare template context
         context = {
@@ -385,7 +385,7 @@ class LabelGenerator:
             "size_label": size_label,
             "logo_data_uri": self.logo_data_uri,
             "logo_panel_width": logo_panel_width,
-            "product_text_x": (width + logo_panel_width) // 2,
+            "product_text_x": (width + logo_panel_width + 10) // 2,
             "product_name": self._fit_text(data.product.name, max_product_name_chars, "UNNAMED PRODUCT"),
             "signal_word": data.ghs.signal_word,
             "pictograms": data.ghs.pictograms,
