@@ -90,6 +90,24 @@ def test_label_uses_brand_purple_for_previous_red_accents():
     assert "data:image/png;base64" in svg
 
 
+def test_signal_word_replaces_ghs_heading_and_strip_stays_blank():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="ClearEdge Signal Test"),
+        ghs=GHSClassification(signal_word="Danger", pictograms=["GHS02"]),
+        transport=TransportClassification(),
+    )
+
+    svg = generator.generate_svg(data, mode="workplace", size="pail")
+
+    assert "GHS PICTOGRAMS" not in svg
+    assert 'id="signal-strip"' in svg
+    assert 'id="signal-word-heading"' in svg
+    assert 'font-size="27"' in svg
+    assert "Danger" in svg
+    assert 'fill="white" text-anchor="middle"' not in svg
+
+
 def test_product_name_uses_logo_purple():
     generator = LabelGenerator()
     data = ExtractedData(

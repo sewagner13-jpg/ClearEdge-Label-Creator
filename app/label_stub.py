@@ -77,17 +77,11 @@ class LabelGenerator:
     </text>
   </g>
 
-  <!-- Signal Word (if present) -->
+  <!-- Signal word brand band (kept blank by design) -->
   {% if signal_word %}
-  <rect x="10" y="122" width="{{ width - 20 }}" height="42"
+  <rect id="signal-strip" x="10" y="122" width="{{ width - 20 }}" height="42"
         fill="{{ brand_purple }}"
         rx="2"/>
-  <text x="{{ width // 2 }}" y="151"
-        font-size="25" font-weight="bold"
-        fill="white" text-anchor="middle"
-        style="text-transform: uppercase;">
-    {{ signal_word }}
-  </text>
   {% set y_offset = 174 %}
   {% else %}
   {% set y_offset = 124 %}
@@ -97,13 +91,16 @@ class LabelGenerator:
   <g id="symbols-summary">
     <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="112"
           fill="#FBFAFE" stroke="#C8BEDD" stroke-width="1.5" rx="3"/>
-    <text x="20" y="{{ y_offset + 19 }}" font-size="11.5" font-weight="bold" fill="{{ brand_purple }}">
-      GHS PICTOGRAMS
+    {% if signal_word %}
+    <text id="signal-word-heading" x="20" y="{{ y_offset + 30 }}" font-size="27"
+          font-weight="bold" fill="{{ brand_purple }}" style="text-transform: uppercase;">
+      {{ signal_word }}
     </text>
+    {% endif %}
 
     <!-- Pictogram images pulled only from the approved GHS pictogram table asset. -->
     {% for pictogram in pictogram_icons[:4] %}
-    <g transform="translate({{ 20 + (loop.index0 % 4) * 72 }}, {{ y_offset + 32 }})">
+    <g transform="translate({{ 20 + (loop.index0 % 4) * 72 }}, {{ y_offset + 40 }})">
       <image id="pictogram-{{ pictogram.code }}" x="0" y="0" width="66" height="66"
              href="{{ pictogram.data_uri }}" xlink:href="{{ pictogram.data_uri }}"
              preserveAspectRatio="xMidYMid meet"/>
