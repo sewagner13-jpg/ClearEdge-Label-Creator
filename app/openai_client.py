@@ -28,6 +28,7 @@ CRITICAL RULES:
 4. For every extracted field, provide evidence with verbatim quotes (max 240 chars)
 5. Include section name/number and page number when available
 6. Use confidence scores: 1.0 = explicit statement, 0.8 = clear but indirect, 0.5 = inferred, 0.3 = uncertain
+7. NFPA 704 values: extract explicit SDS values when listed. If not listed, return 0 for health, flammability, and instability/reactivity, null for special, and add a warning that NFPA 704 values were defaulted to 0 per ClearEdge policy.
 
 SCHEMA TO FOLLOW:
 {
@@ -60,6 +61,12 @@ SCHEMA TO FOLLOW:
     "special_provisions": "string|null",
     "erg_guide_number": "string|null"
   },
+  "nfpa": {
+    "health": 0-4,
+    "flammability": 0-4,
+    "instability": 0-4,
+    "special": "string|null"
+  },
   "evidence": [
     {
       "field_path": "product.name",
@@ -80,18 +87,35 @@ TRANSPORT CLASSIFICATION (Section 14):
 - Look for DOT, IATA, IMDG classifications
 - Marine pollutant status if mentioned
 
+NFPA 704:
+- Blue/left = health, red/top = flammability, yellow/right = instability/reactivity, white/bottom = special hazard
+- Use the 0-4 numbers exactly as listed in the SDS when present
+- Accept labels like NFPA, NFPA 704, HMIS/NFPA, health/fire/reactivity, or health/flammability/instability
+- If NFPA 704 values are not listed, use health=0, flammability=0, instability=0, special=null
+
 GHS PICTOGRAMS:
 - GHS01: Explosive
 - GHS02: Flammable
 - GHS03: Oxidizing
 - GHS04: Compressed Gas
-- GHS05: Corrosive
+- GHS05: Corrosive / Corrosion
 - GHS06: Acute Toxicity
 - GHS07: Harmful/Irritant
 - GHS08: Health Hazard
 - GHS09: Environmental Hazard
 
-Extract only pictograms explicitly mentioned or shown in the SDS."""
+If the SDS lists pictogram words, map them exactly:
+- Exclamation Point -> GHS07
+- Health Hazard -> GHS08
+- Skull and Crossbones -> GHS06
+- Corrosive or Corrosion -> GHS05
+- Flame -> GHS02
+- Gas Cylinder -> GHS04
+- Flame Over Circle -> GHS03
+- Exploding Bomb -> GHS01
+- Environment -> GHS09
+
+Extract only pictograms explicitly mentioned or shown in the SDS. Return only the GHS code list; do not invent pictograms."""
 
     def __init__(self):
         """Initialize OpenAI client."""
@@ -212,8 +236,30 @@ Extract only pictograms explicitly mentioned or shown in the SDS."""
         # Parse JSON
         data = json.loads(cleaned)
 
+        nfpa_payload = data.get("nfpa") or {}
+        nfpa_defaulted = (
+            "nfpa" not in data
+            or any(key not in nfpa_payload or nfpa_payload.get(key) is None for key in ("health", "flammability", "instability"))
+        )
+        data["nfpa"] = {
+            "health": nfpa_payload.get("health") if nfpa_payload.get("health") is not None else 0,
+            "flammability": nfpa_payload.get("flammability") if nfpa_payload.get("flammability") is not None else 0,
+            "instability": (
+                nfpa_payload.get("instability")
+                if nfpa_payload.get("instability") is not None
+                else nfpa_payload.get("reactivity")
+                if nfpa_payload.get("reactivity") is not None
+                else 0
+            ),
+            "special": nfpa_payload.get("special"),
+        }
+
         # Validate with Pydantic
         extracted = ExtractedData(**data)
+        if nfpa_defaulted:
+            extracted.warnings.append(
+                "NFPA 704 ratings were not fully listed in the SDS/TDS extraction response; defaulted missing values to 0 per ClearEdge policy."
+            )
 
         # Verify product name matches
         if extracted.product.name.lower() != product_name.lower():

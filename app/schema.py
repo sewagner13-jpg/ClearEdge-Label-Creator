@@ -5,7 +5,66 @@ All schemas enforce compliance with SDS/TDS structure and DOT/OSHA requirements.
 
 from datetime import datetime
 from typing import List, Optional, Literal
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import AliasChoices, BaseModel, Field, field_validator, ConfigDict
+
+
+GHS_PICTOGRAM_OPTIONS = {
+    "GHS01": "Exploding Bomb",
+    "GHS02": "Flame",
+    "GHS03": "Flame Over Circle",
+    "GHS04": "Gas Cylinder",
+    "GHS05": "Corrosive",
+    "GHS06": "Skull and Crossbones",
+    "GHS07": "Exclamation Point",
+    "GHS08": "Health Hazard",
+    "GHS09": "Environment",
+}
+
+GHS_PICTOGRAM_ALIASES = {
+    "exploding bomb": "GHS01",
+    "bomb": "GHS01",
+    "flame": "GHS02",
+    "flammable": "GHS02",
+    "flame over circle": "GHS03",
+    "oxidizer": "GHS03",
+    "oxidizing": "GHS03",
+    "gas cylinder": "GHS04",
+    "gas under pressure": "GHS04",
+    "gases under pressure": "GHS04",
+    "corrosive": "GHS05",
+    "corrosion": "GHS05",
+    "skull and crossbones": "GHS06",
+    "skull": "GHS06",
+    "exclamation point": "GHS07",
+    "exclamation": "GHS07",
+    "irritant": "GHS07",
+    "health hazard": "GHS08",
+    "environment": "GHS09",
+    "environmental": "GHS09",
+    "aquatic toxicity": "GHS09",
+}
+
+
+def _normalize_pictogram_key(value: str) -> str:
+    return " ".join(value.replace("_", " ").replace("-", " ").split()).lower()
+
+
+def normalize_ghs_pictogram(value: str) -> str:
+    """Map operator/UI words or GHS codes to exact GHS pictogram codes."""
+    code = str(value).strip().upper()
+    if code in GHS_PICTOGRAM_OPTIONS:
+        return code
+
+    normalized = _normalize_pictogram_key(str(value))
+    mapped = GHS_PICTOGRAM_ALIASES.get(normalized)
+    if mapped:
+        return mapped
+
+    for candidate_code, name in GHS_PICTOGRAM_OPTIONS.items():
+        if normalized == _normalize_pictogram_key(name):
+            return candidate_code
+
+    raise ValueError(f"Invalid GHS pictogram: {value}")
 
 
 class HazardStatement(BaseModel):
@@ -57,15 +116,29 @@ class GHSClassification(BaseModel):
         description="Additional non-GHS hazard information"
     )
 
-    @field_validator("pictograms")
+    @field_validator("pictograms", mode="before")
     @classmethod
-    def validate_pictograms(cls, v: List[str]) -> List[str]:
-        """Ensure pictogram codes are valid GHS codes."""
-        valid_codes = {f"GHS{i:02d}" for i in range(1, 10)}
-        for code in v:
-            if code not in valid_codes:
-                raise ValueError(f"Invalid GHS pictogram code: {code}")
-        return list(set(v))  # Remove duplicates
+    def validate_pictograms(cls, v) -> List[str]:
+        """Normalize UI words and GHS codes into stable, deduped GHS codes."""
+        if v is None:
+            return []
+        if isinstance(v, str):
+            values = [
+                item.strip()
+                for item in v.replace("|", ",").replace(";", ",").split(",")
+                if item.strip()
+            ]
+        else:
+            values = list(v)
+
+        deduped = []
+        seen = set()
+        for raw_code in values:
+            code = normalize_ghs_pictogram(raw_code)
+            if code not in seen:
+                deduped.append(code)
+                seen.add(code)
+        return deduped
 
 
 class TransportClassification(BaseModel):
@@ -106,6 +179,44 @@ class TransportClassification(BaseModel):
     )
 
 
+class NFPA704Ratings(BaseModel):
+    """NFPA 704 fire diamond ratings."""
+    model_config = ConfigDict(extra="forbid", populate_by_name=True, str_strip_whitespace=True)
+
+    health: int = Field(
+        0,
+        ge=0,
+        le=4,
+        description="Blue/left health hazard rating, 0=minimal through 4=severe"
+    )
+    flammability: int = Field(
+        0,
+        ge=0,
+        le=4,
+        description="Red/top flammability hazard rating, 0=minimal through 4=severe"
+    )
+    instability: int = Field(
+        0,
+        ge=0,
+        le=4,
+        validation_alias=AliasChoices("instability", "reactivity"),
+        description="Yellow/right instability or reactivity rating, 0=minimal through 4=severe"
+    )
+    special: Optional[str] = Field(
+        None,
+        max_length=12,
+        description="White/bottom special hazard code such as OX or W, if explicitly stated"
+    )
+
+    @field_validator("special")
+    @classmethod
+    def normalize_special(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        normalized = " ".join(v.split()).upper()
+        return normalized or None
+
+
 class ProductInfo(BaseModel):
     """Core product identification and supplier information."""
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -119,6 +230,16 @@ class ProductInfo(BaseModel):
         None,
         description="SDS revision date (ISO format preferred)"
     )
+
+
+class ShipmentInfo(BaseModel):
+    """Operator-provided shipment and batch fields."""
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    lot_number: Optional[str] = Field(None, description="Batch or lot number for this shipment")
+    expiration_date: Optional[str] = Field(None, description="Expiration date for this shipment")
+    fill_amount: Optional[str] = Field(None, description="Net contents or fill amount for this container")
+    manufacture_date: Optional[str] = Field(None, description="Manufacture date for this shipment")
 
 
 class Evidence(BaseModel):
@@ -154,6 +275,8 @@ class ExtractedData(BaseModel):
     product: ProductInfo
     ghs: GHSClassification
     transport: TransportClassification
+    nfpa: NFPA704Ratings = Field(default_factory=NFPA704Ratings)
+    shipment: ShipmentInfo = Field(default_factory=ShipmentInfo)
     evidence: List[Evidence] = Field(default_factory=list)
     confidence: List[FieldConfidence] = Field(default_factory=list)
     warnings: List[str] = Field(

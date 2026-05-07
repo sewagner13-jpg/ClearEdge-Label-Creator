@@ -38,6 +38,45 @@
                 </p>
             </div>
 
+            <div style="margin-top: 20px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; max-width: 760px;">
+                <div>
+                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Lot Number:</label>
+                    <input type="text" id="lotNumber" placeholder="Optional"
+                           style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                </div>
+                <div>
+                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Expiration Date:</label>
+                    <input type="text" id="expirationDate" placeholder="Optional"
+                           style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                </div>
+                <div>
+                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Fill Amount:</label>
+                    <input type="text" id="fillAmount" placeholder="e.g., 441 lb"
+                           style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                </div>
+            </div>
+
+            <div style="margin-top: 20px; max-width: 760px;">
+                <label style="font-weight: 600; margin-bottom: 10px; display: block;">GHS Pictograms:</label>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                    <select id="ghsPictogramSelect" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; min-width: 280px; font-size: 1em;">
+                        <option value="">Auto from SDS</option>
+                        <option value="GHS07">Exclamation Point</option>
+                        <option value="GHS08">Health Hazard</option>
+                        <option value="GHS06">Skull and Crossbones</option>
+                        <option value="GHS05">Corrosive</option>
+                        <option value="GHS02">Flame</option>
+                        <option value="GHS04">Gas Cylinder</option>
+                        <option value="GHS03">Flame Over Circle</option>
+                        <option value="GHS01">Exploding Bomb</option>
+                        <option value="GHS09">Environment</option>
+                    </select>
+                    <button type="button" id="addGhsPictogram" class="btn" style="padding: 10px 16px;">Add</button>
+                    <button type="button" id="clearGhsPictograms" style="padding: 10px 16px; border-radius: 5px; border: 1px solid #bbb; background: #fff; cursor: pointer;">Use SDS auto-pick</button>
+                </div>
+                <div id="selectedGhsPictograms" style="margin-top: 10px; color: #555; font-size: 0.95em;">Auto from SDS</div>
+            </div>
+
             <div style="margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 500px;">
                 <div>
                     <label style="font-weight: 600; margin-bottom: 10px; display: block;">Label Size:</label>

@@ -6,11 +6,14 @@ import pytest
 from pydantic import ValidationError
 
 from app.schema import (
+    GHS_PICTOGRAM_OPTIONS,
     HazardStatement,
     PrecautionaryStatement,
     GHSClassification,
     TransportClassification,
+    NFPA704Ratings,
     ProductInfo,
+    ShipmentInfo,
     ExtractedData,
     Evidence,
     ValidationResult,
@@ -61,6 +64,26 @@ class TestGHSClassification:
     def test_duplicate_pictograms_removed(self):
         ghs = GHSClassification(pictograms=["GHS02", "GHS02", "GHS07"])
         assert len(ghs.pictograms) == 2
+        assert ghs.pictograms == ["GHS02", "GHS07"]
+
+    def test_pictogram_dropdown_names_map_to_codes(self):
+        ghs = GHSClassification(
+            pictograms=["Corrosive", "Exclamation Point", "Corrosive"]
+        )
+        assert ghs.pictograms == ["GHS05", "GHS07"]
+
+    def test_pictogram_option_table_has_all_codes(self):
+        assert GHS_PICTOGRAM_OPTIONS == {
+            "GHS01": "Exploding Bomb",
+            "GHS02": "Flame",
+            "GHS03": "Flame Over Circle",
+            "GHS04": "Gas Cylinder",
+            "GHS05": "Corrosive",
+            "GHS06": "Skull and Crossbones",
+            "GHS07": "Exclamation Point",
+            "GHS08": "Health Hazard",
+            "GHS09": "Environment",
+        }
 
     def test_invalid_signal_word(self):
         with pytest.raises(ValidationError):
@@ -88,6 +111,42 @@ class TestTransportClassification:
         transport = TransportClassification()
         assert transport.un_number is None
         assert transport.hazard_class is None
+
+
+class TestNFPA704Ratings:
+    """Test NFPA 704 rating schema."""
+
+    def test_defaults_missing_ratings_to_zero(self):
+        nfpa = NFPA704Ratings()
+        assert nfpa.health == 0
+        assert nfpa.flammability == 0
+        assert nfpa.instability == 0
+        assert nfpa.special is None
+
+    def test_valid_nfpa_ratings(self):
+        nfpa = NFPA704Ratings(health=2, flammability=3, instability=1, special="ox")
+        assert nfpa.health == 2
+        assert nfpa.flammability == 3
+        assert nfpa.instability == 1
+        assert nfpa.special == "OX"
+
+    def test_reactivity_alias_maps_to_instability(self):
+        nfpa = NFPA704Ratings(health=1, flammability=2, reactivity=3)
+        assert nfpa.instability == 3
+
+    def test_invalid_rating_above_four(self):
+        with pytest.raises(ValidationError):
+            NFPA704Ratings(health=5)
+
+
+class TestShipmentInfo:
+    """Test operator-provided shipment field schema."""
+
+    def test_optional_shipment_fields(self):
+        shipment = ShipmentInfo(fill_amount="441 lb")
+        assert shipment.fill_amount == "441 lb"
+        assert shipment.lot_number is None
+        assert shipment.expiration_date is None
 
 
 class TestExtractedData:

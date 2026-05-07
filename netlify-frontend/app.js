@@ -15,8 +15,68 @@ const result = document.getElementById('result');
 const labelMode = document.getElementById('labelMode');
 const labelSize = document.getElementById('labelSize');
 const productName = document.getElementById('productName');
+const lotNumber = document.getElementById('lotNumber');
+const expirationDate = document.getElementById('expirationDate');
+const fillAmount = document.getElementById('fillAmount');
+const ghsPictogramSelect = document.getElementById('ghsPictogramSelect');
+const addGhsPictogram = document.getElementById('addGhsPictogram');
+const clearGhsPictograms = document.getElementById('clearGhsPictograms');
+const selectedGhsPictogramsEl = document.getElementById('selectedGhsPictograms');
+
+const GHS_PICTOGRAM_OPTIONS = {
+    GHS01: 'Exploding Bomb',
+    GHS02: 'Flame',
+    GHS03: 'Flame Over Circle',
+    GHS04: 'Gas Cylinder',
+    GHS05: 'Corrosive',
+    GHS06: 'Skull and Crossbones',
+    GHS07: 'Exclamation Point',
+    GHS08: 'Health Hazard',
+    GHS09: 'Environment'
+};
 
 let selectedFiles = [];
+let selectedGhsPictograms = [];
+
+function ghsPictogramLabel(code) {
+    return GHS_PICTOGRAM_OPTIONS[code] || code;
+}
+
+function renderSelectedGhsPictograms() {
+    if (selectedGhsPictograms.length === 0) {
+        selectedGhsPictogramsEl.textContent = 'Auto from SDS';
+        return;
+    }
+
+    selectedGhsPictogramsEl.innerHTML = selectedGhsPictograms.map(code => `
+        <span style="display:inline-flex; align-items:center; gap:6px; padding:6px 8px; margin:0 6px 6px 0; border:1px solid #1B006E; border-radius:4px; color:#1B006E; background:#F0E9FF;">
+            ${ghsPictogramLabel(code)}
+            <button type="button" data-ghs-remove="${code}" style="border:none; background:transparent; color:#1B006E; cursor:pointer; font-weight:700;">x</button>
+        </span>
+    `).join('');
+}
+
+addGhsPictogram.addEventListener('click', () => {
+    const code = ghsPictogramSelect.value;
+    if (!code) return;
+    if (!selectedGhsPictograms.includes(code)) {
+        selectedGhsPictograms.push(code);
+        renderSelectedGhsPictograms();
+    }
+});
+
+clearGhsPictograms.addEventListener('click', () => {
+    selectedGhsPictograms = [];
+    ghsPictogramSelect.value = '';
+    renderSelectedGhsPictograms();
+});
+
+selectedGhsPictogramsEl.addEventListener('click', (event) => {
+    const code = event.target?.dataset?.ghsRemove;
+    if (!code) return;
+    selectedGhsPictograms = selectedGhsPictograms.filter(item => item !== code);
+    renderSelectedGhsPictograms();
+});
 
 // Click to upload
 uploadArea.addEventListener('click', () => fileInput.click());
@@ -71,6 +131,40 @@ function removeFile(index) {
     generateBtn.disabled = selectedFiles.length === 0;
 }
 
+function renderActionLinks(label) {
+    const downloadUrl = label?.download_url;
+    const canvaCsvUrl = label?.canva_csv_url;
+    const canvaJsonUrl = label?.canva_json_url;
+
+    return `
+        ${downloadUrl ? `
+        <a href="${API_URL}${downloadUrl}" download style="text-decoration: none;">
+            <button class="btn">📥 Download Label PDF</button>
+        </a>
+        ` : ''}
+        ${canvaCsvUrl || canvaJsonUrl ? `
+        <div style="margin-top: 14px;">
+            <h3>Canva Handoff</h3>
+            <p style="margin: 6px 0 12px; color: #555;">
+                Use the CSV for Canva Bulk Create, or the JSON for manual template entry/review.
+            </p>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                ${canvaCsvUrl ? `
+                <a href="${API_URL}${canvaCsvUrl}" download style="text-decoration: none;">
+                    <button class="btn" type="button">Download Canva CSV</button>
+                </a>
+                ` : ''}
+                ${canvaJsonUrl ? `
+                <a href="${API_URL}${canvaJsonUrl}" target="_blank" rel="noopener" style="text-decoration: none;">
+                    <button class="btn" type="button">View Canva JSON</button>
+                </a>
+                ` : ''}
+            </div>
+        </div>
+        ` : ''}
+    `;
+}
+
 generateBtn.addEventListener('click', async () => {
     if (selectedFiles.length === 0) return;
 
@@ -89,6 +183,12 @@ generateBtn.addEventListener('click', async () => {
     formData.append('product_name', prodName);
     formData.append('mode', labelMode.value);
     formData.append('size', labelSize.value);
+    formData.append('lot_number', lotNumber.value.trim());
+    formData.append('expiration_date', expirationDate.value.trim());
+    formData.append('fill_amount', fillAmount.value.trim());
+    if (selectedGhsPictograms.length > 0) {
+        formData.append('ghs_pictograms', JSON.stringify(selectedGhsPictograms));
+    }
 
     generateBtn.disabled = true;
     loading.classList.add('show');
@@ -136,7 +236,7 @@ generateBtn.addEventListener('click', async () => {
                 <div class="field-group">
                     <div class="field-label">GHS Pictograms</div>
                     <div class="pictograms">
-                        ${data.extracted.ghs.pictograms.map(p => `<span class="pictogram">${p}</span>`).join('')}
+                        ${data.extracted.ghs.pictograms.map(p => `<span class="pictogram">${ghsPictogramLabel(p)}</span>`).join('')}
                     </div>
                 </div>
                 ` : ''}
@@ -161,11 +261,9 @@ generateBtn.addEventListener('click', async () => {
                 ` : ''}
             </div>
 
-            <div style="margin-top: 20px;">
+            <div id="actionPanel" style="margin-top: 20px;">
                 ${data.label?.download_url ? `
-                <a href="${API_URL}${data.label.download_url}" download style="text-decoration: none;">
-                    <button class="btn">📥 Download Label PDF</button>
-                </a>
+                ${renderActionLinks(data.label)}
                 ` : `
                 <div class="error-message">
                     <strong>Download blocked:</strong> Validation failed. Fix required compliance issues first.
@@ -203,8 +301,14 @@ generateBtn.addEventListener('click', async () => {
                     }
 
                     const overrideData = await overrideResponse.json();
-                    if (overrideData.download_url) {
-                        window.location.href = `${API_URL}${overrideData.download_url}`;
+                    const actionPanel = document.getElementById('actionPanel');
+                    if (actionPanel) {
+                        actionPanel.innerHTML = `
+                            <div class="success-message">
+                                <strong>Override approved.</strong> Label PDF and Canva handoff files are now available.
+                            </div>
+                            ${renderActionLinks(overrideData)}
+                        `;
                     }
                 } catch (overrideError) {
                     alert(`Override failed: ${overrideError.message}`);

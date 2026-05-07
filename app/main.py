@@ -18,8 +18,9 @@ from .openai_client import OpenAIClient
 from .validator import ComplianceValidator
 from .web_retrieval import WebRetriever
 from .label_stub import LabelGenerator
+from .schema import GHS_PICTOGRAM_OPTIONS, normalize_ghs_pictogram
 
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from enum import Enum
 from pathlib import Path
 import tempfile
@@ -28,6 +29,8 @@ import re
 import uuid
 import secrets
 import json
+import csv
+import io
 
 # Configure logging
 logging.basicConfig(
@@ -156,6 +159,8 @@ class LabelPayload(BaseModel):
     mode: str
     size: str
     download_url: Optional[str] = None
+    canva_csv_url: Optional[str] = None
+    canva_json_url: Optional[str] = None
 
 
 class AuditPayload(BaseModel):
@@ -212,6 +217,163 @@ def _readiness_payload() -> dict:
     }
 
 
+def _safe_label_id(label_id: str) -> str:
+    """Validate a public label id before reading from runtime storage."""
+    safe_id = re.sub(r'[^a-zA-Z0-9_-]', '', label_id)
+    if not safe_id or safe_id != label_id:
+        raise HTTPException(status_code=400, detail="Invalid label ID")
+    if len(safe_id) > 100:
+        raise HTTPException(status_code=400, detail="Label ID too long")
+    return safe_id
+
+
+def _canva_urls(label_id: str, available: bool) -> dict:
+    """Return Canva handoff URLs only when export is allowed."""
+    if not available:
+        return {"canva_csv_url": None, "canva_json_url": None}
+    return {
+        "canva_csv_url": f"/api/v1/labels/{label_id}/canva-export.csv",
+        "canva_json_url": f"/api/v1/labels/{label_id}/canva-export.json",
+    }
+
+
+def _format_statement_list(items: list) -> str:
+    """Flatten GHS statement objects for Canva Bulk Create cells."""
+    formatted = []
+    for item in items or []:
+        code = (item.get("code") or "").strip()
+        text = (item.get("text") or "").strip()
+        if code and text:
+            formatted.append(f"{code}: {text}")
+        elif text:
+            formatted.append(text)
+        elif code:
+            formatted.append(code)
+    return " | ".join(formatted)
+
+
+def _clean_operator_field(value: Optional[str]) -> Optional[str]:
+    """Normalize optional operator-entered shipment fields."""
+    if value is None:
+        return None
+    cleaned = " ".join(value.split())
+    return cleaned or None
+
+
+def _parse_ghs_pictogram_selection(value: Optional[str]) -> List[str]:
+    """Parse optional operator-selected GHS pictogram dropdown values."""
+    cleaned = _clean_operator_field(value)
+    if not cleaned:
+        return []
+
+    try:
+        parsed = json.loads(cleaned)
+    except json.JSONDecodeError:
+        parsed = cleaned
+
+    if isinstance(parsed, str):
+        raw_values = [
+            item.strip()
+            for item in parsed.replace("|", ",").replace(";", ",").split(",")
+            if item.strip()
+        ]
+    elif isinstance(parsed, list):
+        raw_values = parsed
+    else:
+        raise ValueError("GHS pictograms must be a list or comma-separated string")
+
+    deduped = []
+    seen = set()
+    for raw_value in raw_values:
+        code = normalize_ghs_pictogram(str(raw_value))
+        if code not in seen:
+            deduped.append(code)
+            seen.add(code)
+    return deduped
+
+
+def _ghs_pictogram_names(codes: list) -> str:
+    """Return display names for GHS pictogram codes."""
+    return ", ".join(GHS_PICTOGRAM_OPTIONS.get(code, code) for code in codes or [])
+
+
+def _build_canva_export(extracted: dict, metadata: dict) -> dict:
+    """Create a flat, Canva Bulk Create-friendly label data record."""
+    product = extracted.get("product") or {}
+    ghs = extracted.get("ghs") or {}
+    transport = extracted.get("transport") or {}
+    nfpa = extracted.get("nfpa") or {}
+    shipment = extracted.get("shipment") or {}
+    return {
+        "product_name": metadata.get("product_name") or product.get("name") or "",
+        "label_mode": metadata.get("mode") or "",
+        "label_size": metadata.get("size") or "",
+        "lot_number": shipment.get("lot_number") or "",
+        "expiration_date": shipment.get("expiration_date") or "",
+        "fill_amount": shipment.get("fill_amount") or "",
+        "manufacture_date": shipment.get("manufacture_date") or "",
+        "supplier_name": product.get("supplier_name") or "",
+        "supplier_address": product.get("supplier_address") or "",
+        "supplier_phone": product.get("supplier_phone") or "",
+        "emergency_phone": product.get("emergency_phone") or "",
+        "sds_revision_date": product.get("revision_date") or "",
+        "signal_word": ghs.get("signal_word") or "",
+        "ghs_pictograms": ", ".join(ghs.get("pictograms") or []),
+        "ghs_pictogram_names": _ghs_pictogram_names(ghs.get("pictograms") or []),
+        "hazard_statements": _format_statement_list(ghs.get("hazard_statements") or []),
+        "precautionary_statements": _format_statement_list(ghs.get("precautionary_statements") or []),
+        "supplemental_statements": " | ".join(ghs.get("supplemental_statements") or []),
+        "un_number": transport.get("un_number") or "",
+        "proper_shipping_name": transport.get("proper_shipping_name") or "",
+        "hazard_class": transport.get("hazard_class") or "",
+        "dot_hazard_label": _dot_hazard_label_name(transport.get("hazard_class")),
+        "packing_group": transport.get("packing_group") or "",
+        "marine_pollutant": "" if transport.get("marine_pollutant") is None else str(transport.get("marine_pollutant")),
+        "limited_quantity": "" if transport.get("limited_quantity") is None else str(transport.get("limited_quantity")),
+        "special_provisions": " | ".join(transport.get("special_provisions") or []),
+        "erg_guide_number": transport.get("erg_guide_number") or "",
+        "nfpa_health": str(nfpa.get("health", 0)),
+        "nfpa_flammability": str(nfpa.get("flammability", 0)),
+        "nfpa_instability": str(nfpa.get("instability", 0)),
+        "nfpa_special": nfpa.get("special") or "",
+        "validation_status": metadata.get("status") or "",
+        "override_approved": str(bool(metadata.get("override_approved"))),
+        "override_approver": metadata.get("override_approver") or "",
+        "override_reason": metadata.get("override_reason") or "",
+    }
+
+
+def _dot_hazard_label_name(hazard_class: Optional[str]) -> str:
+    """Return supported DOT hazard label name for Canva handoff."""
+    if not hazard_class:
+        return ""
+    clean = str(hazard_class).strip().lower()
+    if "not regulated" in clean or "not applicable" in clean:
+        return ""
+    if clean.startswith("class "):
+        clean = clean[6:]
+    if "3" in clean:
+        return "FLAMMABLE LIQUID"
+    if "8" in clean:
+        return "CORROSIVE"
+    if "9" in clean:
+        return "CLASS 9"
+    return "Review required"
+
+
+def _get_exportable_label(label_id: str) -> tuple[str, dict]:
+    """Fetch metadata and enforce the same approval gate as PDF downloads."""
+    safe_id = _safe_label_id(label_id)
+    metadata = label_metadata_store.get(safe_id)
+    if not metadata:
+        raise HTTPException(status_code=404, detail="Label not found")
+    if not metadata.get("validation_passed") and not metadata.get("override_approved"):
+        raise HTTPException(status_code=403, detail="CANVA_EXPORT_BLOCKED_VALIDATION_FAILED")
+    if not metadata.get("canva_export"):
+        raise HTTPException(status_code=404, detail="Canva export data not found")
+    return safe_id, metadata
+
+
 # Endpoints
 
 @app.get("/", include_in_schema=False)
@@ -239,7 +401,12 @@ async def generate_label_v1(
     files: List[UploadFile] = File(...),
     product_name: str = Form(...),
     mode: LabelMode = Form(LabelMode.SHIPPED_DOT),
-    size: LabelSize = Form(LabelSize.PAIL)
+    size: LabelSize = Form(LabelSize.PAIL),
+    lot_number: Optional[str] = Form(None),
+    expiration_date: Optional[str] = Form(None),
+    fill_amount: Optional[str] = Form(None),
+    manufacture_date: Optional[str] = Form(None),
+    ghs_pictograms: Optional[str] = Form(None)
 ):
     """Phase 1 label generation endpoint with unified response payload."""
     temp_files: List[Path] = []
@@ -278,6 +445,16 @@ async def generate_label_v1(
 
         extracted_data = openai_client.extract_from_documents(sds_text, tds_text, cleaned_product_name)
         extracted_data.product.name = cleaned_product_name
+        extracted_data.shipment.lot_number = _clean_operator_field(lot_number)
+        extracted_data.shipment.expiration_date = _clean_operator_field(expiration_date)
+        extracted_data.shipment.fill_amount = _clean_operator_field(fill_amount)
+        extracted_data.shipment.manufacture_date = _clean_operator_field(manufacture_date)
+        operator_pictograms = _parse_ghs_pictogram_selection(ghs_pictograms)
+        if operator_pictograms:
+            extracted_data.ghs.pictograms = operator_pictograms
+            extracted_data.warnings.append(
+                "GHS pictograms were selected by operator dropdown and override the SDS auto-pick."
+            )
 
         validation_result = validator.validate(extracted_data, mode.value)
 
@@ -299,6 +476,8 @@ async def generate_label_v1(
         label_path.write_bytes(pdf_content)
 
         download_url = f"/api/v1/labels/{label_id}/download" if validation_result.passed else None
+        canva_export_urls = _canva_urls(label_id, validation_result.passed)
+        extracted_payload = extracted_data.model_dump(mode='json')
 
         metadata = {
             "label_id": label_id,
@@ -310,19 +489,21 @@ async def generate_label_v1(
             "warnings": [w.model_dump() for w in validation_result.warnings],
             "errors": [e.model_dump() for e in validation_result.errors],
             "download_url": download_url,
+            **canva_export_urls,
             "status": "approved" if validation_result.passed else "blocked",
             "override_approved": False,
             "override_reason": None,
             "override_approver": None,
             "override_timestamp": None,
         }
+        metadata["canva_export"] = _build_canva_export(extracted_payload, metadata)
         label_metadata_store[label_id] = metadata
 
         _save_label_metadata_store()
 
         return {
             "label_id": label_id,
-            "extracted": extracted_data.model_dump(mode='json'),
+            "extracted": extracted_payload,
             "validation": {
                 "passed": validation_result.passed,
                 "warnings": metadata["warnings"],
@@ -332,6 +513,8 @@ async def generate_label_v1(
                 "mode": mode.value,
                 "size": size.value,
                 "download_url": metadata["download_url"],
+                "canva_csv_url": metadata["canva_csv_url"],
+                "canva_json_url": metadata["canva_json_url"],
             },
             "warnings": metadata["warnings"],
             "errors": metadata["errors"],
@@ -388,6 +571,12 @@ async def override_label_approval(label_id: str, request: OverrideApprovalReques
     metadata["override_timestamp"] = datetime.utcnow().isoformat()
     metadata["status"] = "override_approved"
     metadata["download_url"] = f"/api/v1/labels/{label_id}/download"
+    metadata.update(_canva_urls(label_id, True))
+    if metadata.get("canva_export"):
+        metadata["canva_export"]["validation_status"] = metadata["status"]
+        metadata["canva_export"]["override_approved"] = "True"
+        metadata["canva_export"]["override_approver"] = metadata["override_approver"]
+        metadata["canva_export"]["override_reason"] = metadata["override_reason"]
     label_metadata_store[label_id] = metadata
     _save_label_metadata_store()
 
@@ -395,8 +584,39 @@ async def override_label_approval(label_id: str, request: OverrideApprovalReques
         "label_id": label_id,
         "status": metadata["status"],
         "override_approved": True,
-        "download_url": metadata["download_url"]
+        "download_url": metadata["download_url"],
+        "canva_csv_url": metadata.get("canva_csv_url"),
+        "canva_json_url": metadata.get("canva_json_url"),
     }
+
+
+@app.get("/api/v1/labels/{label_id}/canva-export.json")
+async def canva_export_json(label_id: str):
+    """Return flat label data for manual Canva template entry."""
+    safe_id, metadata = _get_exportable_label(label_id)
+    return {
+        "label_id": safe_id,
+        "canva_bulk_create": metadata["canva_export"],
+    }
+
+
+@app.get("/api/v1/labels/{label_id}/canva-export.csv")
+async def canva_export_csv(label_id: str):
+    """Return a one-row CSV that can be imported into Canva Bulk Create."""
+    safe_id, metadata = _get_exportable_label(label_id)
+    output = io.StringIO()
+    fieldnames = list(metadata["canva_export"].keys())
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    writer.writerow(metadata["canva_export"])
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_id}-canva-bulk-create.csv"'
+        },
+    )
+
 
 @app.get("/api/v1/labels/{label_id}/download")
 @app.get("/api/download-label/{label_id}")
@@ -408,11 +628,7 @@ async def download_label_v1(label_id: str):
             status_code=403,
             detail="DOWNLOAD_BLOCKED_VALIDATION_FAILED"
         )
-    safe_id = re.sub(r'[^a-zA-Z0-9_-]', '', label_id)
-    if not safe_id or safe_id != label_id:
-        raise HTTPException(status_code=400, detail="Invalid label ID")
-    if len(safe_id) > 100:
-        raise HTTPException(status_code=400, detail="Label ID too long")
+    safe_id = _safe_label_id(label_id)
 
     label_path = LABELS_DIR / f"{safe_id}.pdf"
     try:
