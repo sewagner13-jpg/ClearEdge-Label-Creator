@@ -140,6 +140,14 @@ def test_shipment_fields_render_in_header():
     assert "Net Wt.:" in svg
     assert "441 lb" in svg
     assert svg.count("________") == 2
+    assert 'font-size="13.5" font-weight="bold"' in svg
+
+
+def test_fill_amount_defaults_numeric_values_to_pounds_and_preserves_kgs():
+    assert LabelGenerator._format_fill_amount("441") == "441 lb"
+    assert LabelGenerator._format_fill_amount("441 lb") == "441 lb"
+    assert LabelGenerator._format_fill_amount("200 kg") == "200 kg"
+    assert LabelGenerator._format_fill_amount("200 kgs") == "200 kgs"
 
 
 def test_ghs_pictograms_render_only_approved_table_images():

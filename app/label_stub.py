@@ -63,11 +63,17 @@ class LabelGenerator:
     <text x="{{ product_area_x + 42 }}" y="102" font-size="15.5" font-weight="bold" fill="{{ text_color }}">
       {{ lot_number_display }}
     </text>
-    <text x="{{ product_area_x + 148 }}" y="101" font-size="9.5" fill="{{ text_color }}">
-      <tspan font-weight="bold" fill="{{ brand_purple }}">Exp.:</tspan> {{ expiration_date_display }}
+    <text x="{{ product_area_x + 134 }}" y="101" font-size="10.5" font-weight="bold" fill="{{ brand_purple }}">
+      Exp.:
     </text>
-    <text x="{{ product_area_x + 258 }}" y="101" font-size="9.5" fill="{{ text_color }}">
-      <tspan font-weight="bold" fill="{{ brand_purple }}">Net Wt.:</tspan> {{ fill_amount_display }}
+    <text x="{{ product_area_x + 170 }}" y="102" font-size="13.5" font-weight="bold" fill="{{ text_color }}">
+      {{ expiration_date_display }}
+    </text>
+    <text x="{{ product_area_x + 282 }}" y="101" font-size="10.5" font-weight="bold" fill="{{ brand_purple }}">
+      Net Wt.:
+    </text>
+    <text x="{{ product_area_x + 338 }}" y="102" font-size="13.5" font-weight="bold" fill="{{ text_color }}">
+      {{ fill_amount_display }}
     </text>
   </g>
   <text x="{{ width - 22 }}" y="28" font-size="8.5" fill="{{ brand_purple }}" text-anchor="end">
@@ -513,6 +519,37 @@ class LabelGenerator:
             "line_gap": font_size + 5,
         }
 
+    @classmethod
+    def _format_fill_amount(cls, fill_amount: Optional[str]) -> str:
+        """Return fill amount with an explicit lb/kg unit for label readability."""
+        fallback = "________"
+        if not fill_amount:
+            return fallback
+
+        clean = " ".join(str(fill_amount).split())
+        if not clean:
+            return fallback
+
+        normalized = clean.lower().replace(".", "")
+        unit_markers = (
+            " lb",
+            " lbs",
+            " pound",
+            " pounds",
+            " kg",
+            " kgs",
+            " kilogram",
+            " kilograms",
+        )
+        if any(marker in f" {normalized}" for marker in unit_markers):
+            return cls._fit_text(clean, 16, fallback)
+
+        numeric = normalized.replace(",", "").replace(" ", "")
+        if numeric.replace(".", "", 1).isdigit():
+            return cls._fit_text(f"{clean} lb", 16, fallback)
+
+        return cls._fit_text(clean, 16, fallback)
+
 
     def _format_statements(self, statements, line_width: int = 65, max_items: int = 6):
         """Normalize hazard/precautionary statements with deterministic clipping."""
@@ -668,7 +705,7 @@ class LabelGenerator:
             "product_name": " ".join(heading["lines"]),
             "lot_number_display": self._fit_text(shipment.lot_number, 14, "________"),
             "expiration_date_display": self._fit_text(shipment.expiration_date, 14, "________"),
-            "fill_amount_display": self._fit_text(shipment.fill_amount, 18, "________"),
+            "fill_amount_display": self._format_fill_amount(shipment.fill_amount),
             "signal_word": data.ghs.signal_word,
             "pictograms": data.ghs.pictograms,
             "pictogram_icons": self._format_pictograms(data.ghs.pictograms),
