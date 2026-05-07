@@ -100,8 +100,26 @@ def test_product_name_uses_logo_purple():
 
     svg = generator.generate_svg(data, mode="workplace", size="drum")
 
-    assert 'font-size="34" font-weight="bold" fill="#1B006E" text-anchor="middle"' in svg
+    assert 'font-weight="bold" fill="#1B006E"' in svg
+    assert 'text-anchor="middle"' in svg
     assert "CE Flex Mod" in svg
+
+
+def test_long_product_name_wraps_inside_header_without_logo_box():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="CE Surfactant 336 PSA Extended Batch Name"),
+        ghs=GHSClassification(),
+        transport=TransportClassification(),
+    )
+
+    svg = generator.generate_svg(data, mode="workplace", size="pail")
+
+    assert "CE Surfactant 336" in svg
+    assert "PSA Extended Batc..." in svg
+    assert 'id="shipment-info"' in svg
+    assert '<rect x="10" y="10" width="{{ logo_panel_width }}"' not in svg
+    assert 'x2="175" y2="95"' not in svg
 
 
 def test_shipment_fields_render_in_header():
@@ -181,7 +199,8 @@ def test_nfpa_704_diamond_is_rendered_on_every_label():
     svg = generator.generate_svg(data, mode="workplace", size="pail")
 
     assert 'id="nfpa-704"' in svg
-    assert 'id="nfpa-704" transform="translate(452, 112)"' in svg
+    assert 'id="symbols-summary"' in svg
+    assert 'id="nfpa-704" transform="translate(462, 131)"' in svg
     assert "NFPA 704" in svg
     assert "0=min 4=severe" in svg
     assert "#ED1C24" in svg

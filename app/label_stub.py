@@ -26,100 +26,122 @@ class LabelGenerator:
 <svg width="{{ width }}" height="{{ height }}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" font-family="{{ body_font }}">
   <!-- Background -->
   <rect width="{{ width }}" height="{{ height }}" fill="white"/>
-  <rect x="5" y="5" width="{{ width - 10 }}" height="{{ height - 10 }}" fill="none" stroke="black" stroke-width="3"/>
+  <rect x="5" y="5" width="{{ width - 10 }}" height="{{ height - 10 }}" fill="none" stroke="black" stroke-width="2"/>
 
-  <!-- CLEAR EDGE Header with Logo Area -->
-  <rect x="10" y="10" width="{{ width - 20 }}" height="90"
-        fill="white" stroke="{{ brand_purple }}" stroke-width="3" rx="8"/>
+  <!-- CLEAR EDGE Header -->
+  <rect x="10" y="10" width="{{ width - 20 }}" height="102" fill="white"/>
+  <rect x="10" y="10" width="{{ width - 20 }}" height="8" fill="{{ brand_purple }}"/>
+  <line x1="10" y1="112" x2="{{ width - 10 }}" y2="112" stroke="{{ brand_purple }}" stroke-width="2"/>
 
   <!-- Brand logo -->
-  <rect x="10" y="10" width="{{ logo_panel_width }}" height="90" fill="white"/>
   {% if logo_data_uri %}
-  <image x="20" y="22" width="{{ logo_panel_width - 20 }}" height="66"
+  <image x="20" y="29" width="{{ logo_panel_width }}" height="48"
          href="{{ logo_data_uri }}" xlink:href="{{ logo_data_uri }}"
          preserveAspectRatio="xMidYMid meet"/>
   {% else %}
-  <text x="{{ 10 + logo_panel_width // 2 }}" y="60" font-size="18" font-weight="bold"
+  <text x="{{ 20 + logo_panel_width // 2 }}" y="58" font-size="18" font-weight="bold"
         fill="{{ header_color }}" text-anchor="middle">ClearEdge</text>
   {% endif %}
 
   <!-- Product Name (center/right) -->
-  <line x1="{{ logo_panel_width + 10 }}" y1="15" x2="{{ logo_panel_width + 10 }}" y2="95"
-        stroke="{{ brand_purple }}" stroke-width="2" opacity="0.35"/>
-  <text x="{{ product_text_x }}" y="44" font-size="{{ product_name_font_size }}" font-weight="bold" fill="{{ brand_purple }}" text-anchor="middle">
-    {{ product_name }}
+  <text x="{{ product_text_x }}" y="{{ product_name_y }}" font-size="{{ product_name_font_size }}"
+        font-weight="bold" fill="{{ brand_purple }}" text-anchor="middle">
+    {{ product_name_lines[0] }}
   </text>
+  {% for line in product_name_lines[1:] %}
+  <text x="{{ product_text_x }}" y="{{ product_name_y + (loop.index * product_name_line_gap) }}"
+        font-size="{{ product_name_font_size }}" font-weight="bold" fill="{{ brand_purple }}"
+        text-anchor="middle">
+    {{ line }}
+  </text>
+  {% endfor %}
   <g id="shipment-info">
-    <rect x="{{ logo_panel_width + 20 }}" y="59" width="{{ width - logo_panel_width - 45 }}" height="27"
-          fill="{{ brand_purple_light }}" stroke="{{ brand_purple }}" stroke-width="1.5" rx="4"/>
-    <text x="{{ logo_panel_width + 30 }}" y="77" font-size="10" fill="{{ text_color }}">
+    <line x1="{{ product_area_x }}" y1="83" x2="{{ width - 22 }}" y2="83" stroke="#D7D0E8" stroke-width="1"/>
+    <text x="{{ product_area_x }}" y="101" font-size="9.5" fill="{{ text_color }}">
       <tspan font-weight="bold" fill="{{ brand_purple }}">Lot No.:</tspan> {{ lot_number_display }}
     </text>
-    <text x="{{ logo_panel_width + 140 }}" y="77" font-size="10" fill="{{ text_color }}">
+    <text x="{{ product_area_x + 112 }}" y="101" font-size="9.5" fill="{{ text_color }}">
       <tspan font-weight="bold" fill="{{ brand_purple }}">Exp.:</tspan> {{ expiration_date_display }}
     </text>
-    <text x="{{ logo_panel_width + 238 }}" y="77" font-size="10" fill="{{ text_color }}">
+    <text x="{{ product_area_x + 210 }}" y="101" font-size="9.5" fill="{{ text_color }}">
       <tspan font-weight="bold" fill="{{ brand_purple }}">Net Wt.:</tspan> {{ fill_amount_display }}
     </text>
   </g>
-  <text x="{{ width - 30 }}" y="90" font-size="9" fill="{{ brand_purple }}" text-anchor="end">
+  <text x="{{ width - 22 }}" y="28" font-size="8.5" fill="{{ brand_purple }}" text-anchor="end">
     {{ size_label }}
   </text>
 
   <!-- Signal Word (if present) -->
   {% if signal_word %}
-  <rect x="10" y="110" width="{{ width - 20 }}" height="55"
+  <rect x="10" y="122" width="{{ width - 20 }}" height="42"
         fill="{{ brand_purple }}"
-        stroke="black" stroke-width="3" rx="5"/>
-  <text x="{{ width // 2 }}" y="145"
-        font-size="32" font-weight="bold"
+        rx="2"/>
+  <text x="{{ width // 2 }}" y="151"
+        font-size="25" font-weight="bold"
         fill="white" text-anchor="middle"
         style="text-transform: uppercase;">
     {{ signal_word }}
   </text>
-  {% set y_offset = 175 %}
+  {% set y_offset = 174 %}
   {% else %}
-  {% set y_offset = 110 %}
+  {% set y_offset = 124 %}
   {% endif %}
 
-  <!-- GHS Pictograms Section -->
-  {% if pictograms %}
-  <g id="pictograms">
-    <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="100"
-          fill="#F5F5F5" stroke="#5A2D82" stroke-width="2" rx="5"/>
-    <text x="20" y="{{ y_offset + 20 }}" font-size="13" font-weight="bold" fill="{{ text_color }}">
-      HAZARD PICTOGRAMS:
+  <!-- Safety symbols band -->
+  <g id="symbols-summary">
+    <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="112"
+          fill="#FBFAFE" stroke="#C8BEDD" stroke-width="1.5" rx="3"/>
+    <text x="20" y="{{ y_offset + 19 }}" font-size="11.5" font-weight="bold" fill="{{ brand_purple }}">
+      GHS PICTOGRAMS
     </text>
 
     <!-- Pictogram images pulled only from the approved GHS pictogram table asset. -->
-    {% for pictogram in pictogram_icons[:8] %}
-    <g transform="translate({{ 20 + (loop.index0 % 4) * 140 }}, {{ y_offset + 28 + (loop.index0 // 4) * 55 }})">
-      <image id="pictogram-{{ pictogram.code }}" x="0" y="0" width="70" height="70"
+    {% for pictogram in pictogram_icons[:4] %}
+    <g transform="translate({{ 20 + (loop.index0 % 4) * 72 }}, {{ y_offset + 32 }})">
+      <image id="pictogram-{{ pictogram.code }}" x="0" y="0" width="66" height="66"
              href="{{ pictogram.data_uri }}" xlink:href="{{ pictogram.data_uri }}"
              preserveAspectRatio="xMidYMid meet"/>
     </g>
     {% endfor %}
-  </g>
-  {% set y_offset = y_offset + 110 %}
-  {% endif %}
 
-  <!-- NFPA 704 Diamond: included on every label. Rendered after text panels so it stays visible. -->
-  {% set nfpa_y = y_offset + 2 %}
+    <!-- NFPA 704 Diamond: included on every label. -->
+    <g id="nfpa-704" transform="translate({{ width - 150 }}, {{ y_offset + 7 }})">
+      <rect x="0" y="0" width="130" height="98" fill="white" stroke="#D8D3E6" stroke-width="1" rx="3"/>
+      <text x="65" y="12" font-size="10" text-anchor="middle" fill="{{ text_color }}" font-weight="bold">
+        NFPA 704
+      </text>
+      <text x="65" y="22" font-size="7" text-anchor="middle" fill="{{ text_color }}" opacity="0.75">
+        0=min 4=severe
+      </text>
+      <g transform="translate(29, 27) scale(0.56)">
+        <polygon points="60,0 120,60 60,120 0,60" fill="#222222"/>
+        <polygon points="60,8 87,35 60,60 33,35" fill="#ED1C24"/>
+        <polygon points="8,60 33,35 60,60 33,87" fill="#0094D8"/>
+        <polygon points="112,60 87,35 60,60 87,87" fill="#FFD700"/>
+        <polygon points="60,112 33,87 60,60 87,87" fill="white"/>
+        <text x="60" y="45" font-size="22" font-weight="bold" text-anchor="middle" fill="white">{{ nfpa_flammability }}</text>
+        <text x="34" y="68" font-size="22" font-weight="bold" text-anchor="middle" fill="white">{{ nfpa_health }}</text>
+        <text x="87" y="68" font-size="22" font-weight="bold" text-anchor="middle" fill="black">{{ nfpa_instability }}</text>
+        <text x="60" y="94" font-size="14" font-weight="bold" text-anchor="middle" fill="black">{{ nfpa_special }}</text>
+      </g>
+    </g>
+  </g>
+  {% set y_offset = y_offset + 120 %}
 
   <!-- Hazard Statements Section -->
   {% if hazard_statements %}
   <g id="hazard-statements">
     <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="{{ hazard_block_height }}"
-          fill="#FFF3CD" stroke="#856404" stroke-width="2" rx="5"/>
-    <text x="20" y="{{ y_offset + 20 }}" font-size="13" font-weight="bold" fill="#856404">
+          fill="white" stroke="#D8D3E6" stroke-width="1.5" rx="3"/>
+    <text x="20" y="{{ y_offset + 18 }}" font-size="11.5" font-weight="bold" fill="{{ brand_purple }}">
       HAZARD STATEMENTS (H):
     </text>
     {% for statement in hazard_statements %}
-    <text x="25" y="{{ y_offset + 40 + statement.y }}" font-size="10" fill="{{ text_color }}">
+    <text x="25" y="{{ y_offset + 36 + statement.y }}" font-size="9" fill="{{ text_color }}">
       <tspan font-weight="bold">{{ statement.code }}:</tspan> {{ statement.lines[0] }}
     </text>
       {% for line in statement.lines[1:] %}
-    <text x="55" y="{{ y_offset + 40 + statement.y + loop.index * 12 }}" font-size="10" fill="{{ text_color }}">
+    <text x="55" y="{{ y_offset + 36 + statement.y + loop.index * 10 }}" font-size="9" fill="{{ text_color }}">
       {{ line }}
     </text>
       {% endfor %}
@@ -132,16 +154,16 @@ class LabelGenerator:
   {% if precautionary_statements %}
   <g id="precautionary-statements">
     <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="{{ precautionary_block_height }}"
-          fill="#D1ECF1" stroke="#0C5460" stroke-width="2" rx="5"/>
-    <text x="20" y="{{ y_offset + 20 }}" font-size="13" font-weight="bold" fill="#0C5460">
+          fill="white" stroke="#D8D3E6" stroke-width="1.5" rx="3"/>
+    <text x="20" y="{{ y_offset + 18 }}" font-size="11.5" font-weight="bold" fill="{{ brand_purple }}">
       PRECAUTIONARY STATEMENTS (P):
     </text>
     {% for statement in precautionary_statements %}
-    <text x="25" y="{{ y_offset + 40 + statement.y }}" font-size="10" fill="{{ text_color }}">
+    <text x="25" y="{{ y_offset + 36 + statement.y }}" font-size="8.8" fill="{{ text_color }}">
       <tspan font-weight="bold">{{ statement.code }}:</tspan> {{ statement.lines[0] }}
     </text>
       {% for line in statement.lines[1:] %}
-    <text x="55" y="{{ y_offset + 40 + statement.y + loop.index * 12 }}" font-size="10" fill="{{ text_color }}">
+    <text x="55" y="{{ y_offset + 36 + statement.y + loop.index * 10 }}" font-size="8.8" fill="{{ text_color }}">
       {{ line }}
     </text>
       {% endfor %}
@@ -149,27 +171,6 @@ class LabelGenerator:
   </g>
   {% set y_offset = y_offset + precautionary_block_height + 10 %}
   {% endif %}
-
-  <g id="nfpa-704" transform="translate({{ width - 160 }}, {{ nfpa_y }})">
-    <rect x="0" y="0" width="140" height="160" fill="white" opacity="0.92" rx="4"/>
-    <text x="70" y="10" font-size="11" text-anchor="middle" fill="{{ text_color }}" font-weight="bold">
-      NFPA 704
-    </text>
-    <text x="70" y="22" font-size="8" text-anchor="middle" fill="{{ text_color }}" opacity="0.75">
-      0=min 4=severe
-    </text>
-    <g transform="translate(10, 32)">
-      <polygon points="60,0 120,60 60,120 0,60" fill="#222222"/>
-      <polygon points="60,8 87,35 60,60 33,35" fill="#ED1C24"/>
-      <polygon points="8,60 33,35 60,60 33,87" fill="#0094D8"/>
-      <polygon points="112,60 87,35 60,60 87,87" fill="#FFD700"/>
-      <polygon points="60,112 33,87 60,60 87,87" fill="white"/>
-      <text x="60" y="45" font-size="18" font-weight="bold" text-anchor="middle" fill="white">{{ nfpa_flammability }}</text>
-      <text x="34" y="68" font-size="18" font-weight="bold" text-anchor="middle" fill="white">{{ nfpa_health }}</text>
-      <text x="87" y="68" font-size="18" font-weight="bold" text-anchor="middle" fill="black">{{ nfpa_instability }}</text>
-      <text x="60" y="94" font-size="12" font-weight="bold" text-anchor="middle" fill="black">{{ nfpa_special }}</text>
-    </g>
-  </g>
 
   <!-- DOT TRANSPORT INFORMATION -->
   {% if mode == 'shipped_dot' and un_number %}
@@ -230,54 +231,54 @@ class LabelGenerator:
   {% set y_offset = y_offset + dot_panel_height + 10 %}
   {% elif mode == 'shipped_dot' and transport_not_regulated %}
   <g id="transport-info">
-    <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="88"
-          fill="#FFF" stroke="{{ brand_purple }}" stroke-width="4" rx="5"/>
-    <rect x="15" y="{{ y_offset + 5 }}" width="{{ width - 30 }}" height="30"
+    <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="70"
+          fill="#FFF" stroke="{{ brand_purple }}" stroke-width="2" rx="4"/>
+    <rect x="15" y="{{ y_offset + 5 }}" width="{{ width - 30 }}" height="24"
           fill="{{ brand_purple }}" rx="3"/>
     <text x="{{ width // 2 }}" y="{{ y_offset + 25 }}"
-          font-size="16" font-weight="bold" fill="white" text-anchor="middle">
+          font-size="14" font-weight="bold" fill="white" text-anchor="middle">
       DOT TRANSPORT INFORMATION
     </text>
-    <text x="{{ width // 2 }}" y="{{ y_offset + 58 }}"
-          font-size="18" font-weight="bold" fill="{{ brand_purple }}" text-anchor="middle">
+    <text x="{{ width // 2 }}" y="{{ y_offset + 49 }}"
+          font-size="15" font-weight="bold" fill="{{ brand_purple }}" text-anchor="middle">
       NOT REGULATED FOR DOT TRANSPORT
     </text>
-    <text x="{{ width // 2 }}" y="{{ y_offset + 76 }}"
-          font-size="10" fill="{{ text_color }}" text-anchor="middle">
+    <text x="{{ width // 2 }}" y="{{ y_offset + 63 }}"
+          font-size="8.8" fill="{{ text_color }}" text-anchor="middle">
       Domestic ground: not regulated as a dangerous good based on the SDS.
     </text>
   </g>
-  {% set y_offset = y_offset + 98 %}
+  {% set y_offset = y_offset + 78 %}
   {% endif %}
 
   <!-- Footer Section -->
   <g id="footer">
-    <line x1="10" y1="{{ height - 110 }}" x2="{{ width - 10 }}" y2="{{ height - 110 }}"
+    <line x1="10" y1="{{ height - 94 }}" x2="{{ width - 10 }}" y2="{{ height - 94 }}"
           stroke="#5A2D82" stroke-width="2"/>
 
     <!-- Supplier Information -->
-    <text x="20" y="{{ height - 90 }}" font-size="11" font-weight="bold" fill="{{ text_color }}">
+    <text x="20" y="{{ height - 77 }}" font-size="10.5" font-weight="bold" fill="{{ text_color }}">
       {{ supplier_name or 'ClearEdge Solutions' }}
     </text>
-    <text x="20" y="{{ height - 75 }}" font-size="9" fill="{{ text_color }}" opacity="0.75">
+    <text x="20" y="{{ height - 63 }}" font-size="8" fill="{{ text_color }}" opacity="0.75">
       {{ supplier_address or '14301 CR Koon Highway, Newberry, SC 29108' }}
     </text>
-    <text x="20" y="{{ height - 60 }}" font-size="10" fill="{{ text_color }}" opacity="0.75">
+    <text x="20" y="{{ height - 50 }}" font-size="8.5" fill="{{ text_color }}" opacity="0.75">
       {{ supplier_phone or 'www.clear-edge.net' }}
     </text>
 
     <!-- Emergency Contact (prominent) -->
     {% if emergency_phone %}
-    <rect x="20" y="{{ height - 50 }}" width="{{ emergency_box_width }}" height="30"
-          fill="{{ brand_purple }}" rx="5"/>
-    <text x="30" y="{{ height - 30 }}" font-size="11" font-weight="bold" fill="white">
+    <rect x="20" y="{{ height - 40 }}" width="{{ emergency_box_width }}" height="26"
+          fill="{{ brand_purple }}" rx="4"/>
+    <text x="30" y="{{ height - 23 }}" font-size="10" font-weight="bold" fill="white">
       24-HR EMERGENCY: {{ emergency_phone }}
     </text>
     {% endif %}
 
     <!-- Revision Date -->
     {% if revision_date %}
-    <text x="{{ width // 2 }}" y="{{ height - 15 }}" font-size="9"
+    <text x="{{ width // 2 }}" y="{{ height - 8 }}" font-size="7.5"
           text-anchor="middle" fill="{{ text_color }}" opacity="0.75">
       Revised: {{ revision_date }}
     </text>
@@ -472,6 +473,43 @@ class LabelGenerator:
 
         return lines
 
+    @classmethod
+    def _format_product_heading(cls, product_name: Optional[str], available_width: int) -> dict:
+        """Fit a product name into the header without clipping the right edge."""
+        clean = cls._fit_text(product_name, 72, "UNNAMED PRODUCT")
+        if available_width >= 430:
+            one_line_limit = 27
+            two_line_limit = 24
+            base_font = 30
+        else:
+            one_line_limit = 22
+            two_line_limit = 20
+            base_font = 28
+
+        if len(clean) <= one_line_limit:
+            return {
+                "lines": [clean],
+                "font_size": base_font,
+                "y": 52,
+                "line_gap": 27,
+            }
+
+        lines = cls._wrap_lines(clean, line_width=two_line_limit, max_lines=2) or [clean]
+        longest = max(len(line) for line in lines)
+        if longest > two_line_limit:
+            font_size = 23
+        elif longest > one_line_limit:
+            font_size = 24
+        else:
+            font_size = 25
+
+        return {
+            "lines": lines,
+            "font_size": font_size,
+            "y": 43,
+            "line_gap": font_size + 5,
+        }
+
 
     def _format_statements(self, statements, line_width: int = 65, max_items: int = 6):
         """Normalize hazard/precautionary statements with deterministic clipping."""
@@ -487,7 +525,7 @@ class LabelGenerator:
                 "lines": wrapped,
                 "y": y,
             })
-            y += (len(wrapped) * 12) + 4
+            y += (len(wrapped) * 10) + 3
         return formatted
 
     def _format_pictograms(self, pictograms):
@@ -533,7 +571,7 @@ class LabelGenerator:
         if not formatted_statements:
             return 0
         last = formatted_statements[-1]
-        return 55 + last["y"] + (len(last["lines"]) * 12)
+        return 44 + last["y"] + (len(last["lines"]) * 10)
 
     @staticmethod
     def _is_not_regulated_for_transport(transport) -> bool:
@@ -586,8 +624,10 @@ class LabelGenerator:
         height = template_config["height"]
         size_label = template_config["name"]
         brand = template_config["brand"]
-        max_product_name_chars = template_config["max_product_name_chars"]
-        logo_panel_width = 220 if width <= 612 else 245
+        logo_panel_width = 165 if width <= 612 else 182
+        product_area_x = logo_panel_width + 34
+        product_area_width = width - product_area_x - 22
+        heading = self._format_product_heading(data.product.name, product_area_width)
         shipment = data.shipment
         hazard_statements = self._format_statements(
             data.ghs.hazard_statements,
@@ -616,9 +656,13 @@ class LabelGenerator:
             "size_label": size_label,
             "logo_data_uri": self.logo_data_uri,
             "logo_panel_width": logo_panel_width,
-            "product_text_x": (width + logo_panel_width + 10) // 2,
-            "product_name_font_size": 34 if width > 612 else 32,
-            "product_name": self._fit_text(data.product.name, max_product_name_chars, "UNNAMED PRODUCT"),
+            "product_area_x": product_area_x,
+            "product_text_x": product_area_x + (product_area_width // 2),
+            "product_name_font_size": heading["font_size"],
+            "product_name_y": heading["y"],
+            "product_name_line_gap": heading["line_gap"],
+            "product_name_lines": heading["lines"],
+            "product_name": " ".join(heading["lines"]),
             "lot_number_display": self._fit_text(shipment.lot_number, 14, "________"),
             "expiration_date_display": self._fit_text(shipment.expiration_date, 14, "________"),
             "fill_amount_display": self._fit_text(shipment.fill_amount, 18, "________"),
