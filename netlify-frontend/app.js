@@ -165,6 +165,41 @@ function renderActionLinks(label) {
     `;
 }
 
+function renderValidationPanel(validation) {
+    const errors = validation?.errors || [];
+    const warnings = validation?.warnings || [];
+    if (errors.length === 0 && warnings.length === 0) {
+        return '';
+    }
+
+    const renderIssue = issue => `
+        <li style="margin-bottom: 6px;">
+            <strong>${issue.field || 'validation'}:</strong> ${issue.message || JSON.stringify(issue)}
+        </li>
+    `;
+
+    return `
+        <div style="margin-top: 14px; padding: 14px; border: 1px solid #ddd; border-radius: 6px; background: #fff;">
+            ${errors.length ? `
+            <div style="margin-bottom: 12px;">
+                <strong>Blocking compliance issues</strong>
+                <ul style="margin: 8px 0 0 18px; padding: 0;">
+                    ${errors.map(renderIssue).join('')}
+                </ul>
+            </div>
+            ` : ''}
+            ${warnings.length ? `
+            <div>
+                <strong>Warnings</strong>
+                <ul style="margin: 8px 0 0 18px; padding: 0;">
+                    ${warnings.map(renderIssue).join('')}
+                </ul>
+            </div>
+            ` : ''}
+        </div>
+    `;
+}
+
 generateBtn.addEventListener('click', async () => {
     if (selectedFiles.length === 0) return;
 
@@ -268,6 +303,7 @@ generateBtn.addEventListener('click', async () => {
                 <div class="error-message">
                     <strong>Download blocked:</strong> Validation failed. Fix required compliance issues first.
                 </div>
+                ${renderValidationPanel(data.validation)}
                 <div style="margin-top: 12px; display: grid; gap: 8px; max-width: 500px;">
                     <input id="overrideApprover" placeholder="Approver name" style="padding:8px; border:1px solid #ccc; border-radius:4px;" />
                     <textarea id="overrideReason" placeholder="Override reason (required)" rows="3" style="padding:8px; border:1px solid #ccc; border-radius:4px;"></textarea>

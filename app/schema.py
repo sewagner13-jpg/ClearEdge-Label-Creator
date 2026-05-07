@@ -163,6 +163,10 @@ class TransportClassification(BaseModel):
     """DOT/IATA/IMDG transport classification (SDS Section 14)."""
     model_config = ConfigDict(extra="forbid")
 
+    not_regulated: Optional[bool] = Field(
+        None,
+        description="True when SDS Section 14 explicitly states the product is not regulated for transport"
+    )
     un_number: Optional[str] = Field(
         None,
         description="UN identification number (e.g., UN1090)"

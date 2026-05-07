@@ -324,6 +324,7 @@ def _build_canva_export(extracted: dict, metadata: dict) -> dict:
         "precautionary_statements": _format_statement_list(ghs.get("precautionary_statements") or []),
         "supplemental_statements": " | ".join(ghs.get("supplemental_statements") or []),
         "un_number": transport.get("un_number") or "",
+        "transport_not_regulated": str(bool(transport.get("not_regulated"))),
         "proper_shipping_name": transport.get("proper_shipping_name") or "",
         "hazard_class": transport.get("hazard_class") or "",
         "dot_hazard_label": _dot_hazard_label_name(transport.get("hazard_class")),

@@ -118,6 +118,7 @@ class TestTransportClassification:
 
     def test_all_optional_fields_none(self):
         transport = TransportClassification()
+        assert transport.not_regulated is None
         assert transport.un_number is None
         assert transport.hazard_class is None
 

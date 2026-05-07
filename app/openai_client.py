@@ -52,6 +52,7 @@ SCHEMA TO FOLLOW:
     "supplemental_statements": ["string"]|null
   },
   "transport": {
+    "not_regulated": true|false|null,
     "un_number": "string|null (e.g., UN1090)",
     "proper_shipping_name": "string|null",
     "hazard_class": "string|null (e.g., 3, 6.1, 8)",
@@ -86,6 +87,8 @@ TRANSPORT CLASSIFICATION (Section 14):
 - Extract UN number, proper shipping name, hazard class, packing group
 - Look for DOT, IATA, IMDG classifications
 - Marine pollutant status if mentioned
+- If Section 14 explicitly says the product is not regulated, not restricted, not dangerous goods,
+  or not hazardous for transport, set transport.not_regulated=true and do not invent UN/DOT fields
 
 NFPA 704:
 - Blue/left = health, red/top = flammability, yellow/right = instability/reactivity, white/bottom = special hazard

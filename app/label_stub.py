@@ -538,13 +538,22 @@ class LabelGenerator:
     @staticmethod
     def _is_not_regulated_for_transport(transport) -> bool:
         """Detect explicit SDS language that a shipped label is not DOT regulated."""
+        if getattr(transport, "not_regulated", None) is True:
+            return True
+
         fields = [
             getattr(transport, "proper_shipping_name", None),
             getattr(transport, "hazard_class", None),
             getattr(transport, "un_number", None),
+            getattr(transport, "special_provisions", None),
         ]
         joined = " ".join(str(field).lower() for field in fields if field)
-        return "not regulated" in joined
+        return (
+            "not regulated" in joined
+            or "not restricted" in joined
+            or "not dangerous goods" in joined
+            or "not hazardous for transport" in joined
+        )
 
     def generate_svg(
         self,

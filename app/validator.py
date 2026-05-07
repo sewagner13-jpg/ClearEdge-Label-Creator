@@ -18,6 +18,18 @@ logger = logging.getLogger(__name__)
 class ComplianceValidator:
     """Validates extracted data for compliance with DOT/OSHA/GHS requirements."""
 
+    NOT_REGULATED_MARKERS = (
+        "not regulated",
+        "not restricted",
+        "not dangerous goods",
+        "not classified as dangerous",
+        "not classified as a dangerous good",
+        "not hazardous for transport",
+        "not subject to dot",
+        "non-regulated",
+        "non regulated",
+    )
+
     # GHS pictograms that overlap with DOT hazard classes
     DOT_GHS_OVERLAP = {
         "3": ["GHS02"],  # Flammable liquid -> Flammable
@@ -88,6 +100,15 @@ class ComplianceValidator:
         warnings: List[ValidationError]
     ):
         """Validate for shipped DOT compliance."""
+        if self._is_not_regulated_for_transport(data):
+            if not data.product.emergency_phone:
+                warnings.append(ValidationError(
+                    field="product.emergency_phone",
+                    message="Emergency phone number recommended for shipping labels",
+                    severity="warning"
+                ))
+            return
+
         # Critical DOT fields
         if not data.transport.un_number:
             errors.append(ValidationError(
@@ -125,6 +146,21 @@ class ComplianceValidator:
                 message="Emergency phone number recommended for shipping labels",
                 severity="warning"
             ))
+
+    def _is_not_regulated_for_transport(self, data: ExtractedData) -> bool:
+        """Return true only when transport data explicitly says no DOT regulation applies."""
+        transport = data.transport
+        if transport.not_regulated is True:
+            return True
+
+        fields = (
+            transport.proper_shipping_name,
+            transport.hazard_class,
+            transport.un_number,
+            transport.special_provisions,
+        )
+        joined = " ".join(str(field).lower() for field in fields if field)
+        return any(marker in joined for marker in self.NOT_REGULATED_MARKERS)
 
     def _validate_workplace(
         self,

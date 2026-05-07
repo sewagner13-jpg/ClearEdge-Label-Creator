@@ -66,6 +66,37 @@ class TestComplianceValidator:
         result = validator.validate(data, mode="shipped_dot")
         assert result.passed is True
 
+    def test_shipped_dot_not_regulated_transport_passes_without_dot_fields(self, validator):
+        """Products explicitly not regulated for transport should not require UN/DOT fields."""
+        data = ExtractedData(
+            product=ProductInfo(name="ClearEdge PSA 336"),
+            ghs=GHSClassification(),
+            transport=TransportClassification(
+                not_regulated=True,
+                proper_shipping_name="Not regulated for DOT transport"
+            )
+        )
+
+        result = validator.validate(data, mode="shipped_dot")
+        assert result.passed is True
+        error_fields = [e.field for e in result.errors]
+        assert "transport.un_number" not in error_fields
+        assert "transport.proper_shipping_name" not in error_fields
+        assert "transport.hazard_class" not in error_fields
+
+    def test_shipped_dot_not_dangerous_goods_phrase_passes_without_dot_fields(self, validator):
+        """Section 14 wording can prove the transport state even without the boolean flag."""
+        data = ExtractedData(
+            product=ProductInfo(name="ClearEdge Product"),
+            ghs=GHSClassification(),
+            transport=TransportClassification(
+                proper_shipping_name="Not dangerous goods"
+            )
+        )
+
+        result = validator.validate(data, mode="shipped_dot")
+        assert result.passed is True
+
     def test_missing_packing_group_warning(self, validator):
         """Missing packing group generates warning."""
         data = ExtractedData(
