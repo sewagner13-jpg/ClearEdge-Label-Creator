@@ -76,9 +76,6 @@ class LabelGenerator:
       {{ fill_amount_display }}
     </text>
   </g>
-  <text x="{{ width - 22 }}" y="28" font-size="8.5" fill="{{ brand_purple }}" text-anchor="end">
-    {{ size_label }}
-  </text>
 
   <!-- Signal Word (if present) -->
   {% if signal_word %}
@@ -195,13 +192,13 @@ class LabelGenerator:
       DOT TRANSPORT INFORMATION
     </text>
 
-    <!-- UN Number (large and prominent) -->
+    <!-- Identification number (large and prominent) -->
     <rect x="20" y="{{ y_offset + 45 }}" width="145" height="70"
           fill="{{ brand_purple_light }}" stroke="{{ brand_purple }}" stroke-width="3" rx="5"/>
     <text x="92" y="{{ y_offset + 70 }}" font-size="14" font-weight="bold"
-          fill="{{ brand_purple }}" text-anchor="middle">UN NUMBER:</text>
+          fill="{{ brand_purple }}" text-anchor="middle">ID NUMBER:</text>
     <text x="92" y="{{ y_offset + 100 }}" font-size="28" font-weight="bold"
-          fill="{{ brand_purple }}" text-anchor="middle">{{ un_number }}</text>
+          fill="{{ brand_purple }}" text-anchor="middle">{{ identification_number }}</text>
 
     <!-- Shipping Details -->
     <g transform="translate(180, {{ y_offset + 45 }})">
@@ -222,6 +219,16 @@ class LabelGenerator:
       <text x="0" y="88" font-size="11" fill="{{ text_color }}">
         <tspan font-weight="bold">DOT Label:</tspan> {{ dot_label_name or 'Review required' }}
       </text>
+      {% if marine_pollutant_display %}
+      <text x="0" y="106" font-size="10.5" fill="{{ text_color }}">
+        <tspan font-weight="bold">Marine Pollutant:</tspan> {{ marine_pollutant_display }}
+      </text>
+      {% endif %}
+      {% if limited_quantity_display %}
+      <text x="0" y="124" font-size="10.5" fill="{{ text_color }}">
+        <tspan font-weight="bold">Limited Quantity:</tspan> {{ limited_quantity_display }}
+      </text>
+      {% endif %}
     </g>
 
     {% if dot_labels %}
@@ -550,6 +557,43 @@ class LabelGenerator:
 
         return cls._fit_text(clean, 16, fallback)
 
+    @classmethod
+    def _format_identification_number(cls, un_number: Optional[str]) -> str:
+        """Render a DOT identification number with a UN/NA/ID prefix."""
+        if not un_number:
+            return ""
+
+        clean = "".join(str(un_number).upper().split())
+        if clean.startswith(("UN", "NA", "ID")):
+            return cls._fit_text(clean, 12, clean)
+
+        if clean.isdigit():
+            return cls._fit_text(f"UN{clean}", 12, clean)
+
+        return cls._fit_text(clean, 12, clean)
+
+    @staticmethod
+    def _format_true_transport_flag(value: Optional[bool]) -> Optional[str]:
+        """Show optional transport markings only when the SDS says they apply."""
+        return "Yes" if value is True else None
+
+    @classmethod
+    def _format_limited_quantity(cls, value: Optional[str]) -> Optional[str]:
+        """Return a concise limited quantity display when Section 14 provides one."""
+        if value is None:
+            return None
+
+        clean = " ".join(str(value).split())
+        if not clean:
+            return None
+
+        normalized = clean.lower().replace(".", "")
+        if normalized in {"false", "no", "none", "n/a", "na", "not applicable", "0"}:
+            return None
+        if normalized in {"true", "yes", "y"}:
+            return "Yes"
+        return cls._fit_text(clean, 22, clean)
+
 
     def _format_statements(self, statements, line_width: int = 65, max_items: int = 6):
         """Normalize hazard/precautionary statements with deterministic clipping."""
@@ -662,7 +706,6 @@ class LabelGenerator:
 
         width = template_config["width"]
         height = template_config["height"]
-        size_label = template_config["name"]
         brand = template_config["brand"]
         logo_panel_width = 165 if width <= 612 else 182
         product_area_x = logo_panel_width + 34
@@ -693,7 +736,6 @@ class LabelGenerator:
             "text_color": brand["text_color"],
             "body_font": brand["body_font"],
             "mode": mode,
-            "size_label": size_label,
             "logo_data_uri": self.logo_data_uri,
             "logo_panel_width": logo_panel_width,
             "product_area_x": product_area_x,
@@ -714,12 +756,15 @@ class LabelGenerator:
             "precautionary_statements": precautionary_statements,
             "precautionary_block_height": self._statement_block_height(precautionary_statements),
             "un_number": data.transport.un_number,
+            "identification_number": self._format_identification_number(data.transport.un_number),
             "shipping_name": self._fit_text(data.transport.proper_shipping_name, 45),
             "transport_not_regulated": self._is_not_regulated_for_transport(data.transport),
             "hazard_class": data.transport.hazard_class,
             "packing_group": data.transport.packing_group,
             "dot_labels": dot_labels,
             "dot_label_name": dot_labels[0]["name"] if dot_labels else None,
+            "marine_pollutant_display": self._format_true_transport_flag(data.transport.marine_pollutant),
+            "limited_quantity_display": self._format_limited_quantity(data.transport.limited_quantity),
             "dot_panel_height": 165,
             "supplier_name": self._fit_text(data.product.supplier_name, 50, "ClearEdge Solutions"),
             "supplier_address": self._fit_text(data.product.supplier_address, 70, "14301 CR Koon Highway, Newberry, SC 29108"),

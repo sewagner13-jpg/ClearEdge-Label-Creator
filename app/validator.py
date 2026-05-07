@@ -38,6 +38,7 @@ class ComplianceValidator:
         "6.1": ["GHS06"],  # Toxic -> Acute toxicity
         "8": ["GHS05"],  # Corrosive -> Corrosive
     }
+    SUPPORTED_DOT_LABEL_CLASSES = {"3", "8", "9"}
 
     def validate(
         self,
@@ -123,6 +124,15 @@ class ComplianceValidator:
                 message="Proper shipping name is required for DOT compliance",
                 severity="error"
             ))
+        elif self._shipping_name_needs_technical_name(data.transport.proper_shipping_name):
+            errors.append(ValidationError(
+                field="transport.proper_shipping_name",
+                message=(
+                    "Proper shipping names using n.o.s. must include the SDS-listed "
+                    "technical name in parentheses before the label can be downloaded"
+                ),
+                severity="error"
+            ))
 
         if not data.transport.hazard_class:
             errors.append(ValidationError(
@@ -130,6 +140,24 @@ class ComplianceValidator:
                 message="Hazard class is required for DOT compliance",
                 severity="error"
             ))
+        else:
+            normalized_hazard_class = self._normalize_hazard_class(data.transport.hazard_class)
+            if not normalized_hazard_class:
+                errors.append(ValidationError(
+                    field="transport.hazard_class",
+                    message="Hazard class could not be recognized for DOT label selection",
+                    severity="error"
+                ))
+            elif normalized_hazard_class not in self.SUPPORTED_DOT_LABEL_CLASSES:
+                errors.append(ValidationError(
+                    field="transport.hazard_class",
+                    message=(
+                        f"DOT hazard label asset is not available for hazard class "
+                        f"{data.transport.hazard_class}. Add the required DOT label asset "
+                        "before downloading this shipped label."
+                    ),
+                    severity="error"
+                ))
 
         # Packing group warning (required for most but not all)
         if not data.transport.packing_group:
@@ -161,6 +189,34 @@ class ComplianceValidator:
         )
         joined = " ".join(str(field).lower() for field in fields if field)
         return any(marker in joined for marker in self.NOT_REGULATED_MARKERS)
+
+    @staticmethod
+    def _normalize_hazard_class(hazard_class: str | None) -> str | None:
+        """Normalize DOT hazard class wording for supported-label checks."""
+        if not hazard_class:
+            return None
+        clean = str(hazard_class).strip().lower()
+        if "not regulated" in clean or "not applicable" in clean:
+            return None
+        if clean.startswith("class "):
+            clean = clean[6:]
+        for candidate in ("6.1", "5.1", "5.2", "2.1", "2.2", "2.3", "4.1", "4.2", "4.3"):
+            if candidate in clean:
+                return candidate
+        for char in clean:
+            if char.isdigit():
+                return char
+        return None
+
+    @staticmethod
+    def _shipping_name_needs_technical_name(proper_shipping_name: str | None) -> bool:
+        """Return true when an n.o.s. shipping name is missing parenthetical detail."""
+        if not proper_shipping_name:
+            return False
+        clean = str(proper_shipping_name).lower()
+        has_nos = "n.o.s" in clean or " n.o.s." in clean
+        has_parenthetical_detail = "(" in str(proper_shipping_name) and ")" in str(proper_shipping_name)
+        return has_nos and not has_parenthetical_detail
 
     def _validate_workplace(
         self,
@@ -198,7 +254,7 @@ class ComplianceValidator:
         warnings: List[ValidationError]
     ):
         """Check for DOT/GHS pictogram overlap and warn user."""
-        hazard_class = data.transport.hazard_class
+        hazard_class = self._normalize_hazard_class(data.transport.hazard_class)
         if not hazard_class:
             return
 

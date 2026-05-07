@@ -66,6 +66,67 @@ class TestComplianceValidator:
         result = validator.validate(data, mode="shipped_dot")
         assert result.passed is True
 
+    def test_shipped_dot_blocks_unsupported_dot_hazard_label_asset(self, validator):
+        """Shipped DOT labels must have a supported DOT hazard label asset."""
+        data = ExtractedData(
+            product=ProductInfo(name="Toxic Liquid"),
+            ghs=GHSClassification(),
+            transport=TransportClassification(
+                un_number="UN2810",
+                proper_shipping_name="Toxic liquid, organic, n.o.s. (aniline)",
+                hazard_class="6.1",
+                packing_group="II",
+            )
+        )
+
+        result = validator.validate(data, mode="shipped_dot")
+
+        assert result.passed is False
+        assert any(
+            error.field == "transport.hazard_class"
+            and "DOT hazard label asset is not available" in error.message
+            for error in result.errors
+        )
+
+    def test_shipped_dot_blocks_nos_shipping_name_without_technical_name(self, validator):
+        """N.O.S. shipping names need parenthetical technical detail before download."""
+        data = ExtractedData(
+            product=ProductInfo(name="Flammable Blend"),
+            ghs=GHSClassification(),
+            transport=TransportClassification(
+                un_number="UN1993",
+                proper_shipping_name="Flammable liquids, n.o.s.",
+                hazard_class="3",
+                packing_group="II",
+            )
+        )
+
+        result = validator.validate(data, mode="shipped_dot")
+
+        assert result.passed is False
+        assert any(
+            error.field == "transport.proper_shipping_name"
+            and "technical name" in error.message
+            for error in result.errors
+        )
+
+    def test_shipped_dot_accepts_supported_hazard_label_asset_with_class_wording(self, validator):
+        """Supported DOT hazard classes can be extracted as words like 'Class 8'."""
+        data = ExtractedData(
+            product=ProductInfo(name="Corrosive Liquid"),
+            ghs=GHSClassification(),
+            transport=TransportClassification(
+                un_number="UN1760",
+                proper_shipping_name="Corrosive liquid, n.o.s. (sodium hydroxide)",
+                hazard_class="Class 8",
+                packing_group="II",
+            )
+        )
+
+        result = validator.validate(data, mode="shipped_dot")
+
+        assert result.passed is True
+
     def test_shipped_dot_not_regulated_transport_passes_without_dot_fields(self, validator):
         """Products explicitly not regulated for transport should not require UN/DOT fields."""
         data = ExtractedData(

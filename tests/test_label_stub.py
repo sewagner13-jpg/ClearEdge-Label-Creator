@@ -143,6 +143,22 @@ def test_shipment_fields_render_in_header():
     assert 'font-size="13.5" font-weight="bold"' in svg
 
 
+def test_container_size_name_is_not_printed_on_label():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="ClearEdge Size Test"),
+        ghs=GHSClassification(),
+        transport=TransportClassification(),
+        shipment=ShipmentInfo(fill_amount="441 lb"),
+    )
+
+    svg = generator.generate_svg(data, mode="workplace", size="pail")
+
+    assert "Pail Label" not in svg
+    assert "Drum Label" not in svg
+    assert "441 lb" in svg
+
+
 def test_fill_amount_defaults_numeric_values_to_pounds_and_preserves_kgs():
     assert LabelGenerator._format_fill_amount("441") == "441 lb"
     assert LabelGenerator._format_fill_amount("441 lb") == "441 lb"
@@ -270,3 +286,43 @@ def test_dot_transport_panel_uses_packaged_dot_label_asset_for_class_3():
     assert "DOT Label:" in svg
     assert "FLAMMABLE LIQUID" in svg
     assert 'fill="#C8102E"' in svg
+
+
+def test_dot_transport_panel_formats_id_number_with_prefix():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="ClearEdge Regulated Solvent"),
+        ghs=GHSClassification(),
+        transport=TransportClassification(
+            un_number="1993",
+            proper_shipping_name="Flammable liquids, n.o.s. (xylene)",
+            hazard_class="3",
+            packing_group="II",
+        ),
+    )
+
+    svg = generator.generate_svg(data, mode="shipped_dot", size="drum")
+
+    assert "ID NUMBER:" in svg
+    assert "UN1993" in svg
+
+
+def test_dot_transport_panel_renders_optional_dot_marking_fields():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="ClearEdge Regulated Solvent"),
+        ghs=GHSClassification(),
+        transport=TransportClassification(
+            un_number="UN1993",
+            proper_shipping_name="Flammable liquids, n.o.s. (xylene)",
+            hazard_class="3",
+            packing_group="II",
+            marine_pollutant=True,
+            limited_quantity="Yes",
+        ),
+    )
+
+    svg = generator.generate_svg(data, mode="shipped_dot", size="drum")
+
+    assert "Marine Pollutant:" in svg
+    assert "Limited Quantity:" in svg
