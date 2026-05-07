@@ -134,7 +134,8 @@ def test_shipment_fields_render_in_header():
     svg = generator.generate_svg(data, mode="workplace", size="drum")
 
     assert 'id="shipment-info"' in svg
-    assert "Lot No.:" in svg
+    assert "Lot #:" in svg
+    assert 'font-size="15.5" font-weight="bold"' in svg
     assert "Exp.:" in svg
     assert "Net Wt.:" in svg
     assert "441 lb" in svg

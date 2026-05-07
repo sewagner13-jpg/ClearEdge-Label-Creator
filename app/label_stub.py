@@ -57,13 +57,16 @@ class LabelGenerator:
   {% endfor %}
   <g id="shipment-info">
     <line x1="{{ product_area_x }}" y1="83" x2="{{ width - 22 }}" y2="83" stroke="#D7D0E8" stroke-width="1"/>
-    <text x="{{ product_area_x }}" y="101" font-size="9.5" fill="{{ text_color }}">
-      <tspan font-weight="bold" fill="{{ brand_purple }}">Lot No.:</tspan> {{ lot_number_display }}
+    <text x="{{ product_area_x }}" y="101" font-size="10.5" font-weight="bold" fill="{{ brand_purple }}">
+      Lot #:
     </text>
-    <text x="{{ product_area_x + 112 }}" y="101" font-size="9.5" fill="{{ text_color }}">
+    <text x="{{ product_area_x + 42 }}" y="102" font-size="15.5" font-weight="bold" fill="{{ text_color }}">
+      {{ lot_number_display }}
+    </text>
+    <text x="{{ product_area_x + 148 }}" y="101" font-size="9.5" fill="{{ text_color }}">
       <tspan font-weight="bold" fill="{{ brand_purple }}">Exp.:</tspan> {{ expiration_date_display }}
     </text>
-    <text x="{{ product_area_x + 210 }}" y="101" font-size="9.5" fill="{{ text_color }}">
+    <text x="{{ product_area_x + 258 }}" y="101" font-size="9.5" fill="{{ text_color }}">
       <tspan font-weight="bold" fill="{{ brand_purple }}">Net Wt.:</tspan> {{ fill_amount_display }}
     </text>
   </g>
