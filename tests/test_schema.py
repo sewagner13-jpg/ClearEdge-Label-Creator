@@ -85,6 +85,15 @@ class TestGHSClassification:
             "GHS09": "Environment",
         }
 
+    def test_signal_word_is_case_normalized(self):
+        danger = GHSClassification(signal_word="DANGER")
+        warning = GHSClassification(signal_word=" warning ")
+        missing = GHSClassification(signal_word="N/A")
+
+        assert danger.signal_word == "Danger"
+        assert warning.signal_word == "Warning"
+        assert missing.signal_word is None
+
     def test_invalid_signal_word(self):
         with pytest.raises(ValidationError):
             GHSClassification(signal_word="Caution")  # Must be Danger or Warning

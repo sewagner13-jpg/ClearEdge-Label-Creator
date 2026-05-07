@@ -116,6 +116,24 @@ class GHSClassification(BaseModel):
         description="Additional non-GHS hazard information"
     )
 
+    @field_validator("signal_word", mode="before")
+    @classmethod
+    def normalize_signal_word(cls, v) -> Optional[str]:
+        """Normalize extractor output into the exact GHS signal word values."""
+        if v is None:
+            return None
+
+        value = str(v).strip()
+        if not value or value.lower() in {"none", "null", "n/a", "na", "not applicable"}:
+            return None
+
+        normalized = value.lower()
+        if normalized == "danger":
+            return "Danger"
+        if normalized == "warning":
+            return "Warning"
+        return value
+
     @field_validator("pictograms", mode="before")
     @classmethod
     def validate_pictograms(cls, v) -> List[str]:
