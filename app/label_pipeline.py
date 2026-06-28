@@ -131,7 +131,10 @@ class LabelPipeline:
             raise LabelPipelineError(400, f"AI_EXTRACTION_FAILED: {exc}") from exc
         except Exception as exc:
             logger.error("AI extraction failed: %s", exc, exc_info=True)
-            raise LabelPipelineError(502, "AI_EXTRACTION_FAILED: OpenAI extraction service failed") from exc
+            raise LabelPipelineError(
+                502,
+                f"AI_EXTRACTION_FAILED: {exc.__class__.__name__}: {self._safe_exception_detail(exc)}",
+            ) from exc
         extracted_data.product.name = cleaned_product_name
         self._apply_operator_fields(
             extracted_data,
@@ -565,3 +568,10 @@ class LabelPipeline:
             field_path=field_review["field_path"],
             confidence=float(field_review.get("confidence") or 0),
         ))
+
+    @staticmethod
+    def _safe_exception_detail(exc: Exception) -> str:
+        """Return a short external-service error message without secrets."""
+        detail = str(exc) or "No error detail returned"
+        detail = re.sub(r"sk-[A-Za-z0-9_-]+", "sk-***", detail)
+        return detail[:300]

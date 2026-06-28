@@ -86,6 +86,13 @@ def base_extracted(un_number=None):
     )
 
 
+def test_safe_exception_detail_redacts_openai_keys():
+    detail = LabelPipeline._safe_exception_detail(Exception("bad key sk-test_SECRET123 in request"))
+
+    assert "sk-test_SECRET123" not in detail
+    assert "sk-***" in detail
+
+
 @pytest.mark.asyncio
 async def test_agentcore_disabled_review_degrades_to_openai_only(tmp_path, monkeypatch):
     monkeypatch.setattr(label_pipeline.settings, "agentcore_enabled", False)
