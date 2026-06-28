@@ -18,6 +18,7 @@ from .canva_export import (
     parse_ghs_pictogram_selection,
 )
 from .config import settings
+from .rule_based_extractor import RuleBasedExtractor
 from .schema import Evidence, ExtractedData, FieldConfidence, ValidationError, ValidationResult
 
 logger = logging.getLogger(__name__)
@@ -128,13 +129,20 @@ class LabelPipeline:
         try:
             extracted_data = self.openai_client.extract_from_documents(sds_text, tds_text, cleaned_product_name)
         except ValueError as exc:
-            raise LabelPipelineError(400, f"AI_EXTRACTION_FAILED: {exc}") from exc
+            extracted_data = RuleBasedExtractor.extract(
+                sds_text=sds_text,
+                tds_text=tds_text,
+                product_name=cleaned_product_name,
+                warning=f"AI_EXTRACTION_FAILED: {self._safe_exception_detail(exc)}",
+            )
         except Exception as exc:
             logger.error("AI extraction failed: %s", exc, exc_info=True)
-            raise LabelPipelineError(
-                502,
-                f"AI_EXTRACTION_FAILED: {exc.__class__.__name__}: {self._safe_exception_detail(exc)}",
-            ) from exc
+            extracted_data = RuleBasedExtractor.extract(
+                sds_text=sds_text,
+                tds_text=tds_text,
+                product_name=cleaned_product_name,
+                warning=f"AI_EXTRACTION_FAILED: {exc.__class__.__name__}: {self._safe_exception_detail(exc)}",
+            )
         extracted_data.product.name = cleaned_product_name
         self._apply_operator_fields(
             extracted_data,

@@ -31,6 +31,11 @@ class FakeOpenAIClient:
         return self.extracted
 
 
+class FailingOpenAIClient:
+    def extract_from_documents(self, sds_text, tds_text, product_name: str):
+        raise RuntimeError("quota exceeded")
+
+
 class FakeValidator:
     def validate(self, extracted_data, mode: str):
         return ValidationResult(mode=mode, passed=bool(extracted_data.transport.un_number))
@@ -64,6 +69,24 @@ def make_pipeline(tmp_path, extracted, agentcore_client=None):
     return LabelPipeline(
         pdf_extractor=FakePDFExtractor(),
         openai_client=FakeOpenAIClient(extracted),
+        validator=FakeValidator(),
+        label_generator=FakeLabelGenerator(),
+        agentcore_client=agentcore_client,
+        labels_dir=tmp_path,
+        metadata_store=store,
+        save_metadata_store=save,
+    ), store
+
+
+def make_pipeline_with_openai(tmp_path, openai_client, agentcore_client=None):
+    store = {}
+
+    def save():
+        pass
+
+    return LabelPipeline(
+        pdf_extractor=FakePDFExtractor(),
+        openai_client=openai_client,
         validator=FakeValidator(),
         label_generator=FakeLabelGenerator(),
         agentcore_client=agentcore_client,
@@ -108,6 +131,23 @@ async def test_agentcore_disabled_review_degrades_to_openai_only(tmp_path, monke
     assert result["status"] == "ready"
     assert result["agentcore_review"]["status"] == "disabled"
     assert result["download"]["available"] is True
+
+
+@pytest.mark.asyncio
+async def test_openai_failure_uses_deterministic_fallback(tmp_path, monkeypatch):
+    monkeypatch.setattr(label_pipeline.settings, "agentcore_enabled", False)
+    pipeline, _store = make_pipeline_with_openai(tmp_path, FailingOpenAIClient())
+
+    result = await pipeline.generate_label_from_uploads(
+        files=[_upload("test_sds.pdf")],
+        product_name="Fallback Product",
+        mode="shipped_dot",
+        size="pail",
+    )
+
+    assert result["status"] == "blocked"
+    assert result["success"] is True
+    assert any("AI_EXTRACTION_FAILED" in warning for warning in result["extracted"]["warnings"])
 
 
 @pytest.mark.asyncio
