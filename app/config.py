@@ -4,7 +4,7 @@ Loads settings from environment variables with validation.
 """
 
 from typing import List, Optional
-from pydantic import Field, validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -55,7 +55,8 @@ class Settings(BaseSettings):
     default_label_height: int = Field(default=1000, ge=200, le=3000)
     purple_header_color: str = Field(default="#5A2D82")
 
-    @validator("allowed_domains", pre=True)
+    @field_validator("allowed_domains", mode="before")
+    @classmethod
     def parse_allowed_domains(cls, v):
         """Parse comma-separated string or list."""
         if isinstance(v, str):

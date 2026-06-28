@@ -1,0 +1,65 @@
+"""Request and response models for the public label API."""
+
+from enum import Enum
+from typing import List, Optional
+
+from pydantic import BaseModel, Field
+
+
+class LabelMode(str, Enum):
+    """Label mode options."""
+
+    SHIPPED_DOT = "shipped_dot"
+    WORKPLACE = "workplace"
+
+
+class LabelSize(str, Enum):
+    """Label size options."""
+
+    PAIL = "pail"
+    DRUM = "drum"
+
+
+class ValidationSummary(BaseModel):
+    """Validation summary payload."""
+
+    passed: bool
+    warnings: List[dict]
+    errors: List[dict]
+
+
+class LabelPayload(BaseModel):
+    """Label artifact payload."""
+
+    mode: str
+    size: str
+    download_url: Optional[str] = None
+    canva_csv_url: Optional[str] = None
+    canva_json_url: Optional[str] = None
+
+
+class AuditPayload(BaseModel):
+    """Audit metadata payload."""
+
+    created_at: str
+    phase: str
+
+
+class OverrideApprovalRequest(BaseModel):
+    """Manual override request for compliance-blocked exports."""
+
+    approver: str = Field(..., min_length=2, max_length=100)
+    reason: str = Field(..., min_length=10, max_length=500)
+
+
+class GenerateLabelResponse(BaseModel):
+    """Unified label generation response."""
+
+    label_id: str
+    extracted: dict
+    validation: ValidationSummary
+    label: LabelPayload
+    warnings: List[dict]
+    errors: List[dict]
+    audit: AuditPayload
+    success: bool

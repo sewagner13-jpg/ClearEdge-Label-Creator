@@ -2,6 +2,10 @@
 
 OpenAI-powered SDS/TDS extraction and DOT/OSHA label generation.
 
+For the current restart handoff, deployment status, capabilities, and known limitations, read:
+
+- `docs/current-state.md`
+
 ## Current Architecture
 
 - Frontend: static site in `netlify-frontend/`, deployed to Netlify.
