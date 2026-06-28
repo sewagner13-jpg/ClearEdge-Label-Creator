@@ -11,9 +11,6 @@ from typing import Dict, List, Optional
 import csv
 import io
 import os
-import re
-import secrets
-import uuid
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,18 +22,18 @@ from .openai_client import OpenAIClient
 from .validator import ComplianceValidator
 from .web_retrieval import WebRetriever
 from .label_stub import LabelGenerator
+from .agentcore_client import AgentCoreClient
 from .api_models import (
+    CorrectionRequest,
     GenerateLabelResponse,
     LabelMode,
     LabelSize,
     OverrideApprovalRequest,
 )
 from .canva_export import (
-    build_canva_export,
     canva_urls,
-    clean_operator_field,
-    parse_ghs_pictogram_selection,
 )
+from .label_pipeline import LabelPipeline, LabelPipelineError
 from .label_storage import (
     load_metadata_store,
     metadata_file,
@@ -58,6 +55,7 @@ openai_client: Optional[OpenAIClient] = None
 validator: Optional[ComplianceValidator] = None
 web_retriever: Optional[WebRetriever] = None
 label_generator: Optional[LabelGenerator] = None
+agentcore_client: Optional[AgentCoreClient] = None
 startup_errors: Dict[str, str] = {}
 
 
@@ -92,7 +90,7 @@ def _save_label_metadata_store() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize and cleanup shared resources."""
-    global pdf_extractor, openai_client, validator, web_retriever, label_generator, startup_errors
+    global pdf_extractor, openai_client, validator, web_retriever, label_generator, agentcore_client, startup_errors
 
     logger.info("Initializing CLEAR EDGE Label Pipeline...")
     startup_errors = {}
@@ -107,6 +105,14 @@ async def lifespan(app: FastAPI):
         validator = ComplianceValidator()
         web_retriever = WebRetriever()
         label_generator = LabelGenerator()
+        if settings.agentcore_enabled:
+            try:
+                agentcore_client = AgentCoreClient()
+            except Exception as exc:
+                agentcore_client = None
+                startup_errors["agentcore_client"] = str(exc)
+        else:
+            agentcore_client = None
         _load_label_metadata_store()
 
         logger.info("Core clients initialized successfully")
@@ -155,7 +161,7 @@ def _health_payload() -> dict:
 
 def _readiness_payload() -> dict:
     """Dependency-oriented readiness payload for Phase 0 diagnostics."""
-    checks = {
+    required_checks = {
         "pdf_extractor_initialized": pdf_extractor is not None,
         "openai_client_initialized": openai_client is not None,
         "validator_initialized": validator is not None,
@@ -163,7 +169,19 @@ def _readiness_payload() -> dict:
         "label_generator_initialized": label_generator is not None,
         "openai_api_key_present": bool(settings.openai_api_key),
     }
-    status = "ready" if all(checks.values()) else "degraded"
+    agentcore_checks = {
+        "agentcore_enabled": settings.agentcore_enabled,
+        "agentcore_runtime_configured": bool(settings.agentcore_runtime_arn),
+        "agentcore_client_initialized": agentcore_client is not None if settings.agentcore_enabled else True,
+    }
+    checks = {**required_checks, **agentcore_checks}
+    agentcore_ready = True
+    if settings.agentcore_enabled:
+        agentcore_ready = (
+            agentcore_checks["agentcore_runtime_configured"]
+            and agentcore_checks["agentcore_client_initialized"]
+        )
+    status = "ready" if all(required_checks.values()) and agentcore_ready else "degraded"
     return {
         "status": status,
         "timestamp": datetime.utcnow().isoformat(),
@@ -228,131 +246,37 @@ async def generate_label_v1(
     ghs_pictograms: Optional[str] = Form(None)
 ):
     """Phase 1 label generation endpoint with unified response payload."""
-    temp_files: List[Path] = []
-
     try:
-        cleaned_product_name = product_name.strip()
-        if not cleaned_product_name or len(cleaned_product_name) < 2:
-            raise HTTPException(status_code=400, detail="Product name is required")
-        if len(cleaned_product_name) > 100:
-            raise HTTPException(status_code=400, detail="Product name too long (max 100 chars)")
-
-        sds_text = None
-        tds_text = None
-
-        for upload in files:
-            if not upload.filename or not upload.filename.lower().endswith('.pdf'):
-                continue
-
-            content = await upload.read()
-            temp_filename = f"{secrets.token_hex(8)}.pdf"
-            temp_path = LABELS_DIR / temp_filename
-            temp_path.write_bytes(content)
-            temp_files.append(temp_path)
-
-            doc_type = "SDS" if "sds" in upload.filename.lower() else "TDS"
-            extracted = pdf_extractor.extract_text(content, doc_type)
-            if doc_type == "SDS":
-                sds_text = extracted
-            else:
-                tds_text = extracted
-
-        if not sds_text and not tds_text:
-            raise HTTPException(status_code=400, detail="No valid PDF files provided")
-        if openai_client is None:
-            raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured")
-
-        extracted_data = openai_client.extract_from_documents(sds_text, tds_text, cleaned_product_name)
-        extracted_data.product.name = cleaned_product_name
-        extracted_data.shipment.lot_number = clean_operator_field(lot_number)
-        extracted_data.shipment.expiration_date = clean_operator_field(expiration_date)
-        extracted_data.shipment.fill_amount = clean_operator_field(fill_amount)
-        extracted_data.shipment.manufacture_date = clean_operator_field(manufacture_date)
-        operator_pictograms = parse_ghs_pictogram_selection(ghs_pictograms)
-        if operator_pictograms:
-            extracted_data.ghs.pictograms = operator_pictograms
-            extracted_data.warnings.append(
-                "GHS pictograms were selected by operator dropdown and override the SDS auto-pick."
-            )
-
-        validation_result = validator.validate(extracted_data, mode.value)
-
-        template_id = f"clearedge_{size.value}_v1"
-        svg_content = label_generator.generate_svg(
-            extracted_data,
+        pipeline = LabelPipeline(
+            pdf_extractor=pdf_extractor,
+            openai_client=openai_client,
+            validator=validator,
+            label_generator=label_generator,
+            agentcore_client=agentcore_client,
+            labels_dir=LABELS_DIR,
+            metadata_store=label_metadata_store,
+            save_metadata_store=_save_label_metadata_store,
+        )
+        return await pipeline.generate_label_from_uploads(
+            files=files,
+            product_name=product_name,
             mode=mode.value,
             size=size.value,
-            template_id=template_id
+            lot_number=lot_number,
+            expiration_date=expiration_date,
+            fill_amount=fill_amount,
+            manufacture_date=manufacture_date,
+            ghs_pictograms=ghs_pictograms,
         )
-
-        safe_product_name = re.sub(r'[^a-zA-Z0-9_-]', '', cleaned_product_name[:50])
-        unique_id = uuid.uuid4().hex[:8]
-        label_id = f"label_{safe_product_name}_{unique_id}"
-
-        LABELS_DIR.mkdir(parents=True, exist_ok=True)
-        pdf_content = label_generator.generate_pdf(svg_content)
-        label_path = LABELS_DIR / f"{label_id}.pdf"
-        label_path.write_bytes(pdf_content)
-
-        download_url = f"/api/v1/labels/{label_id}/download" if validation_result.passed else None
-        canva_export_urls = canva_urls(label_id, validation_result.passed)
-        extracted_payload = extracted_data.model_dump(mode='json')
-
-        metadata = {
-            "label_id": label_id,
-            "product_name": cleaned_product_name,
-            "mode": mode.value,
-            "size": size.value,
-            "created_at": datetime.utcnow().isoformat(),
-            "validation_passed": validation_result.passed,
-            "warnings": [w.model_dump() for w in validation_result.warnings],
-            "errors": [e.model_dump() for e in validation_result.errors],
-            "download_url": download_url,
-            **canva_export_urls,
-            "status": "approved" if validation_result.passed else "blocked",
-            "override_approved": False,
-            "override_reason": None,
-            "override_approver": None,
-            "override_timestamp": None,
-        }
-        metadata["canva_export"] = build_canva_export(extracted_payload, metadata)
-        label_metadata_store[label_id] = metadata
-
-        _save_label_metadata_store()
-
-        return {
-            "label_id": label_id,
-            "extracted": extracted_payload,
-            "validation": {
-                "passed": validation_result.passed,
-                "warnings": metadata["warnings"],
-                "errors": metadata["errors"],
-            },
-            "label": {
-                "mode": mode.value,
-                "size": size.value,
-                "download_url": metadata["download_url"],
-                "canva_csv_url": metadata["canva_csv_url"],
-                "canva_json_url": metadata["canva_json_url"],
-            },
-            "warnings": metadata["warnings"],
-            "errors": metadata["errors"],
-            "audit": {
-                "created_at": metadata["created_at"],
-                "phase": "phase_1"
-            },
-            "success": True
-        }
     except HTTPException:
         raise
+    except LabelPipelineError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"INVALID_DATA: {exc}")
     except Exception as exc:
         logger.error(f"Label generation failed: {exc}", exc_info=True)
         raise HTTPException(status_code=500, detail="LABEL_GENERATION_FAILED")
-    finally:
-        for temp_file in temp_files:
-            temp_file.unlink(missing_ok=True)
 
 
 @app.get("/api/v1/labels/{label_id}")
@@ -389,6 +313,11 @@ async def override_label_approval(label_id: str, request: OverrideApprovalReques
     metadata["status"] = "override_approved"
     metadata["download_url"] = f"/api/v1/labels/{label_id}/download"
     metadata.update(canva_urls(label_id, True))
+    metadata["download"] = {
+        "available": True,
+        "url": metadata["download_url"],
+        "reason": None,
+    }
     if metadata.get("canva_export"):
         metadata["canva_export"]["validation_status"] = metadata["status"]
         metadata["canva_export"]["override_approved"] = "True"
@@ -405,6 +334,27 @@ async def override_label_approval(label_id: str, request: OverrideApprovalReques
         "canva_csv_url": metadata.get("canva_csv_url"),
         "canva_json_url": metadata.get("canva_json_url"),
     }
+
+
+@app.patch("/api/v1/labels/{label_id}/corrections", response_model=GenerateLabelResponse)
+async def correct_label_fields(label_id: str, request: CorrectionRequest):
+    """Apply operator corrections, rerender, and rerun validation."""
+    try:
+        pipeline = LabelPipeline(
+            pdf_extractor=pdf_extractor,
+            openai_client=openai_client,
+            validator=validator,
+            label_generator=label_generator,
+            agentcore_client=agentcore_client,
+            labels_dir=LABELS_DIR,
+            metadata_store=label_metadata_store,
+            save_metadata_store=_save_label_metadata_store,
+        )
+        return pipeline.apply_corrections(label_id, request)
+    except LabelPipelineError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"INVALID_DATA: {exc}")
 
 
 @app.get("/api/v1/labels/{label_id}/canva-export.json")

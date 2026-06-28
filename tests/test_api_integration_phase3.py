@@ -48,6 +48,17 @@ class FakeValidator:
         )
 
 
+class FakeCorrectionValidator:
+    def validate(self, extracted_data, mode: str):
+        passed = bool(extracted_data.transport.un_number)
+        return ValidationResult(
+            mode=mode,
+            passed=passed,
+            errors=[] if passed else [ValidationError(field="transport.un_number", message="missing", severity="error")],
+            warnings=[],
+        )
+
+
 class FakeLabelGenerator:
     def generate_svg(self, extracted_data, mode="shipped_dot", size="pail", template_id=None):
         return '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
@@ -69,6 +80,7 @@ def setup_fakes(tmp_path: Path, passed: bool):
     main.openai_client = FakeOpenAIClient()
     main.validator = FakeValidator(passed=passed)
     main.label_generator = FakeLabelGenerator()
+    main.agentcore_client = None
 
 
 def test_generate_blocked_then_override_then_download(tmp_path):
@@ -113,3 +125,33 @@ def test_generate_approved_allows_download(tmp_path):
 
         download_res = client.get(f"/api/v1/labels/{label_id}/download")
         assert download_res.status_code == 200
+
+
+def test_corrections_endpoint_reruns_validation_and_enables_download(tmp_path):
+    setup_fakes(tmp_path, passed=False)
+    main.validator = FakeCorrectionValidator()
+
+    with TestClient(main.app) as client:
+        files = {"files": ("test_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
+        data = {"product_name": "Corrected Product", "mode": "shipped_dot", "size": "pail"}
+
+        generate_res = client.post("/api/v1/labels/generate", files=files, data=data)
+        assert generate_res.status_code == 200
+        payload = generate_res.json()
+        label_id = payload["label_id"]
+        assert payload["status"] == "blocked"
+
+        correction_res = client.patch(
+            f"/api/v1/labels/{label_id}/corrections",
+            json={
+                "updated_by": "QA Lead",
+                "reason": "Confirmed ID number against source SDS",
+                "fields": {"transport.un_number": "UN1263"},
+            },
+        )
+
+        assert correction_res.status_code == 200
+        corrected = correction_res.json()
+        assert corrected["status"] == "ready"
+        assert corrected["download"]["available"] is True
+        assert corrected["extracted"]["transport"]["un_number"] == "UN1263"

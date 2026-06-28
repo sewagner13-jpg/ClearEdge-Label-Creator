@@ -1,7 +1,7 @@
 """Request and response models for the public label API."""
 
 from enum import Enum
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -38,6 +38,14 @@ class LabelPayload(BaseModel):
     canva_json_url: Optional[str] = None
 
 
+class DownloadPayload(BaseModel):
+    """Explicit download availability payload."""
+
+    available: bool
+    url: Optional[str] = None
+    reason: Optional[str] = None
+
+
 class AuditPayload(BaseModel):
     """Audit metadata payload."""
 
@@ -52,13 +60,24 @@ class OverrideApprovalRequest(BaseModel):
     reason: str = Field(..., min_length=10, max_length=500)
 
 
+class CorrectionRequest(BaseModel):
+    """Manual field correction request."""
+
+    updated_by: str = Field(..., min_length=2, max_length=100)
+    reason: str = Field(..., min_length=10, max_length=500)
+    fields: Dict[str, object] = Field(..., min_length=1)
+
+
 class GenerateLabelResponse(BaseModel):
     """Unified label generation response."""
 
     label_id: str
+    status: str
     extracted: dict
     validation: ValidationSummary
     label: LabelPayload
+    download: Optional[DownloadPayload] = None
+    agentcore_review: Optional[dict] = None
     warnings: List[dict]
     errors: List[dict]
     audit: AuditPayload

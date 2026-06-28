@@ -67,6 +67,7 @@ def setup_fakes(tmp_path: Path):
     main.validator = FakeValidatorBlocked()
     main.web_retriever = object()
     main.label_generator = FakeLabelGenerator()
+    main.agentcore_client = None
 
 
 def test_operator_journey_blocked_to_override_to_download(tmp_path):
@@ -142,6 +143,7 @@ def setup_fakes_approved(tmp_path: Path):
     main.validator = FakeValidatorApproved()
     main.web_retriever = object()
     main.label_generator = FakeLabelGenerator()
+    main.agentcore_client = None
 
 
 def test_operator_journey_first_pass_approved(tmp_path):
@@ -170,9 +172,11 @@ def test_operator_journey_first_pass_approved(tmp_path):
         meta = client.get(f"/api/v1/labels/{label_id}")
         assert meta.status_code == 200
         meta_payload = meta.json()
-        assert meta_payload["status"] == "approved"
+        assert meta_payload["status"] == "ready"
         assert meta_payload["override_approved"] is False
         assert meta_payload["download_url"].endswith(f"/{label_id}/download")
+        assert payload["status"] == "ready"
+        assert payload["agentcore_review"]["status"] == "disabled"
 
         download = client.get(f"/api/v1/labels/{label_id}/download")
         assert download.status_code == 200

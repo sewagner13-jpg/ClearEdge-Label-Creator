@@ -11,6 +11,7 @@ For the current restart handoff, deployment status, capabilities, and known limi
 - Frontend: static site in `netlify-frontend/`, deployed to Netlify.
 - Backend: FastAPI service deployed to Railway.
 - AI extraction: OpenAI via `OPENAI_API_KEY`.
+- Optional second-pass review: Amazon Bedrock AgentCore via `AGENTCORE_*` variables.
 - Label artifacts: generated PDF files are stored on the app filesystem under `runtime_data/labels` unless `CLEAREDGE_DATA_DIR` is set.
 
 ## Local Setup
@@ -47,6 +48,16 @@ OPENAI_MODEL=gpt-4o
 ALLOWED_ORIGINS=https://clearedge-label-creator.netlify.app
 ```
 
+Optional AgentCore variables:
+
+```bash
+AGENTCORE_ENABLED=true
+AGENTCORE_RUNTIME_ARN=<bedrock-agentcore-runtime-arn>
+AGENTCORE_REGION=<aws-region>
+AGENTCORE_QUALIFIER=<optional-runtime-qualifier>
+AGENTCORE_TIMEOUT_SECONDS=60
+```
+
 Frontend deployment is configured by root `netlify.toml`, which publishes `netlify-frontend/`.
 
 `netlify-frontend/config.js` must point to the Railway backend:
@@ -62,6 +73,7 @@ window.CLEAREDGE_API_URL = 'https://clearedgelabelcreator-production.up.railway.
 - `POST /api/v1/labels/generate`
 - `GET /api/v1/labels/{label_id}`
 - `GET /api/v1/labels/{label_id}/download`
+- `PATCH /api/v1/labels/{label_id}/corrections`
 - `POST /api/v1/labels/{label_id}/override-approval`
 
 ## Tests

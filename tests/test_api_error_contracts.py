@@ -42,6 +42,7 @@ def setup_fakes(tmp_path: Path):
     main.openai_client = FakeOpenAIClient()
     main.validator = FakeValidator()
     main.label_generator = FakeLabelGenerator()
+    main.agentcore_client = None
 
 
 def test_generate_rejects_non_pdf_upload(tmp_path):
@@ -51,7 +52,7 @@ def test_generate_rejects_non_pdf_upload(tmp_path):
         data = {"product_name": "Test Product", "mode": "shipped_dot", "size": "pail"}
         response = client.post("/api/v1/labels/generate", files=files, data=data)
         assert response.status_code == 400
-        assert "No valid PDF files provided" in response.text
+        assert "UNSUPPORTED_FILE_TYPE" in response.text
 
 
 def test_generate_rejects_oversized_product_name(tmp_path):

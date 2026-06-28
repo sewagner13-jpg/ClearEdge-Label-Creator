@@ -10,6 +10,9 @@ pydantic-settings==2.1.0
 # OpenAI API
 openai==1.51.0
 
+# AWS AgentCore integration
+boto3>=1.40.0
+
 # PDF Processing
 pdfplumber==0.10.3
 pypdf==3.17.4

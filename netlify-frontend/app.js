@@ -42,6 +42,25 @@ function ghsPictogramLabel(code) {
     return GHS_PICTOGRAM_OPTIONS[code] || code;
 }
 
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function statusLabel(status) {
+    const labels = {
+        ready: 'Ready to download',
+        needs_review: 'Needs review',
+        blocked: 'Blocked',
+        override_approved: 'Override approved'
+    };
+    return labels[status] || 'Label generated';
+}
+
 function renderSelectedGhsPictograms() {
     if (selectedGhsPictograms.length === 0) {
         selectedGhsPictogramsEl.textContent = 'Auto from SDS';
@@ -200,6 +219,59 @@ function renderValidationPanel(validation) {
     `;
 }
 
+function renderAgentCoreReview(review) {
+    if (!review) return '';
+
+    const fieldReviews = review.field_reviews || [];
+    const criticalIssues = review.critical_issues || [];
+    const warnings = review.warnings || [];
+    const hasContent = review.status || fieldReviews.length || criticalIssues.length || warnings.length;
+    if (!hasContent) return '';
+
+    const renderFieldReview = item => `
+        <li style="margin-bottom: 8px;">
+            <strong>${escapeHtml(item.field_path || 'field')}:</strong>
+            ${escapeHtml(item.status || 'reviewed')}
+            ${item.recommended_value !== undefined && item.recommended_value !== null ? ` - ${escapeHtml(item.recommended_value)}` : ''}
+            ${item.confidence !== undefined ? ` (${Math.round(Number(item.confidence || 0) * 100)}%)` : ''}
+            ${item.evidence ? `<div style="margin-top:4px; color:#555;">"${escapeHtml(item.evidence)}"</div>` : ''}
+            ${item.reason ? `<div style="margin-top:4px; color:#555;">${escapeHtml(item.reason)}</div>` : ''}
+        </li>
+    `;
+
+    const renderIssue = issue => `
+        <li style="margin-bottom: 8px;">
+            <strong>${escapeHtml(issue.field_path || 'review')}:</strong>
+            ${escapeHtml(issue.message || 'Review required')}
+            ${issue.evidence ? `<div style="margin-top:4px; color:#555;">"${escapeHtml(issue.evidence)}"</div>` : ''}
+        </li>
+    `;
+
+    return `
+        <div style="margin-top: 14px; padding: 14px; border: 1px solid #C8BEDD; border-radius: 6px; background: #FBFAFE;">
+            <h3 style="margin-top:0;">Review what goes on the label</h3>
+            <div style="margin-bottom: 10px; color:#555;">
+                AgentCore status: <strong>${escapeHtml(review.status || 'unknown')}</strong>
+            </div>
+            ${criticalIssues.length ? `
+            <div style="margin-bottom: 12px;">
+                <strong>Critical review issues</strong>
+                <ul style="margin: 8px 0 0 18px; padding: 0;">${criticalIssues.map(renderIssue).join('')}</ul>
+            </div>
+            ` : ''}
+            ${fieldReviews.length ? `
+            <div style="margin-bottom: 12px;">
+                <strong>Field review</strong>
+                <ul style="margin: 8px 0 0 18px; padding: 0;">${fieldReviews.slice(0, 8).map(renderFieldReview).join('')}</ul>
+            </div>
+            ` : ''}
+            ${warnings.length ? `
+            <div style="color:#555;">${warnings.map(escapeHtml).join('<br>')}</div>
+            ` : ''}
+        </div>
+    `;
+}
+
 generateBtn.addEventListener('click', async () => {
     if (selectedFiles.length === 0) return;
 
@@ -248,7 +320,7 @@ generateBtn.addEventListener('click', async () => {
 
         result.innerHTML = `
             <div class="success-message">
-                <strong>✓ Label Generated Successfully!</strong>
+                <strong>${statusLabel(data.status)}</strong>
             </div>
 
             <h3>Extracted Information</h3>
@@ -296,12 +368,14 @@ generateBtn.addEventListener('click', async () => {
                 ` : ''}
             </div>
 
+            ${renderAgentCoreReview(data.agentcore_review)}
+
             <div id="actionPanel" style="margin-top: 20px;">
                 ${data.label?.download_url ? `
                 ${renderActionLinks(data.label)}
                 ` : `
                 <div class="error-message">
-                    <strong>Download blocked:</strong> Validation failed. Fix required compliance issues first.
+                    <strong>Download blocked:</strong> ${escapeHtml(data.download?.reason || 'Validation failed. Fix required compliance issues first.')}
                 </div>
                 ${renderValidationPanel(data.validation)}
                 <div style="margin-top: 12px; display: grid; gap: 8px; max-width: 500px;">
