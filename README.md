@@ -12,6 +12,7 @@ For the current restart handoff, deployment status, capabilities, and known limi
 - Backend: FastAPI service deployed to Railway.
 - AI extraction: OpenAI via `OPENAI_API_KEY`.
 - Optional second-pass review: Amazon Bedrock AgentCore via `AGENTCORE_*` variables.
+- Degraded mode: if OpenAI is unavailable, a deterministic source-text fallback extracts only visibly present PDF values and keeps validation gates active.
 - Label artifacts: generated PDF files are stored on the app filesystem under `runtime_data/labels` unless `CLEAREDGE_DATA_DIR` is set.
 
 ## Local Setup

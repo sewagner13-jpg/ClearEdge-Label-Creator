@@ -74,6 +74,8 @@ If another DOT hazard class is extracted, validation blocks download until the r
 
 OpenAI remains the primary SDS/TDS extractor. Amazon Bedrock AgentCore can optionally run as a second-pass parser/reviewer after OpenAI extraction and before local validation.
 
+If OpenAI extraction is unavailable, for example because the API account is out of quota, the backend falls back to a deterministic source-text parser. That fallback only uses values visibly present in the uploaded PDF text and still lets validation block incomplete DOT/GHS data.
+
 AgentCore is disabled by default. Enable it only after deploying an AgentCore Runtime and configuring:
 
 - `AGENTCORE_ENABLED=true`
@@ -90,6 +92,7 @@ Reconciliation behavior:
 - Missing critical OpenAI values can be filled only when AgentCore provides source evidence with confidence `>= 0.85`.
 - Conflicting critical fields become `needs_review` and block download until correction or override.
 - AgentCore failure or timeout does not stop label generation; the app falls back to OpenAI plus local validation and records a warning.
+- OpenAI failure does not create fabricated values; the app uses source-visible deterministic extraction, records the AI failure in extraction warnings, and keeps normal validation/download gates.
 
 ## Canva Handoff
 
@@ -123,6 +126,7 @@ Backend:
 - `app/label_storage.py`: metadata persistence and label ID validation helpers.
 - `app/label_pipeline.py`: generation, AgentCore review, validation, rendering, correction, and response orchestration.
 - `app/agentcore_client.py`: optional Amazon Bedrock AgentCore Runtime invocation and JSON parsing.
+- `app/rule_based_extractor.py`: deterministic source-text fallback used only when OpenAI extraction is unavailable.
 - `app/openai_client.py`: OpenAI SDS/TDS extraction prompt and response parsing.
 - `app/pdf_extract.py`: PDF text extraction and OCR fallback path.
 - `app/validator.py`: DOT/workplace validation rules.

@@ -131,6 +131,8 @@ Generation responses include:
 
 AgentCore failures degrade to OpenAI-only extraction with a warning. AgentCore conflicts on critical fields force `needs_review` and block download until correction or override.
 
+If OpenAI extraction is unavailable, the backend returns a normal generation response using deterministic source-text extraction. The response records the AI failure under `extracted.warnings`, and validation still blocks download when required DOT/GHS fields are missing or incomplete.
+
 ## Persistent runtime storage
 For multi-instance and restart-safe behavior, runtime label artifacts + metadata now default to:
 - `<repo>/runtime_data/labels`
