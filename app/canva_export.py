@@ -90,7 +90,7 @@ def build_canva_export(extracted: dict, metadata: dict) -> dict:
         "packing_group": transport.get("packing_group") or "",
         "marine_pollutant": _optional_value(transport.get("marine_pollutant")),
         "limited_quantity": _optional_value(transport.get("limited_quantity")),
-        "special_provisions": " | ".join(transport.get("special_provisions") or []),
+        "special_provisions": _join_optional_values(transport.get("special_provisions")),
         "erg_guide_number": transport.get("erg_guide_number") or "",
         "nfpa_health": str(nfpa.get("health", 0)),
         "nfpa_flammability": str(nfpa.get("flammability", 0)),
@@ -124,6 +124,15 @@ def dot_hazard_label_name(hazard_class: Optional[str]) -> str:
 def _optional_value(value) -> str:
     """Return a CSV-safe blank for missing optional values."""
     return "" if value is None else str(value)
+
+
+def _join_optional_values(value) -> str:
+    """Flatten optional scalar/list values into a single Canva cell."""
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        return " | ".join(str(item).strip() for item in value if str(item).strip())
+    return str(value)
 
 
 def _format_statement_list(items: list) -> str:

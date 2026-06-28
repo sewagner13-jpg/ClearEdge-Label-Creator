@@ -125,7 +125,13 @@ class LabelPipeline:
 
         sds_text, tds_text = await self._extract_uploaded_documents(files)
 
-        extracted_data = self.openai_client.extract_from_documents(sds_text, tds_text, cleaned_product_name)
+        try:
+            extracted_data = self.openai_client.extract_from_documents(sds_text, tds_text, cleaned_product_name)
+        except ValueError as exc:
+            raise LabelPipelineError(400, f"AI_EXTRACTION_FAILED: {exc}") from exc
+        except Exception as exc:
+            logger.error("AI extraction failed: %s", exc, exc_info=True)
+            raise LabelPipelineError(502, "AI_EXTRACTION_FAILED: OpenAI extraction service failed") from exc
         extracted_data.product.name = cleaned_product_name
         self._apply_operator_fields(
             extracted_data,
@@ -394,18 +400,22 @@ class LabelPipeline:
             validation_result.passed = False
 
     def _render_pdf(self, label_id: str, extracted_data: ExtractedData, mode: str, size: str) -> Path:
-        template_id = f"clearedge_{size}_v1"
-        svg_content = self.label_generator.generate_svg(
-            extracted_data,
-            mode=mode,
-            size=size,
-            template_id=template_id,
-        )
-        self.labels_dir.mkdir(parents=True, exist_ok=True)
-        pdf_content = self.label_generator.generate_pdf(svg_content)
-        label_path = self.labels_dir / f"{label_id}.pdf"
-        label_path.write_bytes(pdf_content)
-        return label_path
+        try:
+            template_id = f"clearedge_{size}_v1"
+            svg_content = self.label_generator.generate_svg(
+                extracted_data,
+                mode=mode,
+                size=size,
+                template_id=template_id,
+            )
+            self.labels_dir.mkdir(parents=True, exist_ok=True)
+            pdf_content = self.label_generator.generate_pdf(svg_content)
+            label_path = self.labels_dir / f"{label_id}.pdf"
+            label_path.write_bytes(pdf_content)
+            return label_path
+        except Exception as exc:
+            logger.error("Label rendering failed for %s: %s", label_id, exc, exc_info=True)
+            raise LabelPipelineError(500, f"LABEL_RENDERING_FAILED: {exc}") from exc
 
     def _build_metadata(
         self,

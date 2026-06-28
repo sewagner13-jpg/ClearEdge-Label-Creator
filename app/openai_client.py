@@ -239,6 +239,8 @@ Extract only pictograms explicitly mentioned or shown in the SDS. Return only th
         # Parse JSON
         data = json.loads(cleaned)
 
+        self._normalize_response_payload(data)
+
         nfpa_payload = data.get("nfpa") or {}
         nfpa_defaulted = (
             "nfpa" not in data
@@ -272,6 +274,77 @@ Extract only pictograms explicitly mentioned or shown in the SDS. Return only th
             )
 
         return extracted
+
+    @staticmethod
+    def _normalize_response_payload(data: dict) -> None:
+        """Normalize common extractor shape drift before schema validation."""
+        ghs = data.setdefault("ghs", {})
+        for field in ("hazard_statements", "precautionary_statements"):
+            ghs[field] = OpenAIClient._normalize_statement_list(ghs.get(field))
+
+        supplemental = ghs.get("supplemental_statements")
+        if isinstance(supplemental, str):
+            ghs["supplemental_statements"] = [supplemental] if supplemental.strip() else None
+
+        transport = data.setdefault("transport", {})
+        transport["packing_group"] = OpenAIClient._normalize_packing_group(transport.get("packing_group"))
+        transport["special_provisions"] = OpenAIClient._normalize_optional_text(transport.get("special_provisions"))
+        transport["limited_quantity"] = OpenAIClient._normalize_limited_quantity(transport.get("limited_quantity"))
+
+    @staticmethod
+    def _normalize_statement_list(value) -> list[dict]:
+        """Convert obvious statement variants into the schema's object list."""
+        if value is None:
+            return []
+        if isinstance(value, str):
+            values = [value]
+        elif isinstance(value, list):
+            values = value
+        else:
+            return []
+
+        normalized = []
+        for item in values:
+            if isinstance(item, dict):
+                text = str(item.get("text") or "").strip()
+                code = item.get("code")
+            else:
+                raw = str(item).strip()
+                if ":" in raw:
+                    possible_code, text = raw.split(":", 1)
+                    code = possible_code.strip() or None
+                    text = text.strip()
+                else:
+                    code = None
+                    text = raw
+            if text:
+                normalized.append({"code": code or None, "text": text})
+        return normalized
+
+    @staticmethod
+    def _normalize_packing_group(value) -> Optional[str]:
+        if value is None:
+            return None
+        clean = str(value).strip().upper().replace("PACKING GROUP", "").replace("PG", "").strip(" :-")
+        if clean in {"I", "II", "III"}:
+            return clean
+        return None if clean in {"", "NONE", "NULL", "N/A", "NA", "NOT APPLICABLE"} else str(value).strip()
+
+    @staticmethod
+    def _normalize_optional_text(value) -> Optional[str]:
+        if value is None:
+            return None
+        if isinstance(value, list):
+            parts = [str(item).strip() for item in value if str(item).strip()]
+            return " | ".join(parts) or None
+        clean = str(value).strip()
+        return clean or None
+
+    @staticmethod
+    def _normalize_limited_quantity(value) -> Optional[str]:
+        if isinstance(value, bool):
+            return "Yes" if value else "No"
+        return OpenAIClient._normalize_optional_text(value)
 
     def _repair_and_parse(self, response_text: str, product_name: str) -> ExtractedData:
         """Attempt to repair malformed JSON (single retry)."""
