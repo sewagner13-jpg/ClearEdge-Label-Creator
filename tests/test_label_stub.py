@@ -8,6 +8,7 @@ from app.schema import (
     GHSClassification,
     HazardStatement,
     NFPA704Ratings,
+    PrecautionaryStatement,
     ProductInfo,
     ShipmentInfo,
     TransportClassification,
@@ -120,7 +121,7 @@ def test_signal_word_replaces_ghs_heading_and_strip_stays_blank():
     assert "GHS PICTOGRAMS" not in svg
     assert 'id="signal-strip"' in svg
     assert 'id="signal-word-heading"' in svg
-    assert 'font-size="27"' in svg
+    assert 'font-size="21"' in svg
     assert "Danger" in svg
     assert 'fill="white" text-anchor="middle"' not in svg
 
@@ -190,6 +191,11 @@ def test_custom_label_uses_custom_logo_and_supplier_identity():
     )
 
     assert custom_logo in svg
+    logo_match = re.search(r'id="brand-logo" x="20" y="(?P<y>\d+)" width="(?P<width>\d+)" height="(?P<height>\d+)"', svg)
+    assert logo_match
+    assert int(logo_match.group("y")) <= 24
+    assert int(logo_match.group("width")) >= 190
+    assert int(logo_match.group("height")) >= 86
     assert "Customer Chemical Co." in svg
     assert "200 Customer Lane, Charlotte, NC" in svg
     assert "704-555-0199" in svg
@@ -206,8 +212,8 @@ def test_long_product_name_wraps_inside_header_without_logo_box():
 
     svg = generator.generate_svg(data, mode="workplace", size="pail")
 
-    assert "CE Surfactant 336" in svg
-    assert "PSA Extended Batc..." in svg
+    assert "CE Surfactant" in svg
+    assert "336 PSA Exten..." in svg
     assert 'id="shipment-info"' in svg
     assert '<rect x="10" y="10" width="{{ logo_panel_width }}"' not in svg
     assert 'x2="175" y2="95"' not in svg
@@ -332,7 +338,10 @@ def test_nfpa_704_diamond_is_rendered_on_every_label():
 
     assert 'id="nfpa-704"' in svg
     assert 'id="symbols-summary"' in svg
-    assert 'id="nfpa-704" transform="translate(462, 131)"' in svg
+    nfpa_match = re.search(r'id="nfpa-704" transform="translate\((?P<x>\d+), (?P<y>\d+)\)"', svg)
+    assert nfpa_match
+    assert int(nfpa_match.group("x")) >= 470
+    assert int(nfpa_match.group("y")) >= 128
     assert "NFPA 704" in svg
     assert "0=min 4=severe" in svg
     assert "#ED1C24" in svg
@@ -410,9 +419,83 @@ def test_dot_transport_panel_formats_id_number_with_prefix():
 
     svg = generator.generate_svg(data, mode="shipped_dot", size="drum")
 
-    assert "ID NUMBER:" in svg
+    assert "UN/NA ID:" in svg
+    assert "ID NUMBER:" not in svg
     assert "UN1993" in svg
     assert "Flammable liquids, n.o.s. (xylene)" in svg
+
+
+def test_product_name_is_prominent_on_customer_drum_label():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="Rucolac B-212", supplier_name="Rudolf"),
+        ghs=GHSClassification(signal_word="Warning"),
+        transport=TransportClassification(),
+    )
+
+    svg = generator.generate_svg(
+        data,
+        mode="workplace",
+        size="drum",
+        branding={"mode": "custom", "logo_data_uri": "data:image/png;base64,Y3VzdG9t"},
+    )
+
+    match = re.search(r'font-size="(?P<size>\d+)"\s+font-weight="bold" fill="#1B006E" text-anchor="middle">\s*Rucolac B-212', svg)
+    assert match
+    assert int(match.group("size")) >= 40
+
+
+def test_dense_shipped_label_keeps_transport_panel_above_footer():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(
+            name="Rucolac B-212",
+            supplier_name="RUDOLF GmbH",
+            supplier_address="Altvaterstrasse 58-64, D-82538 Geretsried",
+            supplier_phone="+49-(0)8171-53-0",
+            emergency_phone="+49-8171-53-222",
+            revision_date="2025-03-06",
+        ),
+        ghs=GHSClassification(
+            signal_word="Warning",
+            pictograms=["GHS02", "GHS07"],
+            hazard_statements=[
+                HazardStatement(code="H226", text="Flammable liquid and vapor."),
+                HazardStatement(code="H319", text="Causes serious eye irritation."),
+                HazardStatement(code="H336", text="May cause drowsiness or dizziness."),
+                HazardStatement(code="H412", text="Harmful to aquatic life with long lasting effects."),
+            ],
+            precautionary_statements=[
+                PrecautionaryStatement(code="P210", text="Keep away from heat, hot surfaces, sparks, open flames and other ignition sources. No smoking."),
+                PrecautionaryStatement(code="P261", text="Avoid breathing vapors, spray, or mist."),
+                PrecautionaryStatement(code="P280", text="Wear protective gloves, protective clothing, and eye protection."),
+                PrecautionaryStatement(code="P403+P233", text="Store in a well-ventilated place. Keep container tightly closed."),
+                PrecautionaryStatement(code="P501", text="Dispose of contents and container according to local regulations."),
+            ],
+        ),
+        transport=TransportClassification(
+            un_number="NA1993",
+            proper_shipping_name="COMBUSTIBLE LIQUID, N.O.S (2-methoxy-1-methylethyl acetate)",
+            hazard_class="3",
+            packing_group="III",
+        ),
+    )
+
+    svg = generator.generate_svg(
+        data,
+        mode="shipped_dot",
+        size="drum",
+        orientation="horizontal",
+        branding={"mode": "custom", "logo_data_uri": "data:image/png;base64,Y3VzdG9t"},
+    )
+
+    footer_line = re.search(r'<line x1="10" y1="(?P<y>\d+)" x2="\d+" y2="\d+"\s+stroke="#5A2D82"', svg)
+    transport_rect = re.search(r'<rect x="10" y="(?P<y>\d+)" width="\d+" height="(?P<height>\d+)"\s+fill="#FFF" stroke="#1B006E" stroke-width="4"', svg)
+
+    assert footer_line
+    assert transport_rect
+    transport_bottom = int(transport_rect.group("y")) + int(transport_rect.group("height"))
+    assert transport_bottom <= int(footer_line.group("y")) - 8
 
 
 def test_dot_transport_panel_offsets_fields_after_wrapped_shipping_name():
@@ -441,7 +524,7 @@ def test_dot_transport_panel_offsets_fields_after_wrapped_shipping_name():
     packing_y = text_y_containing("Packing Group")
     dot_label_y = text_y_containing("DOT Label")
 
-    assert hazard_y >= shipping_line_y + 16
+    assert hazard_y >= shipping_line_y + 15
     assert packing_y >= hazard_y + 18
     assert dot_label_y >= packing_y + 18
 

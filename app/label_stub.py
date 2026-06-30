@@ -84,20 +84,20 @@ class LabelGenerator:
 
   <!-- Signal word brand band (kept blank by design) -->
   {% if signal_word %}
-  <rect id="signal-strip" x="10" y="122" width="{{ width - 20 }}" height="42"
+  <rect id="signal-strip" x="10" y="122" width="{{ width - 20 }}" height="30"
         fill="{{ brand_purple }}"
         rx="2"/>
-  {% set y_offset = 174 %}
+  {% set y_offset = 160 %}
   {% else %}
   {% set y_offset = 124 %}
   {% endif %}
 
   <!-- Safety symbols band -->
   <g id="symbols-summary">
-    <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="112"
+    <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="96"
           fill="#FBFAFE" stroke="#C8BEDD" stroke-width="1.5" rx="3"/>
     {% if signal_word %}
-    <text id="signal-word-heading" x="20" y="{{ y_offset + 30 }}" font-size="27"
+    <text id="signal-word-heading" x="20" y="{{ y_offset + 30 }}" font-size="21"
           font-weight="bold" fill="{{ brand_purple }}" style="text-transform: uppercase;">
       {{ signal_word }}
     </text>
@@ -105,23 +105,23 @@ class LabelGenerator:
 
     <!-- Pictogram images pulled only from the approved GHS pictogram table asset. -->
     {% for pictogram in pictogram_icons[:4] %}
-    <g transform="translate({{ 20 + (loop.index0 % 4) * 72 }}, {{ y_offset + 40 }})">
-      <image id="pictogram-{{ pictogram.code }}" x="0" y="0" width="66" height="66"
+    <g transform="translate({{ 20 + (loop.index0 % 4) * 64 }}, {{ y_offset + 36 }})">
+      <image id="pictogram-{{ pictogram.code }}" x="0" y="0" width="58" height="58"
              href="{{ pictogram.data_uri }}" xlink:href="{{ pictogram.data_uri }}"
              preserveAspectRatio="xMidYMid meet"/>
     </g>
     {% endfor %}
 
     <!-- NFPA 704 Diamond: included on every label. -->
-    <g id="nfpa-704" transform="translate({{ width - 150 }}, {{ y_offset + 7 }})">
-      <rect x="0" y="0" width="130" height="98" fill="white" stroke="#D8D3E6" stroke-width="1" rx="3"/>
-      <text x="65" y="12" font-size="10" text-anchor="middle" fill="{{ text_color }}" font-weight="bold">
+    <g id="nfpa-704" transform="translate({{ width - 136 }}, {{ y_offset + 4 }})">
+      <rect x="0" y="0" width="116" height="88" fill="white" stroke="#D8D3E6" stroke-width="1" rx="3"/>
+      <text x="58" y="12" font-size="10" text-anchor="middle" fill="{{ text_color }}" font-weight="bold">
         NFPA 704
       </text>
-      <text x="65" y="22" font-size="7" text-anchor="middle" fill="{{ text_color }}" opacity="0.75">
+      <text x="58" y="22" font-size="7" text-anchor="middle" fill="{{ text_color }}" opacity="0.75">
         0=min 4=severe
       </text>
-      <g transform="translate(29, 27) scale(0.56)">
+      <g transform="translate(28, 28) scale(0.49)">
         <polygon points="60,0 120,60 60,120 0,60" fill="#222222"/>
         <polygon points="60,8 87,35 60,60 33,35" fill="#ED1C24"/>
         <polygon points="8,60 33,35 60,60 33,87" fill="#0094D8"/>
@@ -134,7 +134,7 @@ class LabelGenerator:
       </g>
     </g>
   </g>
-  {% set y_offset = y_offset + 120 %}
+  {% set y_offset = y_offset + 104 %}
 
   <!-- Hazard Statements Section -->
   {% if hazard_statements %}
@@ -198,7 +198,7 @@ class LabelGenerator:
     <rect x="20" y="{{ y_offset + 45 }}" width="145" height="70"
           fill="{{ brand_purple_light }}" stroke="{{ brand_purple }}" stroke-width="3" rx="5"/>
     <text x="92" y="{{ y_offset + 70 }}" font-size="14" font-weight="bold"
-          fill="{{ brand_purple }}" text-anchor="middle">ID NUMBER:</text>
+          fill="{{ brand_purple }}" text-anchor="middle">UN/NA ID:</text>
     <text x="92" y="{{ y_offset + 100 }}" font-size="28" font-weight="bold"
           fill="{{ brand_purple }}" text-anchor="middle">{{ identification_number }}</text>
 
@@ -529,35 +529,39 @@ class LabelGenerator:
         """Fit a product name into the header without clipping the right edge."""
         clean = cls._fit_text(product_name, 72, "UNNAMED PRODUCT")
         if available_width >= 430:
-            one_line_limit = 27
-            two_line_limit = 24
-            base_font = 30
+            one_line_limit = 25
+            two_line_limit = 22
+            base_font = 44
+        elif available_width >= 330:
+            one_line_limit = 18
+            two_line_limit = 18
+            base_font = 42
         else:
-            one_line_limit = 22
-            two_line_limit = 20
-            base_font = 28
+            one_line_limit = 16
+            two_line_limit = 16
+            base_font = 34
 
         if len(clean) <= one_line_limit:
             return {
                 "lines": [clean],
                 "font_size": base_font,
-                "y": 52,
-                "line_gap": 27,
+                "y": 66 if base_font >= 40 else 56,
+                "line_gap": base_font + 5,
             }
 
         lines = cls._wrap_lines(clean, line_width=two_line_limit, max_lines=2) or [clean]
         longest = max(len(line) for line in lines)
         if longest > two_line_limit:
-            font_size = 23
+            font_size = 27
         elif longest > one_line_limit:
-            font_size = 24
+            font_size = 29
         else:
-            font_size = 25
+            font_size = 31
 
         return {
             "lines": lines,
             "font_size": font_size,
-            "y": 43,
+            "y": 48,
             "line_gap": font_size + 5,
         }
 
@@ -630,14 +634,20 @@ class LabelGenerator:
         return cls._fit_text(clean, 22, clean)
 
 
-    def _format_statements(self, statements, line_width: int = 65, max_items: int = 6):
+    def _format_statements(
+        self,
+        statements,
+        line_width: int = 65,
+        max_items: int = 6,
+        max_lines: int = 3,
+    ):
         """Normalize hazard/precautionary statements with deterministic clipping."""
         formatted = []
         y = 0
         for statement in (statements or [])[:max_items]:
             code = getattr(statement, "code", None)
             text = getattr(statement, "text", "")
-            wrapped = self._wrap_lines(text, line_width=line_width, max_lines=3) or [""]
+            wrapped = self._wrap_lines(text, line_width=line_width, max_lines=max_lines) or [""]
             formatted.append({
                 "code": code or "•",
                 "text": " ".join(wrapped).strip(),
@@ -646,6 +656,63 @@ class LabelGenerator:
             })
             y += (len(wrapped) * 10) + 3
         return formatted
+
+    def _fit_safety_statements_for_page(
+        self,
+        data: ExtractedData,
+        *,
+        mode: str,
+        width: int,
+        height: int,
+        signal_word: Optional[str],
+        transport_layout: dict,
+    ) -> tuple[list[dict], list[dict]]:
+        """Format safety statements so downstream transport content stays above the footer."""
+        base_line_width = 96 if width >= 760 else (78 if width > 612 else 68)
+        if mode == "shipped_dot":
+            candidates = (
+                [(4, 2), (3, 2), (2, 2), (2, 1), (1, 1)]
+                if width <= height
+                else [(3, 2), (2, 2), (2, 1), (1, 1)]
+            )
+        else:
+            candidates = [(6, 3), (5, 2), (4, 2), (3, 2), (2, 2)]
+
+        content_start = (160 if signal_word else 124) + 104
+        transport_height = 0
+        if mode == "shipped_dot" and data.transport.un_number:
+            transport_height = transport_layout["dot_panel_height"] + 10
+        elif mode == "shipped_dot" and self._is_not_regulated_for_transport(data.transport):
+            transport_height = 78
+
+        footer_limit = height - 102
+        fallback = ([], [])
+        for max_items, max_lines in candidates:
+            hazard_statements = self._format_statements(
+                data.ghs.hazard_statements,
+                line_width=base_line_width,
+                max_items=max_items,
+                max_lines=max_lines,
+            )
+            precautionary_statements = self._format_statements(
+                data.ghs.precautionary_statements,
+                line_width=base_line_width,
+                max_items=max_items,
+                max_lines=max_lines,
+            )
+            fallback = (hazard_statements, precautionary_statements)
+
+            projected_bottom = content_start
+            if hazard_statements:
+                projected_bottom += self._statement_block_height(hazard_statements) + 10
+            if precautionary_statements:
+                projected_bottom += self._statement_block_height(precautionary_statements) + 10
+            projected_bottom += transport_height
+
+            if projected_bottom <= footer_limit:
+                return hazard_statements, precautionary_statements
+
+        return fallback
 
     def _format_pictograms(self, pictograms):
         """Return approved GHS pictogram images; never draw synthetic fallback symbols."""
@@ -690,7 +757,7 @@ class LabelGenerator:
         if not formatted_statements:
             return 0
         last = formatted_statements[-1]
-        return 44 + last["y"] + (len(last["lines"]) * 10)
+        return 38 + last["y"] + (len(last["lines"]) * 10)
 
     @staticmethod
     def _is_not_regulated_for_transport(transport) -> bool:
@@ -722,25 +789,25 @@ class LabelGenerator:
     ) -> dict:
         """Stack DOT detail fields below the rendered shipping-name lines."""
         line_count = max(1, len(shipping_name_lines))
-        hazard_class_y = 32 + ((line_count - 1) * 13) + 19
+        hazard_class_y = 32 + ((line_count - 1) * 12) + 16
         cursor_y = hazard_class_y
 
         packing_group_y = None
         if packing_group:
-            cursor_y += 20
+            cursor_y += 18
             packing_group_y = cursor_y
 
-        cursor_y += 20
+        cursor_y += 18
         dot_label_y = cursor_y
 
         marine_pollutant_y = None
         if marine_pollutant_display:
-            cursor_y += 18
+            cursor_y += 16
             marine_pollutant_y = cursor_y
 
         limited_quantity_y = None
         if limited_quantity_display:
-            cursor_y += 18
+            cursor_y += 16
             limited_quantity_y = cursor_y
 
         return {
@@ -749,7 +816,7 @@ class LabelGenerator:
             "dot_label_y": dot_label_y,
             "marine_pollutant_y": marine_pollutant_y,
             "limited_quantity_y": limited_quantity_y,
-            "dot_panel_height": max(165, 45 + cursor_y + 16),
+            "dot_panel_height": max(154, 45 + cursor_y + 15),
         }
 
     def _resolve_branding(self, data: ExtractedData, branding: Optional[dict]) -> dict:
@@ -806,23 +873,18 @@ class LabelGenerator:
         width, height = self._oriented_dimensions(template_config, orientation)
         brand = template_config["brand"]
         resolved_branding = self._resolve_branding(data, branding)
-        logo_width = 218 if width <= 612 else 238
-        logo_height = int(round(logo_width / self.CLEAREDGE_LOGO_ASPECT_RATIO))
-        logo_y = 34 if width <= 612 else 32
+        if resolved_branding["is_clearedge"]:
+            logo_width = 218 if width <= 612 else 238
+            logo_height = int(round(logo_width / self.CLEAREDGE_LOGO_ASPECT_RATIO))
+            logo_y = 34 if width <= 612 else 32
+        else:
+            logo_width = 198 if width <= 612 else 220
+            logo_height = 88
+            logo_y = 20
         product_area_x = 20 + logo_width + 24
         product_area_width = width - product_area_x - 22
         heading = self._format_product_heading(data.product.name, product_area_width)
         shipment = data.shipment
-        hazard_statements = self._format_statements(
-            data.ghs.hazard_statements,
-            line_width=74 if width > 612 else 68,
-            max_items=6,
-        )
-        precautionary_statements = self._format_statements(
-            data.ghs.precautionary_statements,
-            line_width=74 if width > 612 else 68,
-            max_items=6,
-        )
         dot_labels = self._format_dot_labels(data.transport)
         shipping_name_lines = self._wrap_lines(
             data.transport.proper_shipping_name,
@@ -836,6 +898,14 @@ class LabelGenerator:
             packing_group=data.transport.packing_group,
             marine_pollutant_display=marine_pollutant_display,
             limited_quantity_display=limited_quantity_display,
+        )
+        hazard_statements, precautionary_statements = self._fit_safety_statements_for_page(
+            data,
+            mode=mode,
+            width=width,
+            height=height,
+            signal_word=data.ghs.signal_word,
+            transport_layout=transport_layout,
         )
 
         # Prepare template context
