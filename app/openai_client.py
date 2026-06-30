@@ -34,6 +34,7 @@ SCHEMA TO FOLLOW:
 {
   "product": {
     "name": "string (required)",
+    "product_uses": ["short product use/application from TDS/SDS"]|[],
     "supplier_name": "string|null",
     "supplier_address": "string|null",
     "supplier_phone": "string|null",
@@ -118,7 +119,11 @@ If the SDS lists pictogram words, map them exactly:
 - Exploding Bomb -> GHS01
 - Environment -> GHS09
 
-Extract only pictograms explicitly mentioned or shown in the SDS. Return only the GHS code list; do not invent pictograms."""
+PRODUCT USES:
+- Extract only brief product uses/applications that are explicitly stated in the TDS first, or SDS if no TDS is provided
+- Look for sections like Uses, Applications, Recommended Uses, Typical Applications, Product Description
+- Return at most 3 short phrases, not full marketing paragraphs
+- Do not invent uses and do not include compliance, storage, or handling instructions as product uses"""
 
     def __init__(self):
         """Initialize OpenAI client."""
@@ -278,6 +283,9 @@ Extract only pictograms explicitly mentioned or shown in the SDS. Return only th
     @staticmethod
     def _normalize_response_payload(data: dict) -> None:
         """Normalize common extractor shape drift before schema validation."""
+        product = data.setdefault("product", {})
+        product["product_uses"] = OpenAIClient._normalize_string_list(product.get("product_uses"))
+
         ghs = data.setdefault("ghs", {})
         for field in ("hazard_statements", "precautionary_statements"):
             ghs[field] = OpenAIClient._normalize_statement_list(ghs.get(field))
@@ -290,6 +298,23 @@ Extract only pictograms explicitly mentioned or shown in the SDS. Return only th
         transport["packing_group"] = OpenAIClient._normalize_packing_group(transport.get("packing_group"))
         transport["special_provisions"] = OpenAIClient._normalize_optional_text(transport.get("special_provisions"))
         transport["limited_quantity"] = OpenAIClient._normalize_limited_quantity(transport.get("limited_quantity"))
+
+    @staticmethod
+    def _normalize_string_list(value) -> list[str]:
+        """Normalize scalar/list extractor output into concise strings."""
+        if value is None:
+            return []
+        if isinstance(value, str):
+            values = [
+                item.strip()
+                for item in value.replace("|", ";").replace(",", ";").split(";")
+                if item.strip()
+            ]
+        elif isinstance(value, list):
+            values = value
+        else:
+            return []
+        return [str(item).strip() for item in values if str(item).strip()]
 
     @staticmethod
     def _normalize_statement_list(value) -> list[dict]:

@@ -189,6 +189,24 @@ class TestExtractedData:
         assert data.product.name == "Test Product"
         assert len(data.evidence) == 1
 
+    def test_product_uses_normalize_to_short_unique_list(self):
+        product = ProductInfo(
+            name="Use Test",
+            product_uses=[
+                "Waterproofing membranes",
+                "waterproofing membranes",
+                "Adhesive modifier",
+                "",
+                "A very long product use description that should not be allowed to take over the product label area",
+            ],
+        )
+
+        assert product.product_uses == [
+            "Waterproofing membranes",
+            "Adhesive modifier",
+            "A very long product use description that should not be allowed...",
+        ]
+
     def test_evidence_quote_max_length(self):
         """Evidence quotes must be ≤240 chars."""
         with pytest.raises(ValidationError):

@@ -641,6 +641,13 @@ generateBtn.addEventListener('click', async () => {
                 </div>
                 ` : ''}
 
+                ${data.extracted.product.product_uses && data.extracted.product.product_uses.length > 0 ? `
+                <div class="field-group">
+                    <div class="field-label">Product Uses</div>
+                    <div class="field-value">${data.extracted.product.product_uses.slice(0, 3).map(escapeHtml).join('<br>')}</div>
+                </div>
+                ` : ''}
+
                 ${data.extracted.transport.un_number ? `
                 <div class="field-group">
                     <div class="field-label">UN Number</div>

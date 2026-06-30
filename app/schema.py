@@ -244,6 +244,10 @@ class ProductInfo(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     name: str = Field(..., min_length=1, description="Product name")
+    product_uses: List[str] = Field(
+        default_factory=list,
+        description="Short source-backed product uses/applications from SDS/TDS, preferably TDS"
+    )
     supplier_name: Optional[str] = Field(None, description="Manufacturer/supplier name")
     supplier_address: Optional[str] = Field(None, description="Supplier address")
     supplier_phone: Optional[str] = Field(None, description="Supplier phone number")
@@ -252,6 +256,40 @@ class ProductInfo(BaseModel):
         None,
         description="SDS revision date (ISO format preferred)"
     )
+
+    @field_validator("product_uses", mode="before")
+    @classmethod
+    def normalize_product_uses(cls, value) -> List[str]:
+        """Keep product-use text compact enough for a label."""
+        if value is None:
+            return []
+        if isinstance(value, str):
+            raw_values = [
+                item.strip()
+                for item in value.replace("|", ";").replace(",", ";").split(";")
+                if item.strip()
+            ]
+        else:
+            raw_values = list(value)
+
+        normalized = []
+        seen = set()
+        for raw_value in raw_values:
+            clean = " ".join(str(raw_value or "").strip(" .;-").split())
+            if not clean:
+                continue
+            clean = clean[0].upper() + clean[1:] if clean[:1].islower() else clean
+            if len(clean) > 68:
+                clipped = clean[:65].rsplit(" ", 1)[0].rstrip(" ,.;")
+                clean = f"{clipped}..."
+            key = clean.lower()
+            if key in seen:
+                continue
+            normalized.append(clean)
+            seen.add(key)
+            if len(normalized) >= 3:
+                break
+        return normalized
 
 
 class ShipmentInfo(BaseModel):

@@ -126,6 +126,34 @@ def test_signal_word_replaces_ghs_heading_and_strip_stays_blank():
     assert 'fill="white" text-anchor="middle"' not in svg
 
 
+def test_product_uses_render_as_compact_clipped_label_block():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(
+            name="ClearEdge Uses Test",
+            product_uses=[
+                "Waterproofing membranes",
+                "Adhesive modifier",
+                "Sealant additive",
+                "This extra application should be clipped out of the label block",
+            ],
+        ),
+        ghs=GHSClassification(signal_word="Warning", pictograms=["GHS07"]),
+        transport=TransportClassification(),
+    )
+
+    svg = generator.generate_svg(data, mode="workplace", size="pail")
+
+    assert 'id="product-uses"' in svg
+    assert "PRODUCT USES:" in svg
+    assert "Waterproofing membranes" in svg
+    assert "Adhesive modifier" in svg
+    assert "This extra application" not in svg
+    uses_rect = re.search(r'id="product-uses"[\s\S]*?<rect x="10" y="(?P<y>\d+)" width="(?P<width>\d+)" height="(?P<height>\d+)"', svg)
+    assert uses_rect
+    assert int(uses_rect.group("height")) <= 42
+
+
 def test_product_name_uses_logo_purple():
     generator = LabelGenerator()
     data = ExtractedData(
@@ -450,6 +478,11 @@ def test_dense_shipped_label_keeps_transport_panel_above_footer():
     data = ExtractedData(
         product=ProductInfo(
             name="Rucolac B-212",
+            product_uses=[
+                "Industrial coatings",
+                "Waterproofing membranes",
+                "Adhesive modification",
+            ],
             supplier_name="RUDOLF GmbH",
             supplier_address="Altvaterstrasse 58-64, D-82538 Geretsried",
             supplier_phone="+49-(0)8171-53-0",
@@ -494,6 +527,7 @@ def test_dense_shipped_label_keeps_transport_panel_above_footer():
 
     assert footer_line
     assert transport_rect
+    assert 'id="product-uses"' in svg
     transport_bottom = int(transport_rect.group("y")) + int(transport_rect.group("height"))
     assert transport_bottom <= int(footer_line.group("y")) - 8
 

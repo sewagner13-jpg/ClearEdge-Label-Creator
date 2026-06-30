@@ -2,9 +2,9 @@ from app.rule_based_extractor import RuleBasedExtractor
 from app.schema import ExtractedText, ExtractedTextPage
 
 
-def _text(body: str) -> ExtractedText:
+def _text(body: str, doc: str = "SDS") -> ExtractedText:
     return ExtractedText(
-        doc="SDS",
+        doc=doc,
         method_used="text",
         pages=[ExtractedTextPage(page=1, text=body)],
     )
@@ -58,3 +58,28 @@ def test_rule_based_extractor_captures_not_regulated_transport_state():
 
     assert extracted.transport.not_regulated is True
     assert extracted.transport.un_number is None
+
+
+def test_rule_based_extractor_captures_compact_product_uses_from_tds():
+    extracted = RuleBasedExtractor.extract(
+        sds_text=None,
+        tds_text=_text(
+            """
+            Recommended Uses:
+            Waterproofing membranes
+            Adhesive modifier
+            Sealant additive
+            Decorative paragraph that should not be captured forever
+            """,
+            doc="TDS",
+        ),
+        product_name="TDS Use Product",
+        warning="AI failed",
+    )
+
+    assert extracted.product.product_uses == [
+        "Waterproofing membranes",
+        "Adhesive modifier",
+        "Sealant additive",
+    ]
+    assert any(item.field_path == "product.product_uses" and item.doc == "TDS" for item in extracted.evidence)

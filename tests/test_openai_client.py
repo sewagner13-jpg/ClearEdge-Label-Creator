@@ -51,7 +51,10 @@ def test_parse_response_accepts_explicit_nfpa_values():
 def test_parse_response_normalizes_common_ai_shape_drift():
     client = OpenAIClient.__new__(OpenAIClient)
     response = {
-        "product": {"name": "ClearEdge Normalized"},
+        "product": {
+            "name": "ClearEdge Normalized",
+            "product_uses": "Waterproofing membranes; adhesive modifier; sealant additive",
+        },
         "ghs": {
             "signal_word": "DANGER",
             "pictograms": ["flame"],
@@ -72,6 +75,11 @@ def test_parse_response_normalizes_common_ai_shape_drift():
     extracted = client._parse_response(json.dumps(response), "ClearEdge Normalized")
 
     assert extracted.ghs.signal_word == "Danger"
+    assert extracted.product.product_uses == [
+        "Waterproofing membranes",
+        "Adhesive modifier",
+        "Sealant additive",
+    ]
     assert extracted.ghs.pictograms == ["GHS02"]
     assert extracted.ghs.hazard_statements[0].code == "H225"
     assert extracted.ghs.precautionary_statements[0].text == "Keep away from heat."
@@ -84,7 +92,10 @@ def test_parse_response_normalizes_common_ai_shape_drift():
 def test_canva_export_formats_scalar_special_provisions():
     exported = build_canva_export(
         {
-            "product": {"name": "ClearEdge Canva"},
+            "product": {
+                "name": "ClearEdge Canva",
+                "product_uses": ["Waterproofing membranes", "Adhesive modifier", "Sealant additive"],
+            },
             "ghs": {},
             "transport": {"special_provisions": "IB2 | T4"},
             "nfpa": {},
@@ -99,7 +110,10 @@ def test_canva_export_formats_scalar_special_provisions():
 def test_canva_export_includes_template_ready_display_fields():
     exported = build_canva_export(
         {
-            "product": {"name": "ClearEdge Canva"},
+            "product": {
+                "name": "ClearEdge Canva",
+                "product_uses": ["Waterproofing membranes", "Adhesive modifier", "Sealant additive"],
+            },
             "ghs": {
                 "signal_word": "Warning",
                 "pictograms": ["GHS05", "GHS07"],
@@ -129,6 +143,8 @@ def test_canva_export_includes_template_ready_display_fields():
 
     assert exported["label_id"] == "label_ClearEdgeCanva_abc123"
     assert exported["product_name_display"] == "ClearEdge Canva"
+    assert exported["product_uses"] == "Waterproofing membranes | Adhesive modifier | Sealant additive"
+    assert exported["product_uses_display"] == "Waterproofing membranes | Adhesive modifier"
     assert exported["lot_number_display"] == "LOT-100"
     assert exported["expiration_date_display"] == "2027-05-07"
     assert exported["fill_amount_display"] == "441 lb"

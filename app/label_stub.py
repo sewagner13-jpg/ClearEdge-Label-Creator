@@ -136,6 +136,23 @@ class LabelGenerator:
   </g>
   {% set y_offset = y_offset + 104 %}
 
+  <!-- Compact TDS product uses. Kept short so compliance blocks keep priority. -->
+  {% if product_uses %}
+  <g id="product-uses">
+    <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="{{ product_uses_block_height }}"
+          fill="#FFFFFF" stroke="#D8D3E6" stroke-width="1.5" rx="3"/>
+    <text x="20" y="{{ y_offset + 17 }}" font-size="10" font-weight="bold" fill="{{ brand_purple }}">
+      PRODUCT USES:
+    </text>
+    {% for line in product_uses %}
+    <text x="116" y="{{ y_offset + 17 + (loop.index0 * 11) }}" font-size="8.8" fill="{{ text_color }}">
+      {{ line }}
+    </text>
+    {% endfor %}
+  </g>
+  {% set y_offset = y_offset + product_uses_block_height + 8 %}
+  {% endif %}
+
   <!-- Hazard Statements Section -->
   {% if hazard_statements %}
   <g id="hazard-statements">
@@ -671,14 +688,15 @@ class LabelGenerator:
         base_line_width = 96 if width >= 760 else (78 if width > 612 else 68)
         if mode == "shipped_dot":
             candidates = (
-                [(4, 2), (3, 2), (2, 2), (2, 1), (1, 1)]
+                [(4, 2, 4, 2), (3, 2, 3, 2), (2, 2, 2, 1), (1, 1, 1, 1), (1, 1, 0, 0)]
                 if width <= height
-                else [(3, 2), (2, 2), (2, 1), (1, 1)]
+                else [(3, 2, 2, 1), (2, 1, 1, 1), (1, 1, 0, 0), (0, 0, 0, 0)]
             )
         else:
-            candidates = [(6, 3), (5, 2), (4, 2), (3, 2), (2, 2)]
+            candidates = [(6, 3, 6, 3), (5, 2, 5, 2), (4, 2, 4, 2), (3, 2, 3, 2), (2, 2, 2, 2)]
 
-        content_start = (160 if signal_word else 124) + 104
+        product_uses_height = 50 if getattr(data.product, "product_uses", None) else 0
+        content_start = (160 if signal_word else 124) + 104 + product_uses_height
         transport_height = 0
         if mode == "shipped_dot" and data.transport.un_number:
             transport_height = transport_layout["dot_panel_height"] + 10
@@ -687,18 +705,18 @@ class LabelGenerator:
 
         footer_limit = height - 102
         fallback = ([], [])
-        for max_items, max_lines in candidates:
+        for hazard_max_items, hazard_max_lines, precautionary_max_items, precautionary_max_lines in candidates:
             hazard_statements = self._format_statements(
                 data.ghs.hazard_statements,
                 line_width=base_line_width,
-                max_items=max_items,
-                max_lines=max_lines,
+                max_items=hazard_max_items,
+                max_lines=hazard_max_lines,
             )
             precautionary_statements = self._format_statements(
                 data.ghs.precautionary_statements,
                 line_width=base_line_width,
-                max_items=max_items,
-                max_lines=max_lines,
+                max_items=precautionary_max_items,
+                max_lines=precautionary_max_lines,
             )
             fallback = (hazard_statements, precautionary_statements)
 
@@ -724,6 +742,18 @@ class LabelGenerator:
             else:
                 logger.warning("Skipping GHS pictogram without approved table asset: %s", code)
         return formatted
+
+    def _format_product_uses(self, product_uses, *, width: int) -> list[str]:
+        """Return at most two compact product-use lines for the printed label."""
+        uses = [
+            self._fit_text(str(item), 42, "")
+            for item in (product_uses or [])[:2]
+            if str(item).strip()
+        ]
+        if not uses:
+            return []
+        line_width = 82 if width >= 760 else 62
+        return self._wrap_lines(" | ".join(uses), line_width=line_width, max_lines=2)
 
     @staticmethod
     def _normalize_hazard_class(hazard_class: Optional[str]) -> Optional[str]:
@@ -884,6 +914,7 @@ class LabelGenerator:
         product_area_x = 20 + logo_width + 24
         product_area_width = width - product_area_x - 22
         heading = self._format_product_heading(data.product.name, product_area_width)
+        product_uses = self._format_product_uses(data.product.product_uses, width=width)
         shipment = data.shipment
         dot_labels = self._format_dot_labels(data.transport)
         shipping_name_lines = self._wrap_lines(
@@ -943,6 +974,8 @@ class LabelGenerator:
             "signal_word": data.ghs.signal_word,
             "pictograms": data.ghs.pictograms,
             "pictogram_icons": self._format_pictograms(data.ghs.pictograms),
+            "product_uses": product_uses,
+            "product_uses_block_height": 40,
             "hazard_statements": hazard_statements,
             "hazard_block_height": self._statement_block_height(hazard_statements),
             "precautionary_statements": precautionary_statements,

@@ -83,6 +83,19 @@ class RuleBasedExtractor:
         if "clearedgesolutions" in compact and not data.product.supplier_name:
             data.product.supplier_name = "ClearEdge Solutions"
 
+        product_uses = cls._extract_product_uses(sources)
+        if product_uses:
+            data.product.product_uses = product_uses
+            match = next((item for item in sources if item[0] == "TDS"), sources[0] if sources else None)
+            if match:
+                doc, page, _ = match
+                cls._add_evidence(
+                    data,
+                    "product.product_uses",
+                    "; ".join(product_uses),
+                    {"doc": doc, "page": page, "quote": "; ".join(product_uses)},
+                )
+
     @classmethod
     def _extract_ghs_fields(cls, data: ExtractedData, sources) -> None:
         signal = cls._find_regex(r"\b(Danger|Warning)\b", sources, flags=re.IGNORECASE)
@@ -159,6 +172,36 @@ class RuleBasedExtractor:
         if "flammableliquids,n.o.s." in compact:
             return "Flammable liquids, n.o.s."
         return None
+
+    @classmethod
+    def _extract_product_uses(cls, sources) -> list[str]:
+        """Extract a few explicit product uses from TDS/application sections."""
+        heading_pattern = re.compile(
+            r"^\s*(?:recommended\s+uses?|uses?|applications?|typical\s+applications?|product\s+description)\s*:?\s*$",
+            flags=re.IGNORECASE,
+        )
+        for doc, _, text in sources:
+            if doc != "TDS":
+                continue
+            lines = [line.strip(" \t-•") for line in text.splitlines()]
+            for index, line in enumerate(lines):
+                if not heading_pattern.match(line):
+                    continue
+                uses = []
+                for candidate in lines[index + 1:index + 8]:
+                    clean = " ".join(candidate.strip(" .;-").split())
+                    if not clean:
+                        if uses:
+                            break
+                        continue
+                    if heading_pattern.match(clean) or re.match(r"^[A-Z][A-Za-z ]{2,30}:$", clean):
+                        break
+                    uses.append(clean)
+                    if len(uses) >= 3:
+                        return uses
+                if uses:
+                    return uses
+        return []
 
     @classmethod
     def _statement_matches(cls, pattern: str, sources) -> list[tuple[str, str]]:
