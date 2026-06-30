@@ -16,14 +16,19 @@ const loading = document.getElementById('loading');
 const result = document.getElementById('result');
 const labelMode = document.getElementById('labelMode');
 const labelSize = document.getElementById('labelSize');
+const labelOrientation = document.getElementById('labelOrientation');
 const productName = document.getElementById('productName');
 const lotNumber = document.getElementById('lotNumber');
 const expirationDate = document.getElementById('expirationDate');
 const manufactureDate = document.getElementById('manufactureDate');
 const fillAmount = document.getElementById('fillAmount');
+const containerTypeHint = document.getElementById('containerTypeHint');
 const labelBrand = document.getElementById('labelBrand');
 const brandLogo = document.getElementById('brandLogo');
 const customBrandFields = document.getElementById('customBrandFields');
+const suggestedLogoPanel = document.getElementById('suggestedLogoPanel');
+const suggestedLogoImage = document.getElementById('suggestedLogoImage');
+const suggestedLogoMeta = document.getElementById('suggestedLogoMeta');
 const supplierName = document.getElementById('supplierName');
 const supplierAddress = document.getElementById('supplierAddress');
 const supplierPhone = document.getElementById('supplierPhone');
@@ -54,10 +59,14 @@ const GHS_PICTOGRAM_OPTIONS = {
 
 let selectedFiles = [];
 let selectedGhsPictograms = [];
+const KG_TO_LB = 2.2046226218;
 
 function updateBrandFields() {
     const isCustom = labelBrand.value === 'custom';
     customBrandFields.style.display = isCustom ? 'block' : 'none';
+    if (!isCustom) {
+        clearSuggestedLogo();
+    }
 }
 
 labelBrand.addEventListener('change', updateBrandFields);
@@ -76,6 +85,72 @@ function escapeHtml(value) {
         .replace(/'/g, '&#039;');
 }
 
+function safeImageDataUri(value) {
+    const dataUri = String(value || '');
+    return /^data:image\/(png|jpeg|jpg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/i.test(dataUri)
+        ? dataUri
+        : '';
+}
+
+function clearSuggestedLogo() {
+    suggestedLogoPanel.style.display = 'none';
+    suggestedLogoImage.removeAttribute('src');
+    suggestedLogoMeta.textContent = '';
+}
+
+function setIfBlank(input, value) {
+    if (input && !input.value.trim() && value) {
+        input.value = value;
+    }
+}
+
+function applyCustomBrandSuggestions(data) {
+    if (labelBrand.value !== 'custom') {
+        clearSuggestedLogo();
+        return;
+    }
+
+    setIfBlank(supplierName, data?.extracted?.product?.supplier_name);
+    setIfBlank(supplierAddress, data?.extracted?.product?.supplier_address);
+    setIfBlank(supplierPhone, data?.extracted?.product?.supplier_phone);
+    renderSuggestedLogo(data?.branding);
+}
+
+function renderSuggestedLogo(branding) {
+    const suggestion = branding?.suggested_logo;
+    const dataUri = safeImageDataUri(suggestion?.data_uri);
+    if (!dataUri) {
+        clearSuggestedLogo();
+        return;
+    }
+
+    const source = suggestion.source_file || suggestion.source_document || 'uploaded document';
+    const dimensions = suggestion.width && suggestion.height ? `${suggestion.width} x ${suggestion.height}` : '';
+    const usage = branding?.logo_source === 'suggested'
+        ? 'Using suggested logo on this label.'
+        : 'Suggested logo detected; uploaded logo was used instead.';
+
+    suggestedLogoImage.src = dataUri;
+    suggestedLogoMeta.textContent = [usage, source, dimensions].filter(Boolean).join(' | ');
+    suggestedLogoPanel.style.display = 'block';
+}
+
+function renderBrandingSummary(branding) {
+    if (!branding || branding.mode !== 'custom') return '';
+    const sourceLabels = {
+        suggested: 'Suggested logo from SDS/TDS',
+        uploaded: 'Uploaded logo',
+        none: 'No logo selected'
+    };
+    const sourceLabel = sourceLabels[branding.logo_source] || branding.logo_source || 'Not set';
+    return `
+        <div style="margin-top: 14px; padding: 12px; border: 1px solid #C8BEDD; border-radius: 6px; background: #FBFAFE;">
+            <strong>Custom brand source:</strong> ${escapeHtml(sourceLabel)}
+            ${branding.suggested_logo?.source_file ? `<div style="margin-top:4px; color:#555;">Suggested from ${escapeHtml(branding.suggested_logo.source_file)}</div>` : ''}
+        </div>
+    `;
+}
+
 function statusLabel(status) {
     const labels = {
         ready: 'Ready to download',
@@ -85,6 +160,48 @@ function statusLabel(status) {
     };
     return labels[status] || 'Label generated';
 }
+
+function containerTypeLabel(containerType) {
+    const labels = {
+        pail: 'Pail',
+        drum: 'Drum',
+        tote: 'Tote'
+    };
+    return labels[containerType] || '';
+}
+
+function inferContainerTypeFromFillAmount(value) {
+    const cleaned = String(value || '').trim();
+    const match = cleaned.match(/(\d+(?:,\d{3})*(?:\.\d+)?)/);
+    if (!match) return '';
+
+    const amount = Number(match[1].replace(/,/g, ''));
+    if (!Number.isFinite(amount)) return '';
+
+    const normalized = cleaned.toLowerCase().replace(/\./g, '');
+    const pounds = /\b(kg|kgs|kilogram|kilograms)\b/.test(normalized)
+        ? amount * KG_TO_LB
+        : amount;
+
+    if (pounds > 2000) return 'tote';
+    if (pounds > 60) return 'drum';
+    if (pounds <= 55) return 'pail';
+    return '';
+}
+
+function updateContainerTypeHint() {
+    const containerType = inferContainerTypeFromFillAmount(fillAmount.value);
+    if (!containerType) {
+        containerTypeHint.textContent = 'Container will be inferred when the weight is clear.';
+        return;
+    }
+
+    labelSize.value = containerType;
+    containerTypeHint.textContent = `Inferred container: ${containerTypeLabel(containerType)}.`;
+}
+
+fillAmount.addEventListener('input', updateContainerTypeHint);
+updateContainerTypeHint();
 
 function renderSelectedGhsPictograms() {
     if (selectedGhsPictograms.length === 0) {
@@ -154,6 +271,7 @@ function handleFiles(files) {
     }
 
     displayFiles();
+    clearSuggestedLogo();
     generateBtn.disabled = false;
 }
 
@@ -324,6 +442,7 @@ generateBtn.addEventListener('click', async () => {
     formData.append('product_name', prodName);
     formData.append('mode', labelMode.value);
     formData.append('size', labelSize.value);
+    formData.append('orientation', labelOrientation.value);
     formData.append('lot_number', lotNumber.value.trim());
     formData.append('expiration_date', expirationDate.value.trim());
     formData.append('manufacture_date', manufactureDate.value.trim());
@@ -367,6 +486,7 @@ generateBtn.addEventListener('click', async () => {
         }
 
         const data = await response.json();
+        applyCustomBrandSuggestions(data);
 
         loading.classList.remove('show');
         result.classList.add('show');
@@ -429,6 +549,20 @@ generateBtn.addEventListener('click', async () => {
                 </div>
                 ` : ''}
 
+                ${data.label?.orientation ? `
+                <div class="field-group">
+                    <div class="field-label">Orientation</div>
+                    <div class="field-value">${escapeHtml(containerTypeLabel(data.label.orientation) || data.label.orientation)}</div>
+                </div>
+                ` : ''}
+
+                ${data.label?.container_type ? `
+                <div class="field-group">
+                    <div class="field-label">Inferred Container</div>
+                    <div class="field-value">${escapeHtml(containerTypeLabel(data.label.container_type) || data.label.container_type)}</div>
+                </div>
+                ` : ''}
+
                 ${data.extracted.product.emergency_phone ? `
                 <div class="field-group">
                     <div class="field-label">Emergency Phone</div>
@@ -448,6 +582,8 @@ generateBtn.addEventListener('click', async () => {
                 </div>
                 ` : ''}
             </div>
+
+            ${renderBrandingSummary(data.branding)}
 
             ${renderAgentCoreReview(data.agentcore_review)}
 

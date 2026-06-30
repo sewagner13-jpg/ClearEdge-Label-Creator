@@ -352,6 +352,21 @@ class LabelGenerator:
                     "body_font": "Arial, sans-serif",
                     "text_color": self.brand_palette["text"]
                 }
+            },
+            "clearedge_tote_v1": {
+                "size": "tote",
+                "width": 648,
+                "height": 864,
+                "name": "Tote Label",
+                "safe_margin": 12,
+                "header_height": 100,
+                "max_product_name_chars": 34,
+                "brand": {
+                    "header_color": self.brand_palette["primary"],
+                    "accent_color": self.brand_palette["accent"],
+                    "body_font": "Arial, sans-serif",
+                    "text_color": self.brand_palette["text"]
+                }
             }
         }
 
@@ -450,6 +465,22 @@ class LabelGenerator:
 
         logger.warning(f"Unknown size '{size}', using default template '{self.default_template_id}'")
         return self.templates[self.default_template_id]
+
+    @staticmethod
+    def _normalize_orientation(orientation: Optional[str]) -> str:
+        clean = str(orientation or "vertical").strip().lower()
+        if clean in {"horizontal", "landscape"}:
+            return "horizontal"
+        return "vertical"
+
+    @classmethod
+    def _oriented_dimensions(cls, template_config: dict, orientation: Optional[str]) -> tuple[int, int]:
+        """Return the same physical label dimensions in the requested orientation."""
+        width = int(template_config["width"])
+        height = int(template_config["height"])
+        if cls._normalize_orientation(orientation) == "horizontal":
+            return max(width, height), min(width, height)
+        return min(width, height), max(width, height)
 
     @staticmethod
     def _fit_text(text: Optional[str], max_chars: int, fallback: str = "N/A") -> str:
@@ -751,6 +782,7 @@ class LabelGenerator:
         template_name: str = "default",
         template_id: Optional[str] = None,
         branding: Optional[dict] = None,
+        orientation: str = "vertical",
     ) -> str:
         """
         Generate SVG label from extracted data.
@@ -771,8 +803,7 @@ class LabelGenerator:
             template_key = template_name
         template_config = self.get_template_config(template_key, size)
 
-        width = template_config["width"]
-        height = template_config["height"]
+        width, height = self._oriented_dimensions(template_config, orientation)
         brand = template_config["brand"]
         resolved_branding = self._resolve_branding(data, branding)
         logo_width = 218 if width <= 612 else 238

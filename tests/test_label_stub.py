@@ -29,6 +29,21 @@ def test_get_template_config_by_size_and_id():
     assert by_id["size"] == "pail"
 
 
+def test_horizontal_orientation_uses_same_template_dimensions_rotated():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="ClearEdge Orientation Test"),
+        ghs=GHSClassification(),
+        transport=TransportClassification(),
+    )
+
+    vertical_svg = generator.generate_svg(data, mode="workplace", size="pail", orientation="vertical")
+    horizontal_svg = generator.generate_svg(data, mode="workplace", size="pail", orientation="horizontal")
+
+    assert '<svg width="612" height="792"' in vertical_svg
+    assert '<svg width="792" height="612"' in horizontal_svg
+
+
 def test_fit_text_truncates_deterministically():
     text = "This is a very long product name that should be truncated"
     fitted = LabelGenerator._fit_text(text, 20)

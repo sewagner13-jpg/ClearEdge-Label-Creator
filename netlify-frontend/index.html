@@ -51,6 +51,15 @@
                     <label style="font-weight: 600; margin-bottom: 10px; display: block;">Customer Logo:</label>
                     <input type="file" id="brandLogo" accept=".png,.jpg,.jpeg,.svg,.webp,image/png,image/jpeg,image/svg+xml,image/webp"
                            style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; max-width: 460px; font-size: 1em; background: #fff;">
+                    <div id="suggestedLogoPanel" style="display: none; margin-top: 14px; padding: 12px; border: 1px solid #C8BEDD; border-radius: 6px; background: #fff;">
+                        <div style="font-weight: 700; color: #1B006E; margin-bottom: 8px;">Suggested Logo From SDS/TDS</div>
+                        <img id="suggestedLogoImage" alt="Suggested logo from SDS/TDS"
+                             style="display: block; max-width: 260px; max-height: 80px; object-fit: contain; margin-bottom: 8px; background: white;">
+                        <div id="suggestedLogoMeta" style="color: #555; font-size: 0.9em;"></div>
+                        <div style="color: #555; font-size: 0.9em; margin-top: 6px;">
+                            Leave the upload box empty to use this suggestion. Uploading a logo overrides it.
+                        </div>
+                    </div>
                     <div style="margin-top: 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;">
                         <div>
                             <label style="font-weight: 600; margin-bottom: 10px; display: block;">Supplier Name:</label>
@@ -91,6 +100,7 @@
                     <label style="font-weight: 600; margin-bottom: 10px; display: block;">Fill Amount:</label>
                     <input type="text" id="fillAmount" placeholder="e.g., 441 lb or 200 kg"
                            style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                    <div id="containerTypeHint" style="margin-top: 6px; color: #555; font-size: 0.9em;"></div>
                 </div>
             </div>
 
@@ -174,12 +184,20 @@
                 </div>
             </div>
 
-            <div style="margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 500px;">
+            <div style="margin-top: 20px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; max-width: 760px;">
                 <div>
                     <label style="font-weight: 600; margin-bottom: 10px; display: block;">Label Size:</label>
                     <select id="labelSize" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%;">
                         <option value="pail">Pail (8.5" x 11")</option>
                         <option value="drum">Drum (8.5" x 11")</option>
+                        <option value="tote">Tote (8.5" x 11")</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Orientation:</label>
+                    <select id="labelOrientation" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%;">
+                        <option value="vertical">Vertical</option>
+                        <option value="horizontal">Horizontal</option>
                     </select>
                 </div>
                 <div>

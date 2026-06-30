@@ -18,6 +18,14 @@ class LabelSize(str, Enum):
 
     PAIL = "pail"
     DRUM = "drum"
+    TOTE = "tote"
+
+
+class LabelOrientation(str, Enum):
+    """Printed label orientation options."""
+
+    VERTICAL = "vertical"
+    HORIZONTAL = "horizontal"
 
 
 class ValidationSummary(BaseModel):
@@ -33,6 +41,8 @@ class LabelPayload(BaseModel):
 
     mode: str
     size: str
+    orientation: str = "vertical"
+    container_type: Optional[str] = None
     download_url: Optional[str] = None
     canva_csv_url: Optional[str] = None
     canva_json_url: Optional[str] = None
@@ -78,6 +88,7 @@ class GenerateLabelResponse(BaseModel):
     label: LabelPayload
     download: Optional[DownloadPayload] = None
     agentcore_review: Optional[dict] = None
+    branding: Optional[dict] = None
     warnings: List[dict]
     errors: List[dict]
     audit: AuditPayload

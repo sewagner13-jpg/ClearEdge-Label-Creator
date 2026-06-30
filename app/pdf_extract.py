@@ -3,16 +3,29 @@ PDF text extraction with automatic OCR fallback.
 Extracts text from PDFs page-by-page with quality detection.
 """
 
+import base64
 import io
 import logging
-from typing import List, Tuple
+from typing import List, Optional
 import pdfplumber
 from pypdf import PdfReader
+from PIL import Image
 
 from .config import settings
 from .schema import ExtractedText, ExtractedTextPage
 
 logger = logging.getLogger(__name__)
+
+
+MAX_SUGGESTED_LOGO_BYTES = 750 * 1024
+MIN_LOGO_WIDTH = 120
+MIN_LOGO_HEIGHT = 25
+MIN_LOGO_ASPECT_RATIO = 2.2
+SUPPORTED_LOGO_FORMATS = {
+    "JPEG": "image/jpeg",
+    "PNG": "image/png",
+    "WEBP": "image/webp",
+}
 
 
 class PDFExtractor:
@@ -130,3 +143,96 @@ class PDFExtractor:
         except Exception:
             reader = PdfReader(io.BytesIO(pdf_bytes))
             return len(reader.pages)
+
+    def extract_suggested_logo(
+        self,
+        pdf_bytes: bytes,
+        doc_type: str,
+        source_filename: Optional[str] = None,
+    ) -> Optional[dict]:
+        """Return the best wide embedded image candidate as a suggested company logo."""
+        try:
+            reader = PdfReader(io.BytesIO(pdf_bytes))
+        except Exception as exc:
+            logger.info("Logo suggestion skipped; PDF image scan failed: %s", exc)
+            return None
+
+        best_candidate = None
+        for page_index, page in enumerate(reader.pages[:2], start=1):
+            try:
+                page_images = list(page.images)
+            except Exception as exc:
+                logger.info("Logo suggestion skipped on page %s: %s", page_index, exc)
+                continue
+
+            for image_index, image_file in enumerate(page_images):
+                candidate = self._logo_candidate_from_image(
+                    image_file=image_file,
+                    doc_type=doc_type,
+                    source_filename=source_filename,
+                    page=page_index,
+                    image_index=image_index,
+                )
+                if not candidate:
+                    continue
+                if not best_candidate or candidate["_score"] > best_candidate["_score"]:
+                    best_candidate = candidate
+
+        if not best_candidate:
+            return None
+
+        best_candidate.pop("_score", None)
+        return best_candidate
+
+    @staticmethod
+    def _logo_candidate_from_image(
+        *,
+        image_file,
+        doc_type: str,
+        source_filename: Optional[str],
+        page: int,
+        image_index: int,
+    ) -> Optional[dict]:
+        image_bytes = getattr(image_file, "data", None)
+        if not image_bytes or len(image_bytes) > MAX_SUGGESTED_LOGO_BYTES:
+            return None
+
+        try:
+            with Image.open(io.BytesIO(image_bytes)) as image:
+                width, height = image.size
+                image_format = image.format
+        except Exception:
+            return None
+
+        if not width or not height:
+            return None
+
+        aspect_ratio = width / height
+        if (
+            width < MIN_LOGO_WIDTH
+            or height < MIN_LOGO_HEIGHT
+            or aspect_ratio < MIN_LOGO_ASPECT_RATIO
+        ):
+            return None
+
+        media_type = SUPPORTED_LOGO_FORMATS.get(str(image_format).upper())
+        if not media_type:
+            return None
+
+        area = width * height
+        score = aspect_ratio + min(area / 100000, 2.0)
+        confidence = min(0.95, 0.55 + min(aspect_ratio / 12, 0.25) + min(area / 200000, 0.15))
+        encoded = base64.b64encode(image_bytes).decode("ascii")
+        return {
+            "available": True,
+            "source_document": doc_type,
+            "source_file": source_filename,
+            "page": page,
+            "name": getattr(image_file, "name", None) or f"image-{image_index + 1}",
+            "width": width,
+            "height": height,
+            "media_type": media_type,
+            "data_uri": f"data:{media_type};base64,{encoded}",
+            "confidence": round(confidence, 2),
+            "_score": score,
+        }

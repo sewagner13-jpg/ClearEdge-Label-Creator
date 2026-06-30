@@ -21,6 +21,21 @@ class FakePDFExtractor:
         return type("Text", (), {"doc": doc_type, "pages": [1]})()
 
 
+class FakePDFExtractorWithSuggestedLogo(FakePDFExtractor):
+    def extract_suggested_logo(self, content: bytes, doc_type: str, source_filename: str | None = None):
+        return {
+            "source_document": doc_type,
+            "source_file": source_filename,
+            "page": 1,
+            "name": "vendor-logo.png",
+            "width": 420,
+            "height": 90,
+            "media_type": "image/png",
+            "data_uri": "data:image/png;base64,c3VnZ2VzdGVkLWxvZ28=",
+            "confidence": 0.84,
+        }
+
+
 class FakeOpenAIClient:
     def extract_from_documents(self, sds_text, tds_text, product_name: str):
         return ExtractedData(
@@ -33,6 +48,15 @@ class FakeOpenAIClient:
             ),
             transport=TransportClassification(),
         )
+
+
+class FakeSupplierOpenAIClient(FakeOpenAIClient):
+    def extract_from_documents(self, sds_text, tds_text, product_name: str):
+        extracted = super().extract_from_documents(sds_text, tds_text, product_name)
+        extracted.product.supplier_name = "Vendor Chemical Co."
+        extracted.product.supplier_address = "500 Vendor Drive, Akron, OH 44301"
+        extracted.product.supplier_phone = "330-555-0199"
+        return extracted
 
 
 class FakeValidator:
@@ -79,9 +103,19 @@ class FakeRequiredDotValidator:
 class FakeLabelGenerator:
     def __init__(self):
         self.last_branding = None
+        self.last_orientation = None
 
-    def generate_svg(self, extracted_data, mode="shipped_dot", size="pail", template_id=None, branding=None):
+    def generate_svg(
+        self,
+        extracted_data,
+        mode="shipped_dot",
+        size="pail",
+        template_id=None,
+        branding=None,
+        orientation="vertical",
+    ):
         self.last_branding = branding
+        self.last_orientation = orientation
         return '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
 
     def generate_pdf(self, svg_content: str):
@@ -216,6 +250,31 @@ def test_generate_applies_operator_dot_fields_before_validation(tmp_path):
         assert payload["extracted"]["product"]["supplier_phone"] == "704-799-5769"
 
 
+def test_generate_accepts_orientation_and_infers_container_type_from_weight(tmp_path):
+    setup_fakes(tmp_path, passed=True)
+    fake_generator = FakeLabelGenerator()
+    main.label_generator = fake_generator
+
+    with TestClient(main.app) as client:
+        files = {"files": ("test_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
+        data = {
+            "product_name": "Orientation Product",
+            "mode": "workplace",
+            "size": "pail",
+            "orientation": "horizontal",
+            "fill_amount": "441 lb",
+        }
+
+        generate_res = client.post("/api/v1/labels/generate", files=files, data=data)
+
+        assert generate_res.status_code == 200
+        payload = generate_res.json()
+        assert payload["label"]["orientation"] == "horizontal"
+        assert payload["label"]["container_type"] == "drum"
+        assert payload["extracted"]["shipment"]["container_type"] == "drum"
+        assert fake_generator.last_orientation == "horizontal"
+
+
 def test_generate_custom_brand_accepts_uploaded_logo_and_supplier_fields(tmp_path):
     setup_fakes(tmp_path, passed=True)
     fake_generator = FakeLabelGenerator()
@@ -246,3 +305,34 @@ def test_generate_custom_brand_accepts_uploaded_logo_and_supplier_fields(tmp_pat
         assert payload["extracted"]["product"]["supplier_phone"] == "704-555-0199"
         assert fake_generator.last_branding["mode"] == "custom"
         assert fake_generator.last_branding["logo_data_uri"].startswith("data:image/png;base64,")
+
+
+def test_generate_custom_brand_uses_extracted_supplier_and_suggested_logo(tmp_path):
+    setup_fakes(tmp_path, passed=True)
+    fake_generator = FakeLabelGenerator()
+    main.pdf_extractor = FakePDFExtractorWithSuggestedLogo()
+    main.openai_client = FakeSupplierOpenAIClient()
+    main.label_generator = fake_generator
+
+    with TestClient(main.app) as client:
+        files = {"files": ("vendor_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
+        data = {
+            "product_name": "Private Label Product",
+            "mode": "workplace",
+            "size": "pail",
+            "label_brand": "custom",
+        }
+
+        generate_res = client.post("/api/v1/labels/generate", files=files, data=data)
+
+        assert generate_res.status_code == 200
+        payload = generate_res.json()
+        assert payload["status"] == "ready"
+        assert payload["extracted"]["product"]["supplier_name"] == "Vendor Chemical Co."
+        assert payload["extracted"]["product"]["supplier_address"] == "500 Vendor Drive, Akron, OH 44301"
+        assert payload["extracted"]["product"]["supplier_phone"] == "330-555-0199"
+        assert payload["branding"]["mode"] == "custom"
+        assert payload["branding"]["logo_source"] == "suggested"
+        assert payload["branding"]["suggested_logo"]["source_file"] == "vendor_sds.pdf"
+        assert payload["branding"]["suggested_logo"]["data_uri"].startswith("data:image/png;base64,")
+        assert fake_generator.last_branding["logo_data_uri"] == "data:image/png;base64,c3VnZ2VzdGVkLWxvZ28="

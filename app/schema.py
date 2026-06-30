@@ -262,6 +262,10 @@ class ShipmentInfo(BaseModel):
     expiration_date: Optional[str] = Field(None, description="Expiration date for this shipment")
     fill_amount: Optional[str] = Field(None, description="Net contents or fill amount for this container")
     manufacture_date: Optional[str] = Field(None, description="Manufacture date for this shipment")
+    container_type: Optional[Literal["pail", "drum", "tote"]] = Field(
+        None,
+        description="Container inferred from net weight when possible"
+    )
 
 
 class Evidence(BaseModel):

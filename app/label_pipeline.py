@@ -30,6 +30,7 @@ MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024
 MAX_TOTAL_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_LOGO_FILE_SIZE_BYTES = 2 * 1024 * 1024
 AGENTCORE_PROMOTION_CONFIDENCE = 0.85
+KG_TO_LB = 2.2046226218
 
 ALLOWED_PDF_CONTENT_TYPES = {
     "application/pdf",
@@ -90,6 +91,33 @@ PROMOTABLE_AGENTCORE_FIELDS = {
 }
 
 
+def infer_container_type_from_fill_amount(fill_amount: Optional[str]) -> Optional[str]:
+    """Infer pail, drum, or tote from net weight using ClearEdge thresholds."""
+    cleaned = clean_operator_field(fill_amount)
+    if not cleaned:
+        return None
+
+    match = re.search(r"(?P<amount>\d+(?:,\d{3})*(?:\.\d+)?)", cleaned)
+    if not match:
+        return None
+
+    try:
+        amount = float(match.group("amount").replace(",", ""))
+    except ValueError:
+        return None
+
+    normalized = cleaned.lower().replace(".", "")
+    pounds = amount * KG_TO_LB if re.search(r"\b(kg|kgs|kilogram|kilograms)\b", normalized) else amount
+
+    if pounds > 2000:
+        return "tote"
+    if pounds > 60:
+        return "drum"
+    if pounds <= 55:
+        return "pail"
+    return None
+
+
 class LabelPipelineError(Exception):
     """HTTP-compatible pipeline error."""
 
@@ -130,6 +158,7 @@ class LabelPipeline:
         product_name: str,
         mode: str,
         size: str,
+        orientation: str = "vertical",
         lot_number: Optional[str] = None,
         expiration_date: Optional[str] = None,
         fill_amount: Optional[str] = None,
@@ -151,12 +180,13 @@ class LabelPipeline:
     ) -> dict:
         """Run the label generation workflow."""
         cleaned_product_name = self._validate_product_name(product_name)
+        orientation = self._normalize_orientation(orientation)
         if self.openai_client is None:
             raise LabelPipelineError(503, "OPENAI_API_KEY is not configured")
 
         branding = await self._build_branding(label_brand=label_brand, brand_logo=brand_logo)
 
-        sds_text, tds_text = await self._extract_uploaded_documents(files)
+        sds_text, tds_text, suggested_logo = await self._extract_uploaded_documents(files)
 
         try:
             extracted_data = self.openai_client.extract_from_documents(sds_text, tds_text, cleaned_product_name)
@@ -176,6 +206,7 @@ class LabelPipeline:
                 warning=f"AI_EXTRACTION_FAILED: {exc.__class__.__name__}: {self._safe_exception_detail(exc)}",
             )
         extracted_data.product.name = cleaned_product_name
+        branding = self._apply_suggested_logo_to_branding(branding, suggested_logo)
         self._apply_operator_fields(
             extracted_data,
             lot_number=lot_number,
@@ -210,7 +241,14 @@ class LabelPipeline:
         self._apply_agentcore_issues_to_validation(validation_result, agentcore_review, agentcore_needs_review)
 
         label_id = self._new_label_id(cleaned_product_name)
-        label_path = self._render_pdf(label_id, extracted_data, mode, size, branding=branding)
+        label_path = self._render_pdf(
+            label_id,
+            extracted_data,
+            mode,
+            size,
+            orientation=orientation,
+            branding=branding,
+        )
         status = self._label_status(validation_result, agentcore_needs_review, agentcore_review)
 
         metadata = self._build_metadata(
@@ -218,6 +256,7 @@ class LabelPipeline:
             product_name=cleaned_product_name,
             mode=mode,
             size=size,
+            orientation=orientation,
             extracted_data=extracted_data,
             validation_result=validation_result,
             status=status,
@@ -253,6 +292,7 @@ class LabelPipeline:
             extracted_data,
             metadata["mode"],
             metadata["size"],
+            orientation=metadata.get("orientation") or "vertical",
             branding=metadata.get("branding"),
         )
 
@@ -262,6 +302,7 @@ class LabelPipeline:
                 product_name=metadata["product_name"],
                 mode=metadata["mode"],
                 size=metadata["size"],
+                orientation=metadata.get("orientation") or "vertical",
                 extracted_data=extracted_data,
                 validation_result=validation_result,
                 status=status,
@@ -295,6 +336,7 @@ class LabelPipeline:
         total_size = 0
         sds_text = None
         tds_text = None
+        suggested_logo = None
 
         for upload in files:
             self._validate_upload_file(upload)
@@ -320,10 +362,17 @@ class LabelPipeline:
             else:
                 tds_text = extracted
 
+            detected_logo = self._extract_suggested_logo(content, doc_type, upload.filename)
+            if detected_logo and (
+                not suggested_logo
+                or detected_logo.get("confidence", 0) > suggested_logo.get("confidence", 0)
+            ):
+                suggested_logo = detected_logo
+
         if not sds_text and not tds_text:
             raise LabelPipelineError(400, "PDF_TEXT_EXTRACTION_FAILED: No valid PDF files provided")
 
-        return sds_text, tds_text
+        return sds_text, tds_text, suggested_logo
 
     @staticmethod
     def _validate_upload_file(upload: UploadFile) -> None:
@@ -339,6 +388,19 @@ class LabelPipeline:
         if "tds" in lower:
             return "TDS"
         return "SDS"
+
+    def _extract_suggested_logo(self, content: bytes, doc_type: str, filename: Optional[str]) -> Optional[dict]:
+        extractor = getattr(self.pdf_extractor, "extract_suggested_logo", None)
+        if not callable(extractor):
+            return None
+
+        try:
+            return extractor(content, doc_type, source_filename=filename)
+        except TypeError:
+            return extractor(content, doc_type)
+        except Exception as exc:
+            logger.info("Suggested logo extraction failed for %s: %s", filename, exc)
+            return None
 
     def _apply_operator_fields(
         self,
@@ -366,6 +428,9 @@ class LabelPipeline:
         extracted_data.shipment.expiration_date = clean_operator_field(expiration_date)
         extracted_data.shipment.fill_amount = clean_operator_field(fill_amount)
         extracted_data.shipment.manufacture_date = clean_operator_field(manufacture_date)
+        extracted_data.shipment.container_type = infer_container_type_from_fill_amount(
+            extracted_data.shipment.fill_amount
+        )
 
         self._apply_branding_fields(
             extracted_data,
@@ -408,7 +473,28 @@ class LabelPipeline:
             "mode": mode,
             "logo_data_uri": logo_data_uri,
             "logo_filename": logo_filename,
+            "logo_source": "uploaded" if logo_data_uri else ("clearedge" if mode == "clearedge" else "none"),
+            "suggested_logo": None,
         }
+
+    @staticmethod
+    def _apply_suggested_logo_to_branding(branding: dict, suggested_logo: Optional[dict]) -> dict:
+        resolved = dict(branding)
+        if resolved.get("mode") != "custom":
+            resolved["suggested_logo"] = None
+            resolved["logo_source"] = "clearedge"
+            return resolved
+
+        resolved["suggested_logo"] = suggested_logo
+        if suggested_logo and not resolved.get("logo_data_uri"):
+            resolved["logo_data_uri"] = suggested_logo.get("data_uri")
+            resolved["logo_filename"] = suggested_logo.get("source_file") or suggested_logo.get("name")
+            resolved["logo_source"] = "suggested"
+        elif resolved.get("logo_data_uri"):
+            resolved["logo_source"] = "uploaded"
+        else:
+            resolved["logo_source"] = "none"
+        return resolved
 
     @staticmethod
     def _normalize_label_brand(value: Optional[str]) -> str:
@@ -564,6 +650,15 @@ class LabelPipeline:
             return False
         raise LabelPipelineError(400, f"INVALID_BOOLEAN_FIELD: {field_name} must be yes, no, or auto")
 
+    @staticmethod
+    def _normalize_orientation(value: Optional[str]) -> str:
+        cleaned = (clean_operator_field(value) or "vertical").lower().replace("-", "_").replace(" ", "_")
+        if cleaned in {"vertical", "portrait"}:
+            return "vertical"
+        if cleaned in {"horizontal", "landscape"}:
+            return "horizontal"
+        raise LabelPipelineError(400, "INVALID_ORIENTATION: Use vertical or horizontal")
+
     def _run_agentcore_review(
         self,
         *,
@@ -671,6 +766,7 @@ class LabelPipeline:
         mode: str,
         size: str,
         *,
+        orientation: str = "vertical",
         branding: Optional[dict] = None,
     ) -> Path:
         try:
@@ -680,6 +776,7 @@ class LabelPipeline:
                 mode=mode,
                 size=size,
                 template_id=template_id,
+                orientation=orientation,
                 branding=branding,
             )
             self.labels_dir.mkdir(parents=True, exist_ok=True)
@@ -698,6 +795,7 @@ class LabelPipeline:
         product_name: str,
         mode: str,
         size: str,
+        orientation: str,
         extracted_data: ExtractedData,
         validation_result: ValidationResult,
         status: str,
@@ -720,6 +818,8 @@ class LabelPipeline:
             "product_name": product_name,
             "mode": mode,
             "size": size,
+            "orientation": orientation,
+            "container_type": extracted_payload.get("shipment", {}).get("container_type"),
             "created_at": datetime.utcnow().isoformat(),
             "validation_passed": validation_result.passed and status == "ready",
             "warnings": [w.model_dump() for w in validation_result.warnings],
@@ -774,12 +874,15 @@ class LabelPipeline:
             "label": {
                 "mode": metadata["mode"],
                 "size": metadata["size"],
+                "orientation": metadata.get("orientation") or "vertical",
+                "container_type": metadata.get("container_type"),
                 "download_url": metadata["download_url"],
                 "canva_csv_url": metadata["canva_csv_url"],
                 "canva_json_url": metadata["canva_json_url"],
             },
             "download": metadata["download"],
             "agentcore_review": metadata.get("agentcore_review"),
+            "branding": metadata.get("branding"),
             "warnings": metadata["warnings"],
             "errors": metadata["errors"],
             "audit": {

@@ -26,6 +26,7 @@ from .agentcore_client import AgentCoreClient
 from .api_models import (
     CorrectionRequest,
     GenerateLabelResponse,
+    LabelOrientation,
     LabelMode,
     LabelSize,
     OverrideApprovalRequest,
@@ -241,6 +242,7 @@ async def generate_label_v1(
     product_name: str = Form(...),
     mode: LabelMode = Form(LabelMode.SHIPPED_DOT),
     size: LabelSize = Form(LabelSize.PAIL),
+    orientation: LabelOrientation = Form(LabelOrientation.VERTICAL),
     lot_number: Optional[str] = Form(None),
     expiration_date: Optional[str] = Form(None),
     fill_amount: Optional[str] = Form(None),
@@ -276,6 +278,7 @@ async def generate_label_v1(
             product_name=product_name,
             mode=mode.value,
             size=size.value,
+            orientation=orientation.value,
             lot_number=lot_number,
             expiration_date=expiration_date,
             fill_amount=fill_amount,
