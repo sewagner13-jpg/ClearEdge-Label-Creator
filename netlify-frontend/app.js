@@ -85,6 +85,25 @@ function escapeHtml(value) {
         .replace(/'/g, '&#039;');
 }
 
+function formatFetchError(error) {
+    const message = String(error?.message || error || 'Unknown error');
+    if (/failed to fetch|networkerror|load failed/i.test(message)) {
+        if (window.location.protocol === 'file:') {
+            return (
+                'Failed to connect to the label backend. You are opening this page as a local file. ' +
+                'Start the backend with ./run-local.sh, then Open the app from http://localhost:8000 instead of the file path.'
+            );
+        }
+
+        return (
+            `Failed to connect to the label backend at ${API_URL}. ` +
+            'Check that the backend is running and reachable, then try again.'
+        );
+    }
+
+    return message;
+}
+
 function safeImageDataUri(value) {
     const dataUri = String(value || '');
     return /^data:image\/(png|jpeg|jpg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/i.test(dataUri)
@@ -648,7 +667,7 @@ generateBtn.addEventListener('click', async () => {
         result.classList.add('show');
         result.innerHTML = `
             <div class="error-message">
-                <strong>Error:</strong> ${error.message}
+                <strong>Error:</strong> ${escapeHtml(formatFetchError(error))}
             </div>
         `;
     } finally {

@@ -15,6 +15,7 @@ import os
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 from .config import settings
 from .pdf_extract import PDFExtractor
@@ -64,6 +65,7 @@ startup_errors: Dict[str, str] = {}
 DEFAULT_DATA_ROOT = Path(os.getenv("CLEAREDGE_DATA_DIR", str(Path.cwd() / "runtime_data")))
 LABELS_DIR = DEFAULT_DATA_ROOT / "labels"
 LABELS_DIR.mkdir(parents=True, exist_ok=True)
+FRONTEND_DIR = Path(__file__).resolve().parent.parent / "netlify-frontend"
 
 # In-memory metadata store for Phase 1 API reads
 label_metadata_store: Dict[str, dict] = {}
@@ -137,7 +139,7 @@ app = FastAPI(
 
 allowed_origins = [
     origin.strip()
-    for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000").split(",")
+    for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000,null").split(",")
     if origin.strip()
 ]
 
@@ -148,6 +150,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+if FRONTEND_DIR.exists():
+    app.mount("/frontend", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
 
 def _health_payload() -> dict:
@@ -217,7 +222,9 @@ def _get_exportable_label(label_id: str) -> tuple[str, dict]:
 
 @app.get("/", include_in_schema=False)
 async def root():
-    """Send browser users to the interactive API docs."""
+    """Send browser users to the local label creator UI when available."""
+    if (FRONTEND_DIR / "index.html").exists():
+        return RedirectResponse(url="/frontend/index.html")
     return RedirectResponse(url="/docs")
 
 
