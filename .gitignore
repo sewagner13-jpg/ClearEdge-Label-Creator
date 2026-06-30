@@ -65,3 +65,6 @@ temp/
 
 # Generated PDFs and SVGs (local dev)
 test_output/
+
+# Local Netlify folder
+.netlify
