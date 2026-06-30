@@ -138,6 +138,7 @@ class LabelPipeline:
         validator,
         label_generator,
         agentcore_client=None,
+        logo_library=None,
         labels_dir: Path,
         metadata_store: dict,
         save_metadata_store,
@@ -147,6 +148,7 @@ class LabelPipeline:
         self.validator = validator
         self.label_generator = label_generator
         self.agentcore_client = agentcore_client
+        self.logo_library = logo_library
         self.labels_dir = labels_dir
         self.metadata_store = metadata_store
         self.save_metadata_store = save_metadata_store
@@ -166,6 +168,9 @@ class LabelPipeline:
         ghs_pictograms: Optional[str] = None,
         label_brand: Optional[str] = None,
         brand_logo: Optional[UploadFile] = None,
+        brand_logo_id: Optional[str] = None,
+        save_brand_logo: bool = False,
+        brand_logo_name: Optional[str] = None,
         supplier_name: Optional[str] = None,
         supplier_address: Optional[str] = None,
         supplier_phone: Optional[str] = None,
@@ -184,7 +189,13 @@ class LabelPipeline:
         if self.openai_client is None:
             raise LabelPipelineError(503, "OPENAI_API_KEY is not configured")
 
-        branding = await self._build_branding(label_brand=label_brand, brand_logo=brand_logo)
+        branding = await self._build_branding(
+            label_brand=label_brand,
+            brand_logo=brand_logo,
+            brand_logo_id=brand_logo_id,
+            save_brand_logo=save_brand_logo,
+            brand_logo_name=brand_logo_name,
+        )
 
         sds_text, tds_text, suggested_logo = await self._extract_uploaded_documents(files)
 
@@ -458,22 +469,65 @@ class LabelPipeline:
                 "GHS pictograms were selected by operator dropdown and override the SDS auto-pick."
             )
 
-    async def _build_branding(self, *, label_brand: Optional[str], brand_logo: Optional[UploadFile]) -> dict:
+    async def _build_branding(
+        self,
+        *,
+        label_brand: Optional[str],
+        brand_logo: Optional[UploadFile],
+        brand_logo_id: Optional[str] = None,
+        save_brand_logo: bool = False,
+        brand_logo_name: Optional[str] = None,
+    ) -> dict:
         mode = self._normalize_label_brand(label_brand)
         if brand_logo and mode == "clearedge" and label_brand is None:
             mode = "custom"
 
         logo_data_uri = None
         logo_filename = None
+        logo_id = None
+        logo_name = None
+        logo_source = "clearedge" if mode == "clearedge" else "none"
+        saved_logo = None
         if mode == "custom" and brand_logo is not None:
-            logo_data_uri = await self._read_brand_logo_data_uri(brand_logo)
-            logo_filename = brand_logo.filename
+            logo_upload = await self._read_brand_logo_upload(brand_logo)
+            logo_data_uri = logo_upload["data_uri"]
+            logo_filename = logo_upload["filename"]
+            logo_source = "uploaded"
+            if save_brand_logo:
+                if self.logo_library is None:
+                    raise LabelPipelineError(500, "LOGO_LIBRARY_UNAVAILABLE: Saved logo library is not initialized")
+                try:
+                    saved_logo = self.logo_library.save_logo(
+                        name=brand_logo_name or logo_upload["filename"],
+                        filename=logo_upload["filename"],
+                        content_type=logo_upload["content_type"],
+                        content=logo_upload["content"],
+                    )
+                except ValueError as exc:
+                    raise LabelPipelineError(400, str(exc)) from exc
+                logo_id = saved_logo["logo_id"]
+                logo_name = saved_logo["name"]
+        elif mode == "custom" and clean_operator_field(brand_logo_id):
+            if self.logo_library is None:
+                raise LabelPipelineError(500, "LOGO_LIBRARY_UNAVAILABLE: Saved logo library is not initialized")
+            try:
+                saved = self.logo_library.get_logo(clean_operator_field(brand_logo_id))
+                logo_data_uri = self.logo_library.logo_data_uri(saved["logo_id"])
+            except ValueError as exc:
+                raise LabelPipelineError(400, str(exc)) from exc
+            logo_filename = saved.get("filename")
+            logo_id = saved["logo_id"]
+            logo_name = saved["name"]
+            logo_source = "library"
 
         return {
             "mode": mode,
             "logo_data_uri": logo_data_uri,
             "logo_filename": logo_filename,
-            "logo_source": "uploaded" if logo_data_uri else ("clearedge" if mode == "clearedge" else "none"),
+            "logo_source": logo_source,
+            "logo_id": logo_id,
+            "logo_name": logo_name,
+            "saved_logo": saved_logo,
             "suggested_logo": None,
         }
 
@@ -491,7 +545,7 @@ class LabelPipeline:
             resolved["logo_filename"] = suggested_logo.get("source_file") or suggested_logo.get("name")
             resolved["logo_source"] = "suggested"
         elif resolved.get("logo_data_uri"):
-            resolved["logo_source"] = "uploaded"
+            resolved["logo_source"] = resolved.get("logo_source") or "uploaded"
         else:
             resolved["logo_source"] = "none"
         return resolved
@@ -507,6 +561,10 @@ class LabelPipeline:
 
     @staticmethod
     async def _read_brand_logo_data_uri(brand_logo: UploadFile) -> str:
+        return (await LabelPipeline._read_brand_logo_upload(brand_logo))["data_uri"]
+
+    @staticmethod
+    async def _read_brand_logo_upload(brand_logo: UploadFile) -> dict:
         filename = brand_logo.filename or ""
         content_type = brand_logo.content_type or ""
         suffix = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
@@ -521,7 +579,13 @@ class LabelPipeline:
             raise LabelPipelineError(400, "EMPTY_LOGO_FILE: Uploaded logo file is empty")
 
         encoded = base64.b64encode(content).decode("ascii")
-        return f"data:{content_type};base64,{encoded}"
+        return {
+            "filename": filename,
+            "content_type": content_type,
+            "suffix": suffix,
+            "content": content,
+            "data_uri": f"data:{content_type};base64,{encoded}",
+        }
 
     @staticmethod
     def _apply_branding_fields(
@@ -782,6 +846,8 @@ class LabelPipeline:
             self.labels_dir.mkdir(parents=True, exist_ok=True)
             pdf_content = self.label_generator.generate_pdf(svg_content)
             label_path = self.labels_dir / f"{label_id}.pdf"
+            preview_path = self.labels_dir / f"{label_id}.svg"
+            preview_path.write_text(svg_content)
             label_path.write_bytes(pdf_content)
             return label_path
         except Exception as exc:
@@ -802,6 +868,7 @@ class LabelPipeline:
         agentcore_review: dict,
         branding: Optional[dict] = None,
     ) -> dict:
+        preview_url = f"/api/v1/labels/{label_id}/preview.svg"
         download_url = f"/api/v1/labels/{label_id}/download" if status == "ready" else None
         canva_export_urls = canva_urls(label_id, status == "ready")
         extracted_payload = extracted_data.model_dump(mode="json")
@@ -824,8 +891,14 @@ class LabelPipeline:
             "validation_passed": validation_result.passed and status == "ready",
             "warnings": [w.model_dump() for w in validation_result.warnings],
             "errors": [e.model_dump() for e in validation_result.errors],
+            "preview_url": preview_url,
             "download_url": download_url,
             **canva_export_urls,
+            "preview": {
+                "available": True,
+                "url": preview_url,
+                "media_type": "image/svg+xml",
+            },
             "download": {
                 "available": bool(download_url),
                 "url": download_url,
@@ -876,10 +949,12 @@ class LabelPipeline:
                 "size": metadata["size"],
                 "orientation": metadata.get("orientation") or "vertical",
                 "container_type": metadata.get("container_type"),
+                "preview_url": metadata["preview_url"],
                 "download_url": metadata["download_url"],
                 "canva_csv_url": metadata["canva_csv_url"],
                 "canva_json_url": metadata["canva_json_url"],
             },
+            "preview": metadata["preview"],
             "download": metadata["download"],
             "agentcore_review": metadata.get("agentcore_review"),
             "branding": metadata.get("branding"),

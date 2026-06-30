@@ -25,6 +25,13 @@ const fillAmount = document.getElementById('fillAmount');
 const containerTypeHint = document.getElementById('containerTypeHint');
 const labelBrand = document.getElementById('labelBrand');
 const brandLogo = document.getElementById('brandLogo');
+const savedLogoSelect = document.getElementById('savedLogoSelect');
+const refreshLogosBtn = document.getElementById('refreshLogosBtn');
+const savedLogoPreview = document.getElementById('savedLogoPreview');
+const savedLogoImage = document.getElementById('savedLogoImage');
+const savedLogoMeta = document.getElementById('savedLogoMeta');
+const saveBrandLogo = document.getElementById('saveBrandLogo');
+const brandLogoName = document.getElementById('brandLogoName');
 const customBrandFields = document.getElementById('customBrandFields');
 const suggestedLogoPanel = document.getElementById('suggestedLogoPanel');
 const suggestedLogoImage = document.getElementById('suggestedLogoImage');
@@ -59,6 +66,7 @@ const GHS_PICTOGRAM_OPTIONS = {
 
 let selectedFiles = [];
 let selectedGhsPictograms = [];
+let savedLogos = [];
 const KG_TO_LB = 2.2046226218;
 
 function updateBrandFields() {
@@ -66,11 +74,13 @@ function updateBrandFields() {
     customBrandFields.style.display = isCustom ? 'block' : 'none';
     if (!isCustom) {
         clearSuggestedLogo();
+        clearSavedLogoPreview();
+    } else {
+        loadLogoLibrary();
     }
 }
 
 labelBrand.addEventListener('change', updateBrandFields);
-updateBrandFields();
 
 function ghsPictogramLabel(code) {
     return GHS_PICTOGRAM_OPTIONS[code] || code;
@@ -111,11 +121,74 @@ function safeImageDataUri(value) {
         : '';
 }
 
+function apiUrl(path) {
+    const value = String(path || '');
+    if (!value) return '';
+    if (/^https?:\/\//i.test(value)) return value;
+    return `${API_URL}${value}`;
+}
+
 function clearSuggestedLogo() {
     suggestedLogoPanel.style.display = 'none';
     suggestedLogoImage.removeAttribute('src');
     suggestedLogoMeta.textContent = '';
 }
+
+function clearSavedLogoPreview() {
+    savedLogoPreview.style.display = 'none';
+    savedLogoImage.removeAttribute('src');
+    savedLogoMeta.textContent = '';
+}
+
+function renderSavedLogoPreview() {
+    const logo = savedLogos.find(item => item.logo_id === savedLogoSelect.value);
+    if (!logo) {
+        clearSavedLogoPreview();
+        return;
+    }
+
+    savedLogoImage.src = apiUrl(logo.image_url);
+    savedLogoMeta.textContent = [logo.name, logo.filename].filter(Boolean).join(' | ');
+    savedLogoPreview.style.display = 'block';
+}
+
+async function loadLogoLibrary() {
+    if (!savedLogoSelect || labelBrand.value !== 'custom') return;
+
+    try {
+        const response = await fetch(`${API_URL}/api/v1/logos`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        savedLogos = Array.isArray(payload.logos) ? payload.logos : [];
+        const current = savedLogoSelect.value;
+        savedLogoSelect.innerHTML = `
+            <option value="">No saved logo selected</option>
+            ${savedLogos.map(logo => `
+                <option value="${escapeHtml(logo.logo_id)}">${escapeHtml(logo.name)}</option>
+            `).join('')}
+        `;
+        if (savedLogos.some(logo => logo.logo_id === current)) {
+            savedLogoSelect.value = current;
+        }
+        renderSavedLogoPreview();
+    } catch (error) {
+        savedLogos = [];
+        savedLogoSelect.innerHTML = '<option value="">Logo library unavailable</option>';
+        clearSavedLogoPreview();
+    }
+}
+
+savedLogoSelect.addEventListener('change', renderSavedLogoPreview);
+refreshLogosBtn.addEventListener('click', loadLogoLibrary);
+brandLogo.addEventListener('change', () => {
+    const file = brandLogo.files?.[0];
+    if (!file) return;
+    savedLogoSelect.value = '';
+    clearSavedLogoPreview();
+    if (!brandLogoName.value.trim()) {
+        brandLogoName.value = file.name.replace(/\.[^.]+$/, '');
+    }
+});
 
 function setIfBlank(input, value) {
     if (input && !input.value.trim() && value) {
@@ -159,13 +232,31 @@ function renderBrandingSummary(branding) {
     const sourceLabels = {
         suggested: 'Suggested logo from SDS/TDS',
         uploaded: 'Uploaded logo',
+        library: 'Saved logo library',
         none: 'No logo selected'
     };
     const sourceLabel = sourceLabels[branding.logo_source] || branding.logo_source || 'Not set';
     return `
         <div style="margin-top: 14px; padding: 12px; border: 1px solid #C8BEDD; border-radius: 6px; background: #FBFAFE;">
             <strong>Custom brand source:</strong> ${escapeHtml(sourceLabel)}
+            ${branding.logo_name ? `<div style="margin-top:4px; color:#555;">Logo: ${escapeHtml(branding.logo_name)}</div>` : ''}
+            ${branding.saved_logo?.name ? `<div style="margin-top:4px; color:#555;">Saved to library as ${escapeHtml(branding.saved_logo.name)}</div>` : ''}
             ${branding.suggested_logo?.source_file ? `<div style="margin-top:4px; color:#555;">Suggested from ${escapeHtml(branding.suggested_logo.source_file)}</div>` : ''}
+        </div>
+    `;
+}
+
+function renderLabelPreview(data) {
+    const previewUrl = data?.preview?.url || data?.label?.preview_url;
+    if (!previewUrl) return '';
+
+    return `
+        <div class="label-preview-panel">
+            <div class="label-preview-heading">
+                <h3>Label Preview</h3>
+                <a href="${apiUrl(previewUrl)}" target="_blank" rel="noopener">Open larger preview</a>
+            </div>
+            <iframe class="label-preview-frame" title="Generated label preview" src="${apiUrl(previewUrl)}"></iframe>
         </div>
     `;
 }
@@ -221,6 +312,7 @@ function updateContainerTypeHint() {
 
 fillAmount.addEventListener('input', updateContainerTypeHint);
 updateContainerTypeHint();
+updateBrandFields();
 
 function renderSelectedGhsPictograms() {
     if (selectedGhsPictograms.length === 0) {
@@ -471,6 +563,10 @@ generateBtn.addEventListener('click', async () => {
         const logoFile = brandLogo.files?.[0];
         if (logoFile) {
             formData.append('brand_logo', logoFile);
+            formData.append('save_brand_logo', saveBrandLogo.checked ? 'true' : 'false');
+            formData.append('brand_logo_name', brandLogoName.value.trim());
+        } else if (savedLogoSelect.value) {
+            formData.append('brand_logo_id', savedLogoSelect.value);
         }
         formData.append('supplier_name', supplierName.value.trim());
         formData.append('supplier_address', supplierAddress.value.trim());
@@ -506,6 +602,9 @@ generateBtn.addEventListener('click', async () => {
 
         const data = await response.json();
         applyCustomBrandSuggestions(data);
+        if (data?.branding?.saved_logo) {
+            loadLogoLibrary();
+        }
 
         loading.classList.remove('show');
         result.classList.add('show');
@@ -514,6 +613,8 @@ generateBtn.addEventListener('click', async () => {
             <div class="success-message">
                 <strong>${statusLabel(data.status)}</strong>
             </div>
+
+            ${renderLabelPreview(data)}
 
             <h3>Extracted Information</h3>
             <div class="preview">

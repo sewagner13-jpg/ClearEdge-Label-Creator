@@ -48,9 +48,32 @@
                     ClearEdge labels always print ClearEdge Solutions, 14301 CR Koon Highway, Newberry, SC 29108, and 704-799-5769.
                 </p>
                 <div id="customBrandFields" style="display: none; margin-top: 14px;">
+                    <div style="display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 12px; align-items: end; margin-bottom: 14px;">
+                        <div>
+                            <label style="font-weight: 600; margin-bottom: 10px; display: block;">Saved Company Logo:</label>
+                            <select id="savedLogoSelect" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                                <option value="">No saved logo selected</option>
+                            </select>
+                        </div>
+                        <button type="button" id="refreshLogosBtn" style="padding: 10px 16px; border-radius: 5px; border: 1px solid #bbb; background: #fff; cursor: pointer;">Refresh Logos</button>
+                    </div>
+                    <div id="savedLogoPreview" style="display: none; margin-bottom: 14px; padding: 12px; border: 1px solid #C8BEDD; border-radius: 6px; background: #fff;">
+                        <div style="font-weight: 700; color: #1B006E; margin-bottom: 8px;">Selected Saved Logo</div>
+                        <img id="savedLogoImage" alt="Selected saved logo"
+                             style="display: block; max-width: 260px; max-height: 80px; object-fit: contain; margin-bottom: 8px; background: white;">
+                        <div id="savedLogoMeta" style="color: #555; font-size: 0.9em;"></div>
+                    </div>
                     <label style="font-weight: 600; margin-bottom: 10px; display: block;">Customer Logo:</label>
                     <input type="file" id="brandLogo" accept=".png,.jpg,.jpeg,.svg,.webp,image/png,image/jpeg,image/svg+xml,image/webp"
                            style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; max-width: 460px; font-size: 1em; background: #fff;">
+                    <div style="margin-top: 10px; display: grid; grid-template-columns: auto minmax(220px, 360px); gap: 10px; align-items: center;">
+                        <label style="display: inline-flex; align-items: center; gap: 8px; font-weight: 600;">
+                            <input type="checkbox" id="saveBrandLogo">
+                            Save uploaded logo
+                        </label>
+                        <input type="text" id="brandLogoName" placeholder="Logo name for library"
+                               style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                    </div>
                     <div id="suggestedLogoPanel" style="display: none; margin-top: 14px; padding: 12px; border: 1px solid #C8BEDD; border-radius: 6px; background: #fff;">
                         <div style="font-weight: 700; color: #1B006E; margin-bottom: 8px;">Suggested Logo From SDS/TDS</div>
                         <img id="suggestedLogoImage" alt="Suggested logo from SDS/TDS"

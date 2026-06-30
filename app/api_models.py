@@ -43,9 +43,18 @@ class LabelPayload(BaseModel):
     size: str
     orientation: str = "vertical"
     container_type: Optional[str] = None
+    preview_url: Optional[str] = None
     download_url: Optional[str] = None
     canva_csv_url: Optional[str] = None
     canva_json_url: Optional[str] = None
+
+
+class PreviewPayload(BaseModel):
+    """Inline label preview availability payload."""
+
+    available: bool
+    url: Optional[str] = None
+    media_type: Optional[str] = None
 
 
 class DownloadPayload(BaseModel):
@@ -86,6 +95,7 @@ class GenerateLabelResponse(BaseModel):
     extracted: dict
     validation: ValidationSummary
     label: LabelPayload
+    preview: Optional[PreviewPayload] = None
     download: Optional[DownloadPayload] = None
     agentcore_review: Optional[dict] = None
     branding: Optional[dict] = None

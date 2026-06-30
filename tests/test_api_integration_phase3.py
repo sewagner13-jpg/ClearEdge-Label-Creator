@@ -130,6 +130,8 @@ async def no_lifespan(app):
 def setup_fakes(tmp_path: Path, passed: bool):
     main.app.router.lifespan_context = no_lifespan
     main.LABELS_DIR = tmp_path
+    main.LOGOS_DIR = tmp_path / "logos"
+    main.logo_library = None
     main.label_metadata_store = {}
     main.pdf_extractor = FakePDFExtractor()
     main.openai_client = FakeOpenAIClient()
@@ -150,6 +152,13 @@ def test_generate_blocked_then_override_then_download(tmp_path):
         payload = generate_res.json()
         label_id = payload["label_id"]
         assert payload["label"]["download_url"] is None
+        assert payload["preview"]["available"] is True
+        assert payload["label"]["preview_url"].endswith(f"/{label_id}/preview.svg")
+
+        preview = client.get(payload["label"]["preview_url"])
+        assert preview.status_code == 200
+        assert "image/svg+xml" in preview.headers["content-type"]
+        assert b"<svg" in preview.content
 
         blocked_download = client.get(f"/api/v1/labels/{label_id}/download")
         assert blocked_download.status_code == 403
@@ -163,6 +172,50 @@ def test_generate_blocked_then_override_then_download(tmp_path):
 
         allowed_download = client.get(f"/api/v1/labels/{label_id}/download")
         assert allowed_download.status_code == 200
+
+
+def test_logo_library_upload_list_and_generate_reuses_saved_logo(tmp_path):
+    setup_fakes(tmp_path, passed=True)
+    fake_generator = FakeLabelGenerator()
+    main.label_generator = fake_generator
+
+    with TestClient(main.app) as client:
+        upload = client.post(
+            "/api/v1/logos",
+            files={"logo": ("rudolf-logo.png", b"fake-png", "image/png")},
+            data={"name": "Rudolf"},
+        )
+        assert upload.status_code == 200
+        logo = upload.json()
+        assert logo["name"] == "Rudolf"
+        assert logo["logo_id"]
+        assert logo["image_url"].endswith(f"/api/v1/logos/{logo['logo_id']}/image")
+
+        listing = client.get("/api/v1/logos")
+        assert listing.status_code == 200
+        assert [item["logo_id"] for item in listing.json()["logos"]] == [logo["logo_id"]]
+
+        image = client.get(logo["image_url"])
+        assert image.status_code == 200
+        assert image.content == b"fake-png"
+        assert image.headers["content-type"] == "image/png"
+
+        files = {"files": ("test_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
+        data = {
+            "product_name": "Customer Label",
+            "mode": "workplace",
+            "size": "pail",
+            "label_brand": "custom",
+            "brand_logo_id": logo["logo_id"],
+        }
+        generated = client.post("/api/v1/labels/generate", files=files, data=data)
+
+        assert generated.status_code == 200
+        payload = generated.json()
+        assert payload["branding"]["logo_source"] == "library"
+        assert payload["branding"]["logo_id"] == logo["logo_id"]
+        assert payload["branding"]["logo_name"] == "Rudolf"
+        assert fake_generator.last_branding["logo_data_uri"] == "data:image/png;base64,ZmFrZS1wbmc="
 
 
 def test_generate_approved_allows_download(tmp_path):

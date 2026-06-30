@@ -37,6 +37,7 @@ from .canva_export import (
     canva_template_manifest,
 )
 from .label_pipeline import LabelPipeline, LabelPipelineError
+from .logo_library import LogoLibrary, LogoLibraryError
 from .label_storage import (
     load_metadata_store,
     metadata_file,
@@ -59,12 +60,15 @@ validator: Optional[ComplianceValidator] = None
 web_retriever: Optional[WebRetriever] = None
 label_generator: Optional[LabelGenerator] = None
 agentcore_client: Optional[AgentCoreClient] = None
+logo_library: Optional[LogoLibrary] = None
 startup_errors: Dict[str, str] = {}
 
 
 DEFAULT_DATA_ROOT = Path(os.getenv("CLEAREDGE_DATA_DIR", str(Path.cwd() / "runtime_data")))
 LABELS_DIR = DEFAULT_DATA_ROOT / "labels"
+LOGOS_DIR = DEFAULT_DATA_ROOT / "logos"
 LABELS_DIR.mkdir(parents=True, exist_ok=True)
+LOGOS_DIR.mkdir(parents=True, exist_ok=True)
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "netlify-frontend"
 
 # In-memory metadata store for Phase 1 API reads
@@ -94,7 +98,7 @@ def _save_label_metadata_store() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize and cleanup shared resources."""
-    global pdf_extractor, openai_client, validator, web_retriever, label_generator, agentcore_client, startup_errors
+    global pdf_extractor, openai_client, validator, web_retriever, label_generator, agentcore_client, logo_library, startup_errors
 
     logger.info("Initializing CLEAR EDGE Label Pipeline...")
     startup_errors = {}
@@ -109,6 +113,7 @@ async def lifespan(app: FastAPI):
         validator = ComplianceValidator()
         web_retriever = WebRetriever()
         label_generator = LabelGenerator()
+        logo_library = LogoLibrary(LOGOS_DIR)
         if settings.agentcore_enabled:
             try:
                 agentcore_client = AgentCoreClient()
@@ -218,6 +223,22 @@ def _get_exportable_label(label_id: str) -> tuple[str, dict]:
     return safe_id, metadata
 
 
+def _get_logo_library() -> LogoLibrary:
+    """Return a logo library bound to the current runtime logo directory."""
+    global logo_library
+    if logo_library is None or getattr(logo_library, "root_dir", None) != LOGOS_DIR:
+        logo_library = LogoLibrary(LOGOS_DIR)
+    return logo_library
+
+
+def _safe_logo_id(logo_id: str) -> str:
+    """Validate a public logo id and convert validation failures to HTTP errors."""
+    try:
+        return LogoLibrary.safe_logo_id(logo_id)
+    except LogoLibraryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 # Endpoints
 
 @app.get("/", include_in_schema=False)
@@ -246,6 +267,9 @@ async def readiness_check():
 async def generate_label_v1(
     files: List[UploadFile] = File(...),
     brand_logo: Optional[UploadFile] = File(None),
+    brand_logo_id: Optional[str] = Form(None),
+    save_brand_logo: bool = Form(False),
+    brand_logo_name: Optional[str] = Form(None),
     product_name: str = Form(...),
     mode: LabelMode = Form(LabelMode.SHIPPED_DOT),
     size: LabelSize = Form(LabelSize.PAIL),
@@ -276,6 +300,7 @@ async def generate_label_v1(
             validator=validator,
             label_generator=label_generator,
             agentcore_client=agentcore_client,
+            logo_library=_get_logo_library(),
             labels_dir=LABELS_DIR,
             metadata_store=label_metadata_store,
             save_metadata_store=_save_label_metadata_store,
@@ -293,6 +318,9 @@ async def generate_label_v1(
             ghs_pictograms=ghs_pictograms,
             label_brand=label_brand,
             brand_logo=brand_logo,
+            brand_logo_id=brand_logo_id,
+            save_brand_logo=save_brand_logo,
+            brand_logo_name=brand_logo_name,
             supplier_name=supplier_name,
             supplier_address=supplier_address,
             supplier_phone=supplier_phone,
@@ -323,6 +351,46 @@ async def get_label_metadata_v1(label_id: str):
     if not metadata:
         raise HTTPException(status_code=404, detail="Label not found")
     return metadata
+
+
+@app.get("/api/v1/logos")
+async def list_saved_logos():
+    """List reusable company logos."""
+    return {"logos": _get_logo_library().list_logos()}
+
+
+@app.post("/api/v1/logos")
+async def save_company_logo(
+    logo: UploadFile = File(...),
+    name: str = Form(...),
+):
+    """Save a reusable company logo for future custom labels."""
+    content = await logo.read()
+    try:
+        return _get_logo_library().save_logo(
+            name=name,
+            filename=logo.filename or "",
+            content_type=logo.content_type or "",
+            content=content,
+        )
+    except LogoLibraryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/v1/logos/{logo_id}/image")
+async def get_company_logo_image(logo_id: str):
+    """Return a saved logo image."""
+    safe_id = _safe_logo_id(logo_id)
+    try:
+        record = _get_logo_library().get_logo(safe_id)
+        return FileResponse(
+            _get_logo_library().logo_path(record),
+            media_type=record["content_type"],
+            filename=record.get("filename") or f"{safe_id}.{record.get('extension', 'png')}",
+        )
+    except LogoLibraryError as exc:
+        status_code = 404 if "NOT_FOUND" in str(exc) or "MISSING" in str(exc) else 400
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
 
 
 @app.get("/api/v1/canva/template-fields")
@@ -389,6 +457,7 @@ async def correct_label_fields(label_id: str, request: CorrectionRequest):
             validator=validator,
             label_generator=label_generator,
             agentcore_client=agentcore_client,
+            logo_library=_get_logo_library(),
             labels_dir=LABELS_DIR,
             metadata_store=label_metadata_store,
             save_metadata_store=_save_label_metadata_store,
@@ -426,6 +495,31 @@ async def canva_export_csv(label_id: str):
             "Content-Disposition": f'attachment; filename="{safe_id}-canva-bulk-create.csv"'
         },
     )
+
+
+@app.get("/api/v1/labels/{label_id}/preview.svg")
+async def preview_label_svg(label_id: str):
+    """Return the generated SVG label preview without bypassing PDF download gating."""
+    safe_id = _safe_label_id(label_id)
+    metadata = label_metadata_store.get(safe_id)
+    if not metadata:
+        raise HTTPException(status_code=404, detail="Label not found")
+
+    preview_path = LABELS_DIR / f"{safe_id}.svg"
+    try:
+        preview_path_resolved = preview_path.resolve()
+        labels_dir_resolved = LABELS_DIR.resolve()
+        if not str(preview_path_resolved).startswith(str(labels_dir_resolved)):
+            raise HTTPException(status_code=403, detail="Access denied")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if not preview_path.exists():
+        raise HTTPException(status_code=404, detail="Label preview not found")
+
+    return FileResponse(preview_path, media_type="image/svg+xml", filename=f"{safe_id}.svg")
 
 
 @app.get("/api/v1/labels/{label_id}/download")
