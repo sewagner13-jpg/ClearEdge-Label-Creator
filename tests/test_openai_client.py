@@ -1,7 +1,7 @@
 import json
 
 from app.openai_client import OpenAIClient
-from app.canva_export import build_canva_export
+from app.canva_export import build_canva_export, canva_template_manifest
 
 
 def test_parse_response_defaults_missing_nfpa_values_to_zero():
@@ -94,3 +94,60 @@ def test_canva_export_formats_scalar_special_provisions():
     )
 
     assert exported["special_provisions"] == "IB2 | T4"
+
+
+def test_canva_export_includes_template_ready_display_fields():
+    exported = build_canva_export(
+        {
+            "product": {"name": "ClearEdge Canva"},
+            "ghs": {
+                "signal_word": "Warning",
+                "pictograms": ["GHS05", "GHS07"],
+            },
+            "transport": {
+                "un_number": "UN1760",
+                "proper_shipping_name": "Corrosive liquid, n.o.s.",
+                "hazard_class": "8",
+                "packing_group": "III",
+            },
+            "nfpa": {"health": 2, "flammability": 1, "instability": 0},
+            "shipment": {
+                "lot_number": "LOT-100",
+                "expiration_date": "2027-05-07",
+                "fill_amount": "441 lb",
+                "manufacture_date": "2026-05-07",
+            },
+        },
+        {
+            "label_id": "label_ClearEdgeCanva_abc123",
+            "product_name": "ClearEdge Canva",
+            "mode": "shipped_dot",
+            "size": "drum",
+            "status": "ready",
+        },
+    )
+
+    assert exported["label_id"] == "label_ClearEdgeCanva_abc123"
+    assert exported["product_name_display"] == "ClearEdge Canva"
+    assert exported["lot_number_display"] == "LOT-100"
+    assert exported["expiration_date_display"] == "2027-05-07"
+    assert exported["fill_amount_display"] == "441 lb"
+    assert exported["manufacture_date"] == "2026-05-07"
+    assert exported["signal_word_display"] == "WARNING"
+    assert exported["ghs_pictogram_1_code"] == "GHS05"
+    assert exported["ghs_pictogram_1_name"] == "Corrosive"
+    assert exported["ghs_pictogram_2_code"] == "GHS07"
+    assert exported["ghs_pictogram_2_name"] == "Exclamation Point"
+    assert exported["transport_summary"] == "UN1760 | Corrosive liquid, n.o.s. | Class 8 | PG III"
+    assert exported["nfpa_704_summary"] == "Health 2 | Flammability 1 | Instability 0"
+
+
+def test_canva_template_manifest_has_required_bulk_create_fields():
+    manifest = canva_template_manifest()
+    field_names = {field["name"] for field in manifest["fields"]}
+
+    assert manifest["template_name"] == "ClearEdge Product Label Template"
+    assert "product_name" in field_names
+    assert "lot_number_display" in field_names
+    assert "ghs_pictogram_1_code" in field_names
+    assert "nfpa_704_summary" in field_names

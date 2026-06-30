@@ -32,6 +32,7 @@ from .api_models import (
 )
 from .canva_export import (
     canva_urls,
+    canva_template_manifest,
 )
 from .label_pipeline import LabelPipeline, LabelPipelineError
 from .label_storage import (
@@ -288,6 +289,12 @@ async def get_label_metadata_v1(label_id: str):
     return metadata
 
 
+@app.get("/api/v1/canva/template-fields")
+async def get_canva_template_fields():
+    """Return the stable Canva Bulk Create field manifest."""
+    return canva_template_manifest()
+
+
 @app.post("/api/v1/labels/{label_id}/override-approval")
 async def override_label_approval(label_id: str, request: OverrideApprovalRequest):
     """Approve a compliance-blocked label with required reason logging."""
@@ -389,13 +396,15 @@ async def canva_export_csv(label_id: str):
 @app.get("/api/download-label/{label_id}")
 async def download_label_v1(label_id: str):
     """Download generated label PDF with path traversal protection."""
-    metadata = label_metadata_store.get(label_id)
-    if metadata and not metadata.get("validation_passed") and not metadata.get("override_approved"):
+    safe_id = _safe_label_id(label_id)
+    metadata = label_metadata_store.get(safe_id)
+    if not metadata:
+        raise HTTPException(status_code=404, detail="Label not found")
+    if not metadata.get("validation_passed") and not metadata.get("override_approved"):
         raise HTTPException(
             status_code=403,
             detail="DOWNLOAD_BLOCKED_VALIDATION_FAILED"
         )
-    safe_id = _safe_label_id(label_id)
 
     label_path = LABELS_DIR / f"{safe_id}.pdf"
     try:

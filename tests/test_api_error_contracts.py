@@ -84,3 +84,27 @@ def test_download_rejects_invalid_label_id(tmp_path):
         response = client.get("/api/v1/labels/label*bad/download")
         assert response.status_code == 400
         assert "Invalid label ID" in response.text
+
+
+def test_download_rejects_orphan_pdf_without_metadata(tmp_path):
+    setup_fakes(tmp_path)
+    label_id = "label_orphan"
+    (tmp_path / f"{label_id}.pdf").write_bytes(b"%PDF-1.4 orphan")
+
+    with TestClient(main.app) as client:
+        response = client.get(f"/api/v1/labels/{label_id}/download")
+        assert response.status_code == 404
+        assert "Label not found" in response.text
+
+
+def test_canva_template_fields_endpoint_returns_manifest(tmp_path):
+    setup_fakes(tmp_path)
+
+    with TestClient(main.app) as client:
+        response = client.get("/api/v1/canva/template-fields")
+        assert response.status_code == 200
+        payload = response.json()
+        field_names = {field["name"] for field in payload["fields"]}
+        assert payload["template_name"] == "ClearEdge Product Label Template"
+        assert "product_name" in field_names
+        assert "ghs_pictogram_1_code" in field_names

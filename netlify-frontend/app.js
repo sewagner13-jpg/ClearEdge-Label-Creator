@@ -3,8 +3,10 @@
 const API_URL = window.CLEAREDGE_API_URL || (
     window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
         ? 'http://localhost:8000'
-        : 'https://clearedge-label-creator-production.up.railway.app'
+        : 'https://clearedgelabelcreator-production.up.railway.app'
 );
+const CANVA_TEMPLATE_NAME = window.CLEAREDGE_CANVA_TEMPLATE_NAME || 'ClearEdge Product Label Template';
+const CANVA_TEMPLATE_URL = window.CLEAREDGE_CANVA_TEMPLATE_URL || '';
 
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
@@ -17,6 +19,7 @@ const labelSize = document.getElementById('labelSize');
 const productName = document.getElementById('productName');
 const lotNumber = document.getElementById('lotNumber');
 const expirationDate = document.getElementById('expirationDate');
+const manufactureDate = document.getElementById('manufactureDate');
 const fillAmount = document.getElementById('fillAmount');
 const ghsPictogramSelect = document.getElementById('ghsPictogramSelect');
 const addGhsPictogram = document.getElementById('addGhsPictogram');
@@ -154,6 +157,7 @@ function renderActionLinks(label) {
     const downloadUrl = label?.download_url;
     const canvaCsvUrl = label?.canva_csv_url;
     const canvaJsonUrl = label?.canva_json_url;
+    const canvaFieldMapUrl = `${API_URL}/api/v1/canva/template-fields`;
 
     return `
         ${downloadUrl ? `
@@ -165,9 +169,14 @@ function renderActionLinks(label) {
         <div style="margin-top: 14px;">
             <h3>Canva Handoff</h3>
             <p style="margin: 6px 0 12px; color: #555;">
-                Use the CSV for Canva Bulk Create, or the JSON for manual template entry/review.
+                ${escapeHtml(CANVA_TEMPLATE_NAME)} uses the generated CSV fields for Bulk Create.
             </p>
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                ${CANVA_TEMPLATE_URL ? `
+                <a href="${escapeHtml(CANVA_TEMPLATE_URL)}" target="_blank" rel="noopener" style="text-decoration: none;">
+                    <button class="btn" type="button">Open Canva Template</button>
+                </a>
+                ` : ''}
                 ${canvaCsvUrl ? `
                 <a href="${API_URL}${canvaCsvUrl}" download style="text-decoration: none;">
                     <button class="btn" type="button">Download Canva CSV</button>
@@ -178,6 +187,9 @@ function renderActionLinks(label) {
                     <button class="btn" type="button">View Canva JSON</button>
                 </a>
                 ` : ''}
+                <a href="${canvaFieldMapUrl}" target="_blank" rel="noopener" style="text-decoration: none;">
+                    <button class="btn" type="button">View Canva Field Map</button>
+                </a>
             </div>
         </div>
         ` : ''}
@@ -292,6 +304,7 @@ generateBtn.addEventListener('click', async () => {
     formData.append('size', labelSize.value);
     formData.append('lot_number', lotNumber.value.trim());
     formData.append('expiration_date', expirationDate.value.trim());
+    formData.append('manufacture_date', manufactureDate.value.trim());
     formData.append('fill_amount', fillAmount.value.trim());
     if (selectedGhsPictograms.length > 0) {
         formData.append('ghs_pictograms', JSON.stringify(selectedGhsPictograms));
