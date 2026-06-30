@@ -400,6 +400,37 @@ def test_dot_transport_panel_formats_id_number_with_prefix():
     assert "Flammable liquids, n.o.s. (xylene)" in svg
 
 
+def test_dot_transport_panel_offsets_fields_after_wrapped_shipping_name():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="ClearEdge Combustible"),
+        ghs=GHSClassification(),
+        transport=TransportClassification(
+            un_number="NA1993",
+            proper_shipping_name="COMBUSTIBLE LIQUID, N.O.S (2-methoxy-1-methylethyl acetate)",
+            hazard_class="3",
+            packing_group="III",
+        ),
+    )
+
+    svg = generator.generate_svg(data, mode="shipped_dot", size="drum")
+
+    def text_y_containing(needle: str) -> int:
+        for match in re.finditer(r'<text[^>]* y="(?P<y>\d+)"[^>]*>(?P<body>.*?)</text>', svg, re.S):
+            if needle in match.group("body"):
+                return int(match.group("y"))
+        raise AssertionError(f"Text not found in SVG: {needle}")
+
+    shipping_line_y = text_y_containing("1-methylethyl acetate")
+    hazard_y = text_y_containing("Hazard Class")
+    packing_y = text_y_containing("Packing Group")
+    dot_label_y = text_y_containing("DOT Label")
+
+    assert hazard_y >= shipping_line_y + 16
+    assert packing_y >= hazard_y + 18
+    assert dot_label_y >= packing_y + 18
+
+
 def test_dot_transport_panel_renders_optional_dot_marking_fields():
     generator = LabelGenerator()
     data = ExtractedData(

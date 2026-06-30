@@ -211,25 +211,25 @@ class LabelGenerator:
       <text x="0" y="{{ 32 + (loop.index0 * 13) }}" font-size="10" fill="{{ text_color }}">{{ line }}</text>
       {% endfor %}
 
-      <text x="0" y="50" font-size="11" fill="{{ text_color }}">
+      <text x="0" y="{{ hazard_class_y }}" font-size="11" fill="{{ text_color }}">
         <tspan font-weight="bold">Hazard Class:</tspan> {{ hazard_class or 'N/A' }}
       </text>
 
       {% if packing_group %}
-      <text x="0" y="68" font-size="11" fill="{{ text_color }}">
+      <text x="0" y="{{ packing_group_y }}" font-size="11" fill="{{ text_color }}">
         <tspan font-weight="bold">Packing Group:</tspan> {{ packing_group }}
       </text>
       {% endif %}
-      <text x="0" y="88" font-size="11" fill="{{ text_color }}">
+      <text x="0" y="{{ dot_label_y }}" font-size="11" fill="{{ text_color }}">
         <tspan font-weight="bold">DOT Label:</tspan> {{ dot_label_name or 'Review required' }}
       </text>
       {% if marine_pollutant_display %}
-      <text x="0" y="106" font-size="10.5" fill="{{ text_color }}">
+      <text x="0" y="{{ marine_pollutant_y }}" font-size="10.5" fill="{{ text_color }}">
         <tspan font-weight="bold">Marine Pollutant:</tspan> {{ marine_pollutant_display }}
       </text>
       {% endif %}
       {% if limited_quantity_display %}
-      <text x="0" y="124" font-size="10.5" fill="{{ text_color }}">
+      <text x="0" y="{{ limited_quantity_y }}" font-size="10.5" fill="{{ text_color }}">
         <tspan font-weight="bold">Limited Quantity:</tspan> {{ limited_quantity_display }}
       </text>
       {% endif %}
@@ -681,6 +681,46 @@ class LabelGenerator:
             or "not hazardous for transport" in joined
         )
 
+    @staticmethod
+    def _transport_detail_layout(
+        *,
+        shipping_name_lines: list[str],
+        packing_group: Optional[str],
+        marine_pollutant_display: Optional[str],
+        limited_quantity_display: Optional[str],
+    ) -> dict:
+        """Stack DOT detail fields below the rendered shipping-name lines."""
+        line_count = max(1, len(shipping_name_lines))
+        hazard_class_y = 32 + ((line_count - 1) * 13) + 19
+        cursor_y = hazard_class_y
+
+        packing_group_y = None
+        if packing_group:
+            cursor_y += 20
+            packing_group_y = cursor_y
+
+        cursor_y += 20
+        dot_label_y = cursor_y
+
+        marine_pollutant_y = None
+        if marine_pollutant_display:
+            cursor_y += 18
+            marine_pollutant_y = cursor_y
+
+        limited_quantity_y = None
+        if limited_quantity_display:
+            cursor_y += 18
+            limited_quantity_y = cursor_y
+
+        return {
+            "hazard_class_y": hazard_class_y,
+            "packing_group_y": packing_group_y,
+            "dot_label_y": dot_label_y,
+            "marine_pollutant_y": marine_pollutant_y,
+            "limited_quantity_y": limited_quantity_y,
+            "dot_panel_height": max(165, 45 + cursor_y + 16),
+        }
+
     def _resolve_branding(self, data: ExtractedData, branding: Optional[dict]) -> dict:
         """Resolve print branding without letting SDS supplier data override ClearEdge labels."""
         mode = str((branding or {}).get("mode") or "clearedge").lower()
@@ -753,6 +793,19 @@ class LabelGenerator:
             max_items=6,
         )
         dot_labels = self._format_dot_labels(data.transport)
+        shipping_name_lines = self._wrap_lines(
+            data.transport.proper_shipping_name,
+            line_width=44 if width > 612 else 38,
+            max_lines=2,
+        )
+        marine_pollutant_display = self._format_true_transport_flag(data.transport.marine_pollutant)
+        limited_quantity_display = self._format_limited_quantity(data.transport.limited_quantity)
+        transport_layout = self._transport_detail_layout(
+            shipping_name_lines=shipping_name_lines,
+            packing_group=data.transport.packing_group,
+            marine_pollutant_display=marine_pollutant_display,
+            limited_quantity_display=limited_quantity_display,
+        )
 
         # Prepare template context
         context = {
@@ -795,19 +848,15 @@ class LabelGenerator:
             "precautionary_block_height": self._statement_block_height(precautionary_statements),
             "un_number": data.transport.un_number,
             "identification_number": self._format_identification_number(data.transport.un_number),
-            "shipping_name_lines": self._wrap_lines(
-                data.transport.proper_shipping_name,
-                line_width=44 if width > 612 else 38,
-                max_lines=2,
-            ),
+            "shipping_name_lines": shipping_name_lines,
             "transport_not_regulated": self._is_not_regulated_for_transport(data.transport),
             "hazard_class": data.transport.hazard_class,
             "packing_group": data.transport.packing_group,
             "dot_labels": dot_labels,
             "dot_label_name": dot_labels[0]["name"] if dot_labels else None,
-            "marine_pollutant_display": self._format_true_transport_flag(data.transport.marine_pollutant),
-            "limited_quantity_display": self._format_limited_quantity(data.transport.limited_quantity),
-            "dot_panel_height": 165,
+            "marine_pollutant_display": marine_pollutant_display,
+            "limited_quantity_display": limited_quantity_display,
+            **transport_layout,
             "supplier_name": self._fit_text(
                 resolved_branding["supplier_name"],
                 50,
