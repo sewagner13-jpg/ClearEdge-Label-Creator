@@ -237,6 +237,7 @@ async def readiness_check():
 @app.post("/api/generate-label", response_model=GenerateLabelResponse)
 async def generate_label_v1(
     files: List[UploadFile] = File(...),
+    brand_logo: Optional[UploadFile] = File(None),
     product_name: str = Form(...),
     mode: LabelMode = Form(LabelMode.SHIPPED_DOT),
     size: LabelSize = Form(LabelSize.PAIL),
@@ -244,7 +245,19 @@ async def generate_label_v1(
     expiration_date: Optional[str] = Form(None),
     fill_amount: Optional[str] = Form(None),
     manufacture_date: Optional[str] = Form(None),
-    ghs_pictograms: Optional[str] = Form(None)
+    ghs_pictograms: Optional[str] = Form(None),
+    label_brand: Optional[str] = Form(None),
+    supplier_name: Optional[str] = Form(None),
+    supplier_address: Optional[str] = Form(None),
+    supplier_phone: Optional[str] = Form(None),
+    emergency_phone: Optional[str] = Form(None),
+    transport_status: Optional[str] = Form(None),
+    un_number: Optional[str] = Form(None),
+    proper_shipping_name: Optional[str] = Form(None),
+    hazard_class: Optional[str] = Form(None),
+    packing_group: Optional[str] = Form(None),
+    marine_pollutant: Optional[str] = Form(None),
+    limited_quantity: Optional[str] = Form(None),
 ):
     """Phase 1 label generation endpoint with unified response payload."""
     try:
@@ -268,6 +281,19 @@ async def generate_label_v1(
             fill_amount=fill_amount,
             manufacture_date=manufacture_date,
             ghs_pictograms=ghs_pictograms,
+            label_brand=label_brand,
+            brand_logo=brand_logo,
+            supplier_name=supplier_name,
+            supplier_address=supplier_address,
+            supplier_phone=supplier_phone,
+            emergency_phone=emergency_phone,
+            transport_status=transport_status,
+            un_number=un_number,
+            proper_shipping_name=proper_shipping_name,
+            hazard_class=hazard_class,
+            packing_group=packing_group,
+            marine_pollutant=marine_pollutant,
+            limited_quantity=limited_quantity,
         )
     except HTTPException:
         raise

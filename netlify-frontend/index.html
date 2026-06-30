@@ -38,6 +38,39 @@
                 </p>
             </div>
 
+            <div style="margin-top: 20px; padding: 16px; border: 1px solid #D8D3E6; border-radius: 6px; background: #FBFAFE;">
+                <label style="font-weight: 700; margin-bottom: 10px; display: block;">Label Brand:</label>
+                <select id="labelBrand" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; max-width: 360px; font-size: 1em;">
+                    <option value="clearedge">ClearEdge label - use official ClearEdge logo/address/phone</option>
+                    <option value="custom">Customer/company label - use uploaded logo and supplier info</option>
+                </select>
+                <p id="clearedgeBrandNote" style="color: #555; font-size: 0.9em; margin-top: 8px;">
+                    ClearEdge labels always print ClearEdge Solutions, 14301 CR Koon Highway, Newberry, SC 29108, and 704-799-5769.
+                </p>
+                <div id="customBrandFields" style="display: none; margin-top: 14px;">
+                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Customer Logo:</label>
+                    <input type="file" id="brandLogo" accept=".png,.jpg,.jpeg,.svg,.webp,image/png,image/jpeg,image/svg+xml,image/webp"
+                           style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; max-width: 460px; font-size: 1em; background: #fff;">
+                    <div style="margin-top: 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;">
+                        <div>
+                            <label style="font-weight: 600; margin-bottom: 10px; display: block;">Supplier Name:</label>
+                            <input type="text" id="supplierName" placeholder="From SDS or enter manually"
+                                   style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                        </div>
+                        <div>
+                            <label style="font-weight: 600; margin-bottom: 10px; display: block;">Supplier Address:</label>
+                            <input type="text" id="supplierAddress" placeholder="From SDS or enter manually"
+                                   style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                        </div>
+                        <div>
+                            <label style="font-weight: 600; margin-bottom: 10px; display: block;">Supplier Phone:</label>
+                            <input type="text" id="supplierPhone" placeholder="From SDS or enter manually"
+                                   style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div style="margin-top: 20px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; max-width: 920px;">
                 <div>
                     <label style="font-weight: 600; margin-bottom: 10px; display: block;">Lot Number:</label>
@@ -80,6 +113,65 @@
                     <button type="button" id="clearGhsPictograms" style="padding: 10px 16px; border-radius: 5px; border: 1px solid #bbb; background: #fff; cursor: pointer;">Use SDS auto-pick</button>
                 </div>
                 <div id="selectedGhsPictograms" style="margin-top: 10px; color: #555; font-size: 0.95em;">Auto from SDS</div>
+            </div>
+
+            <div style="margin-top: 20px; padding: 16px; border: 1px solid #D8D3E6; border-radius: 6px; background: #fff;">
+                <h3 style="margin-bottom: 12px;">DOT Highway Shipping Information</h3>
+                <p style="color: #666; margin-bottom: 14px;">
+                    Use SDS auto-pick when Section 14 is complete. Fill these boxes when the shipping data is known but missing or unclear.
+                </p>
+                <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px;">
+                    <div>
+                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Transport Status:</label>
+                        <select id="transportStatus" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                            <option value="auto">Auto from SDS</option>
+                            <option value="regulated">DOT regulated</option>
+                            <option value="not_regulated">Not regulated for DOT transport</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">UN/NA Number:</label>
+                        <input type="text" id="unNumber" placeholder="e.g., UN1993"
+                               style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                    </div>
+                    <div>
+                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Proper Shipping Name:</label>
+                        <input type="text" id="properShippingName" placeholder="Exact DOT name"
+                               style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                    </div>
+                    <div>
+                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Hazard Class:</label>
+                        <input type="text" id="hazardClass" placeholder="e.g., 3, 8, 9"
+                               style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                    </div>
+                    <div>
+                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Packing Group:</label>
+                        <select id="packingGroup" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                            <option value="">Auto / not listed</option>
+                            <option value="I">I</option>
+                            <option value="II">II</option>
+                            <option value="III">III</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Marine Pollutant:</label>
+                        <select id="marinePollutant" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                            <option value="">Auto / not listed</option>
+                            <option value="yes">Yes</option>
+                            <option value="no">No</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Limited Quantity:</label>
+                        <input type="text" id="limitedQuantity" placeholder="Yes, No, or threshold"
+                               style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                    </div>
+                    <div>
+                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Emergency Phone:</label>
+                        <input type="text" id="emergencyPhone" placeholder="24-hour emergency number"
+                               style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                    </div>
+                </div>
             </div>
 
             <div style="margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 500px;">

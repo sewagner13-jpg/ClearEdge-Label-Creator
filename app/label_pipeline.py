@@ -1,5 +1,6 @@
 """Label generation pipeline orchestration."""
 
+import base64
 import logging
 import re
 import uuid
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 MAX_PDFS_PER_REQUEST = 4
 MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024
 MAX_TOTAL_UPLOAD_BYTES = 50 * 1024 * 1024
+MAX_LOGO_FILE_SIZE_BYTES = 2 * 1024 * 1024
 AGENTCORE_PROMOTION_CONFIDENCE = 0.85
 
 ALLOWED_PDF_CONTENT_TYPES = {
@@ -34,6 +36,21 @@ ALLOWED_PDF_CONTENT_TYPES = {
     "application/octet-stream",
     "",
     None,
+}
+
+ALLOWED_LOGO_CONTENT_TYPES = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/svg+xml": "svg",
+    "image/webp": "webp",
+}
+ALLOWED_LOGO_EXTENSIONS = {"png", "jpg", "jpeg", "svg", "webp"}
+
+OFFICIAL_CLEAREDGE_SUPPLIER = {
+    "supplier_name": "ClearEdge Solutions",
+    "supplier_address": "14301 CR Koon Highway, Newberry, SC 29108",
+    "supplier_phone": "704-799-5769",
 }
 
 CRITICAL_AGENTCORE_FIELDS = {
@@ -118,11 +135,26 @@ class LabelPipeline:
         fill_amount: Optional[str] = None,
         manufacture_date: Optional[str] = None,
         ghs_pictograms: Optional[str] = None,
+        label_brand: Optional[str] = None,
+        brand_logo: Optional[UploadFile] = None,
+        supplier_name: Optional[str] = None,
+        supplier_address: Optional[str] = None,
+        supplier_phone: Optional[str] = None,
+        emergency_phone: Optional[str] = None,
+        transport_status: Optional[str] = None,
+        un_number: Optional[str] = None,
+        proper_shipping_name: Optional[str] = None,
+        hazard_class: Optional[str] = None,
+        packing_group: Optional[str] = None,
+        marine_pollutant: Optional[str] = None,
+        limited_quantity: Optional[str] = None,
     ) -> dict:
         """Run the label generation workflow."""
         cleaned_product_name = self._validate_product_name(product_name)
         if self.openai_client is None:
             raise LabelPipelineError(503, "OPENAI_API_KEY is not configured")
+
+        branding = await self._build_branding(label_brand=label_brand, brand_logo=brand_logo)
 
         sds_text, tds_text = await self._extract_uploaded_documents(files)
 
@@ -151,6 +183,18 @@ class LabelPipeline:
             fill_amount=fill_amount,
             manufacture_date=manufacture_date,
             ghs_pictograms=ghs_pictograms,
+            branding=branding,
+            supplier_name=supplier_name,
+            supplier_address=supplier_address,
+            supplier_phone=supplier_phone,
+            emergency_phone=emergency_phone,
+            transport_status=transport_status,
+            un_number=un_number,
+            proper_shipping_name=proper_shipping_name,
+            hazard_class=hazard_class,
+            packing_group=packing_group,
+            marine_pollutant=marine_pollutant,
+            limited_quantity=limited_quantity,
         )
 
         agentcore_review = self._run_agentcore_review(
@@ -166,7 +210,7 @@ class LabelPipeline:
         self._apply_agentcore_issues_to_validation(validation_result, agentcore_review, agentcore_needs_review)
 
         label_id = self._new_label_id(cleaned_product_name)
-        label_path = self._render_pdf(label_id, extracted_data, mode, size)
+        label_path = self._render_pdf(label_id, extracted_data, mode, size, branding=branding)
         status = self._label_status(validation_result, agentcore_needs_review, agentcore_review)
 
         metadata = self._build_metadata(
@@ -178,6 +222,7 @@ class LabelPipeline:
             validation_result=validation_result,
             status=status,
             agentcore_review=agentcore_review,
+            branding=branding,
         )
         metadata["artifact_path"] = str(label_path)
         self.metadata_store[label_id] = metadata
@@ -203,7 +248,13 @@ class LabelPipeline:
 
         validation_result = self.validator.validate(extracted_data, metadata["mode"])
         status = "ready" if validation_result.passed else "blocked"
-        self._render_pdf(label_id, extracted_data, metadata["mode"], metadata["size"])
+        self._render_pdf(
+            label_id,
+            extracted_data,
+            metadata["mode"],
+            metadata["size"],
+            branding=metadata.get("branding"),
+        )
 
         metadata.update(
             self._build_metadata(
@@ -215,6 +266,7 @@ class LabelPipeline:
                 validation_result=validation_result,
                 status=status,
                 agentcore_review=metadata.get("agentcore_review") or disabled_agentcore_review(),
+                branding=metadata.get("branding"),
             )
         )
         metadata.setdefault("correction_history", []).append({
@@ -297,11 +349,42 @@ class LabelPipeline:
         fill_amount: Optional[str],
         manufacture_date: Optional[str],
         ghs_pictograms: Optional[str],
+        branding: dict,
+        supplier_name: Optional[str],
+        supplier_address: Optional[str],
+        supplier_phone: Optional[str],
+        emergency_phone: Optional[str],
+        transport_status: Optional[str],
+        un_number: Optional[str],
+        proper_shipping_name: Optional[str],
+        hazard_class: Optional[str],
+        packing_group: Optional[str],
+        marine_pollutant: Optional[str],
+        limited_quantity: Optional[str],
     ) -> None:
         extracted_data.shipment.lot_number = clean_operator_field(lot_number)
         extracted_data.shipment.expiration_date = clean_operator_field(expiration_date)
         extracted_data.shipment.fill_amount = clean_operator_field(fill_amount)
         extracted_data.shipment.manufacture_date = clean_operator_field(manufacture_date)
+
+        self._apply_branding_fields(
+            extracted_data,
+            branding=branding,
+            supplier_name=supplier_name,
+            supplier_address=supplier_address,
+            supplier_phone=supplier_phone,
+            emergency_phone=emergency_phone,
+        )
+        self._apply_transport_fields(
+            extracted_data,
+            transport_status=transport_status,
+            un_number=un_number,
+            proper_shipping_name=proper_shipping_name,
+            hazard_class=hazard_class,
+            packing_group=packing_group,
+            marine_pollutant=marine_pollutant,
+            limited_quantity=limited_quantity,
+        )
 
         operator_pictograms = parse_ghs_pictogram_selection(ghs_pictograms)
         if operator_pictograms:
@@ -309,6 +392,177 @@ class LabelPipeline:
             extracted_data.warnings.append(
                 "GHS pictograms were selected by operator dropdown and override the SDS auto-pick."
             )
+
+    async def _build_branding(self, *, label_brand: Optional[str], brand_logo: Optional[UploadFile]) -> dict:
+        mode = self._normalize_label_brand(label_brand)
+        if brand_logo and mode == "clearedge" and label_brand is None:
+            mode = "custom"
+
+        logo_data_uri = None
+        logo_filename = None
+        if mode == "custom" and brand_logo is not None:
+            logo_data_uri = await self._read_brand_logo_data_uri(brand_logo)
+            logo_filename = brand_logo.filename
+
+        return {
+            "mode": mode,
+            "logo_data_uri": logo_data_uri,
+            "logo_filename": logo_filename,
+        }
+
+    @staticmethod
+    def _normalize_label_brand(value: Optional[str]) -> str:
+        cleaned = (clean_operator_field(value) or "clearedge").lower()
+        if cleaned in {"clearedge", "clear edge", "ce"}:
+            return "clearedge"
+        if cleaned in {"custom", "customer", "other", "vendor", "supplier", "private_label"}:
+            return "custom"
+        raise LabelPipelineError(400, "INVALID_LABEL_BRAND: Use clearedge or custom")
+
+    @staticmethod
+    async def _read_brand_logo_data_uri(brand_logo: UploadFile) -> str:
+        filename = brand_logo.filename or ""
+        content_type = brand_logo.content_type or ""
+        suffix = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+
+        if content_type not in ALLOWED_LOGO_CONTENT_TYPES or suffix not in ALLOWED_LOGO_EXTENSIONS:
+            raise LabelPipelineError(400, "UNSUPPORTED_LOGO_FILE_TYPE: Upload a PNG, JPG, SVG, or WebP logo image")
+
+        content = await brand_logo.read()
+        if len(content) > MAX_LOGO_FILE_SIZE_BYTES:
+            raise LabelPipelineError(400, "LOGO_FILE_TOO_LARGE: Logo image must be 2 MB or smaller")
+        if not content:
+            raise LabelPipelineError(400, "EMPTY_LOGO_FILE: Uploaded logo file is empty")
+
+        encoded = base64.b64encode(content).decode("ascii")
+        return f"data:{content_type};base64,{encoded}"
+
+    @staticmethod
+    def _apply_branding_fields(
+        extracted_data: ExtractedData,
+        *,
+        branding: dict,
+        supplier_name: Optional[str],
+        supplier_address: Optional[str],
+        supplier_phone: Optional[str],
+        emergency_phone: Optional[str],
+    ) -> None:
+        if branding.get("mode") == "custom":
+            extracted_data.product.supplier_name = (
+                clean_operator_field(supplier_name) or extracted_data.product.supplier_name
+            )
+            extracted_data.product.supplier_address = (
+                clean_operator_field(supplier_address) or extracted_data.product.supplier_address
+            )
+            extracted_data.product.supplier_phone = (
+                clean_operator_field(supplier_phone) or extracted_data.product.supplier_phone
+            )
+        else:
+            extracted_data.product.supplier_name = OFFICIAL_CLEAREDGE_SUPPLIER["supplier_name"]
+            extracted_data.product.supplier_address = OFFICIAL_CLEAREDGE_SUPPLIER["supplier_address"]
+            extracted_data.product.supplier_phone = OFFICIAL_CLEAREDGE_SUPPLIER["supplier_phone"]
+
+        entered_emergency_phone = clean_operator_field(emergency_phone)
+        if entered_emergency_phone:
+            extracted_data.product.emergency_phone = entered_emergency_phone
+
+    @classmethod
+    def _apply_transport_fields(
+        cls,
+        extracted_data: ExtractedData,
+        *,
+        transport_status: Optional[str],
+        un_number: Optional[str],
+        proper_shipping_name: Optional[str],
+        hazard_class: Optional[str],
+        packing_group: Optional[str],
+        marine_pollutant: Optional[str],
+        limited_quantity: Optional[str],
+    ) -> None:
+        status = cls._normalize_transport_status(transport_status)
+        if status == "regulated":
+            extracted_data.transport.not_regulated = False
+        elif status == "not_regulated":
+            extracted_data.transport.not_regulated = True
+
+        entered_un_number = clean_operator_field(un_number)
+        entered_shipping_name = clean_operator_field(proper_shipping_name)
+        entered_hazard_class = clean_operator_field(hazard_class)
+        entered_packing_group = cls._normalize_packing_group(packing_group)
+        entered_marine_pollutant = cls._parse_optional_bool(marine_pollutant, "marine_pollutant")
+        entered_limited_quantity = clean_operator_field(limited_quantity)
+
+        applied = False
+        if entered_un_number:
+            extracted_data.transport.un_number = entered_un_number
+            applied = True
+        if entered_shipping_name:
+            extracted_data.transport.proper_shipping_name = entered_shipping_name
+            applied = True
+        if entered_hazard_class:
+            extracted_data.transport.hazard_class = entered_hazard_class
+            applied = True
+        if entered_packing_group:
+            extracted_data.transport.packing_group = entered_packing_group
+            applied = True
+        if entered_marine_pollutant is not None:
+            extracted_data.transport.marine_pollutant = entered_marine_pollutant
+            applied = True
+        if entered_limited_quantity:
+            extracted_data.transport.limited_quantity = entered_limited_quantity
+            applied = True
+        if status != "auto":
+            applied = True
+
+        if applied:
+            extracted_data.warnings.append("Operator-entered DOT/shipping fields were applied before validation.")
+
+    @staticmethod
+    def _normalize_transport_status(value: Optional[str]) -> str:
+        cleaned = (clean_operator_field(value) or "auto").lower().replace("-", "_").replace(" ", "_")
+        if cleaned in {"", "auto", "from_sds", "sds"}:
+            return "auto"
+        if cleaned in {"regulated", "dot_regulated", "hazmat", "hazardous"}:
+            return "regulated"
+        if cleaned in {"not_regulated", "not_dot_regulated", "not_hazmat", "not_restricted"}:
+            return "not_regulated"
+        raise LabelPipelineError(400, "INVALID_TRANSPORT_STATUS: Use auto, regulated, or not_regulated")
+
+    @staticmethod
+    def _normalize_packing_group(value: Optional[str]) -> Optional[str]:
+        cleaned = clean_operator_field(value)
+        if not cleaned:
+            return None
+
+        normalized = cleaned.upper().replace("PACKING GROUP", "").replace("PG", "").strip()
+        normalized = normalized.replace(" ", "")
+        mapping = {
+            "1": "I",
+            "I": "I",
+            "2": "II",
+            "II": "II",
+            "3": "III",
+            "III": "III",
+        }
+        packing_group = mapping.get(normalized)
+        if not packing_group:
+            raise LabelPipelineError(400, "INVALID_PACKING_GROUP: Use I, II, III, 1, 2, or 3")
+        return packing_group
+
+    @staticmethod
+    def _parse_optional_bool(value: Optional[str], field_name: str) -> Optional[bool]:
+        cleaned = clean_operator_field(value)
+        if not cleaned:
+            return None
+
+        normalized = cleaned.lower()
+        if normalized in {"auto", "unknown", "not listed"}:
+            return None
+        if normalized in {"true", "yes", "y", "1"}:
+            return True
+        if normalized in {"false", "no", "n", "0"}:
+            return False
+        raise LabelPipelineError(400, f"INVALID_BOOLEAN_FIELD: {field_name} must be yes, no, or auto")
 
     def _run_agentcore_review(
         self,
@@ -410,7 +664,15 @@ class LabelPipeline:
         if validation_result.errors:
             validation_result.passed = False
 
-    def _render_pdf(self, label_id: str, extracted_data: ExtractedData, mode: str, size: str) -> Path:
+    def _render_pdf(
+        self,
+        label_id: str,
+        extracted_data: ExtractedData,
+        mode: str,
+        size: str,
+        *,
+        branding: Optional[dict] = None,
+    ) -> Path:
         try:
             template_id = f"clearedge_{size}_v1"
             svg_content = self.label_generator.generate_svg(
@@ -418,6 +680,7 @@ class LabelPipeline:
                 mode=mode,
                 size=size,
                 template_id=template_id,
+                branding=branding,
             )
             self.labels_dir.mkdir(parents=True, exist_ok=True)
             pdf_content = self.label_generator.generate_pdf(svg_content)
@@ -439,6 +702,7 @@ class LabelPipeline:
         validation_result: ValidationResult,
         status: str,
         agentcore_review: dict,
+        branding: Optional[dict] = None,
     ) -> dict:
         download_url = f"/api/v1/labels/{label_id}/download" if status == "ready" else None
         canva_export_urls = canva_urls(label_id, status == "ready")
@@ -474,6 +738,7 @@ class LabelPipeline:
             "override_timestamp": None,
             "extracted": extracted_payload,
             "agentcore_review": agentcore_review,
+            "branding": branding or {"mode": "clearedge", "logo_data_uri": None, "logo_filename": None},
         }
         metadata["canva_export"] = build_canva_export(extracted_payload, metadata)
         return metadata

@@ -46,7 +46,7 @@ class FakeValidatorBlocked:
 
 
 class FakeLabelGenerator:
-    def generate_svg(self, extracted_data, mode="shipped_dot", size="pail", template_id=None):
+    def generate_svg(self, extracted_data, mode="shipped_dot", size="pail", template_id=None, branding=None):
         return '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
 
     def generate_pdf(self, svg_content: str):

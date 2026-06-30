@@ -22,6 +22,11 @@ logger = logging.getLogger(__name__)
 class LabelGenerator:
     """Generate SVG and PDF labels from extracted product data."""
 
+    CLEAREDGE_SUPPLIER_NAME = "ClearEdge Solutions"
+    CLEAREDGE_SUPPLIER_ADDRESS = "14301 CR Koon Highway, Newberry, SC 29108"
+    CLEAREDGE_SUPPLIER_PHONE = "704-799-5769"
+    CLEAREDGE_LOGO_ASPECT_RATIO = 2794 / 596
+
     SVG_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
 <svg width="{{ width }}" height="{{ height }}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" font-family="{{ body_font }}">
   <!-- Background -->
@@ -35,12 +40,12 @@ class LabelGenerator:
 
   <!-- Brand logo -->
   {% if logo_data_uri %}
-  <image x="20" y="29" width="{{ logo_panel_width }}" height="48"
+  <image id="brand-logo" x="20" y="{{ logo_y }}" width="{{ logo_width }}" height="{{ logo_height }}"
          href="{{ logo_data_uri }}" xlink:href="{{ logo_data_uri }}"
-         preserveAspectRatio="xMidYMid meet"/>
+         preserveAspectRatio="xMinYMid meet"/>
   {% else %}
-  <text x="{{ 20 + logo_panel_width // 2 }}" y="58" font-size="18" font-weight="bold"
-        fill="{{ header_color }}" text-anchor="middle">ClearEdge</text>
+  <text x="20" y="62" font-size="18" font-weight="bold"
+        fill="{{ header_color }}">Custom Label</text>
   {% endif %}
 
   <!-- Product Name (center/right) -->
@@ -57,22 +62,22 @@ class LabelGenerator:
   {% endfor %}
   <g id="shipment-info">
     <line x1="{{ product_area_x }}" y1="83" x2="{{ width - 22 }}" y2="83" stroke="#D7D0E8" stroke-width="1"/>
-    <text x="{{ product_area_x }}" y="101" font-size="10.5" font-weight="bold" fill="{{ brand_purple }}">
+    <text x="{{ lot_label_x }}" y="101" font-size="10.5" font-weight="bold" fill="{{ brand_purple }}">
       Lot #:
     </text>
-    <text x="{{ product_area_x + 42 }}" y="102" font-size="15.5" font-weight="bold" fill="{{ text_color }}">
+    <text x="{{ lot_value_x }}" y="102" font-size="15.5" font-weight="bold" fill="{{ text_color }}">
       {{ lot_number_display }}
     </text>
-    <text x="{{ product_area_x + 134 }}" y="101" font-size="10.5" font-weight="bold" fill="{{ brand_purple }}">
+    <text x="{{ expiration_label_x }}" y="101" font-size="10.5" font-weight="bold" fill="{{ brand_purple }}">
       Exp.:
     </text>
-    <text x="{{ product_area_x + 170 }}" y="102" font-size="13.5" font-weight="bold" fill="{{ text_color }}">
+    <text x="{{ expiration_value_x }}" y="102" font-size="13.5" font-weight="bold" fill="{{ text_color }}">
       {{ expiration_date_display }}
     </text>
-    <text x="{{ product_area_x + 282 }}" y="101" font-size="10.5" font-weight="bold" fill="{{ brand_purple }}">
+    <text x="{{ weight_label_x }}" y="101" font-size="10.5" font-weight="bold" fill="{{ brand_purple }}">
       Net Wt.:
     </text>
-    <text x="{{ product_area_x + 338 }}" y="102" font-size="13.5" font-weight="bold" fill="{{ text_color }}">
+    <text x="{{ weight_value_x }}" y="102" font-size="13.5" font-weight="bold" fill="{{ text_color }}">
       {{ fill_amount_display }}
     </text>
   </g>
@@ -202,7 +207,9 @@ class LabelGenerator:
       <text x="0" y="15" font-size="11" fill="{{ text_color }}">
         <tspan font-weight="bold">Proper Shipping Name:</tspan>
       </text>
-      <text x="0" y="32" font-size="10" fill="{{ text_color }}">{{ shipping_name[:36] }}</text>
+      {% for line in shipping_name_lines %}
+      <text x="0" y="{{ 32 + (loop.index0 * 13) }}" font-size="10" fill="{{ text_color }}">{{ line }}</text>
+      {% endfor %}
 
       <text x="0" y="50" font-size="11" fill="{{ text_color }}">
         <tspan font-weight="bold">Hazard Class:</tspan> {{ hazard_class or 'N/A' }}
@@ -277,7 +284,7 @@ class LabelGenerator:
       {{ supplier_address or '14301 CR Koon Highway, Newberry, SC 29108' }}
     </text>
     <text x="20" y="{{ height - 50 }}" font-size="8.5" fill="{{ text_color }}" opacity="0.75">
-      {{ supplier_phone or 'www.clear-edge.net' }}
+      {{ supplier_phone }}
     </text>
 
     <!-- Emergency Contact (prominent) -->
@@ -674,13 +681,36 @@ class LabelGenerator:
             or "not hazardous for transport" in joined
         )
 
+    def _resolve_branding(self, data: ExtractedData, branding: Optional[dict]) -> dict:
+        """Resolve print branding without letting SDS supplier data override ClearEdge labels."""
+        mode = str((branding or {}).get("mode") or "clearedge").lower()
+        if mode != "custom":
+            return {
+                "mode": "clearedge",
+                "logo_data_uri": self.logo_data_uri,
+                "supplier_name": self.CLEAREDGE_SUPPLIER_NAME,
+                "supplier_address": self.CLEAREDGE_SUPPLIER_ADDRESS,
+                "supplier_phone": self.CLEAREDGE_SUPPLIER_PHONE,
+                "is_clearedge": True,
+            }
+
+        return {
+            "mode": "custom",
+            "logo_data_uri": (branding or {}).get("logo_data_uri"),
+            "supplier_name": data.product.supplier_name or "Custom Label",
+            "supplier_address": data.product.supplier_address or "",
+            "supplier_phone": data.product.supplier_phone or "",
+            "is_clearedge": False,
+        }
+
     def generate_svg(
         self,
         data: ExtractedData,
         mode: str = "shipped_dot",
         size: str = "pail",
         template_name: str = "default",
-        template_id: Optional[str] = None
+        template_id: Optional[str] = None,
+        branding: Optional[dict] = None,
     ) -> str:
         """
         Generate SVG label from extracted data.
@@ -704,8 +734,11 @@ class LabelGenerator:
         width = template_config["width"]
         height = template_config["height"]
         brand = template_config["brand"]
-        logo_panel_width = 165 if width <= 612 else 182
-        product_area_x = logo_panel_width + 34
+        resolved_branding = self._resolve_branding(data, branding)
+        logo_width = 218 if width <= 612 else 238
+        logo_height = int(round(logo_width / self.CLEAREDGE_LOGO_ASPECT_RATIO))
+        logo_y = 34 if width <= 612 else 32
+        product_area_x = 20 + logo_width + 24
         product_area_width = width - product_area_x - 22
         heading = self._format_product_heading(data.product.name, product_area_width)
         shipment = data.shipment
@@ -733,10 +766,18 @@ class LabelGenerator:
             "text_color": brand["text_color"],
             "body_font": brand["body_font"],
             "mode": mode,
-            "logo_data_uri": self.logo_data_uri,
-            "logo_panel_width": logo_panel_width,
+            "logo_data_uri": resolved_branding["logo_data_uri"],
+            "logo_width": logo_width,
+            "logo_height": logo_height,
+            "logo_y": logo_y,
             "product_area_x": product_area_x,
             "product_text_x": product_area_x + (product_area_width // 2),
+            "lot_label_x": product_area_x,
+            "lot_value_x": product_area_x + 42,
+            "expiration_label_x": product_area_x + 146,
+            "expiration_value_x": product_area_x + 182,
+            "weight_label_x": width - 128,
+            "weight_value_x": width - 74,
             "product_name_font_size": heading["font_size"],
             "product_name_y": heading["y"],
             "product_name_line_gap": heading["line_gap"],
@@ -754,7 +795,11 @@ class LabelGenerator:
             "precautionary_block_height": self._statement_block_height(precautionary_statements),
             "un_number": data.transport.un_number,
             "identification_number": self._format_identification_number(data.transport.un_number),
-            "shipping_name": self._fit_text(data.transport.proper_shipping_name, 45),
+            "shipping_name_lines": self._wrap_lines(
+                data.transport.proper_shipping_name,
+                line_width=44 if width > 612 else 38,
+                max_lines=2,
+            ),
             "transport_not_regulated": self._is_not_regulated_for_transport(data.transport),
             "hazard_class": data.transport.hazard_class,
             "packing_group": data.transport.packing_group,
@@ -763,9 +808,21 @@ class LabelGenerator:
             "marine_pollutant_display": self._format_true_transport_flag(data.transport.marine_pollutant),
             "limited_quantity_display": self._format_limited_quantity(data.transport.limited_quantity),
             "dot_panel_height": 165,
-            "supplier_name": self._fit_text(data.product.supplier_name, 50, "ClearEdge Solutions"),
-            "supplier_address": self._fit_text(data.product.supplier_address, 70, "14301 CR Koon Highway, Newberry, SC 29108"),
-            "supplier_phone": self._fit_text(data.product.supplier_phone, 35, "www.clear-edge.net"),
+            "supplier_name": self._fit_text(
+                resolved_branding["supplier_name"],
+                50,
+                self.CLEAREDGE_SUPPLIER_NAME if resolved_branding["is_clearedge"] else "Custom Label",
+            ),
+            "supplier_address": self._fit_text(
+                resolved_branding["supplier_address"],
+                70,
+                self.CLEAREDGE_SUPPLIER_ADDRESS if resolved_branding["is_clearedge"] else "",
+            ),
+            "supplier_phone": self._fit_text(
+                resolved_branding["supplier_phone"],
+                35,
+                self.CLEAREDGE_SUPPLIER_PHONE if resolved_branding["is_clearedge"] else "",
+            ),
             "emergency_phone": self._fit_text(data.product.emergency_phone, 45, "") if data.product.emergency_phone else None,
             "emergency_box_width": min(width - 40, 370),
             "revision_date": data.product.revision_date,

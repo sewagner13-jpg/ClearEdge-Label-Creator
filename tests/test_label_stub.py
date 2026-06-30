@@ -1,4 +1,6 @@
 from pathlib import Path
+import base64
+import re
 
 from app.label_stub import LabelGenerator
 from app.schema import (
@@ -123,6 +125,62 @@ def test_product_name_uses_logo_purple():
     assert "CE Flex Mod" in svg
 
 
+def test_clearedge_label_forces_official_supplier_and_exact_logo_asset():
+    generator = LabelGenerator()
+    logo_path = Path(__file__).resolve().parents[1] / "High Res Logo.png"
+    expected_logo_data_uri = f"data:image/png;base64,{base64.b64encode(logo_path.read_bytes()).decode('ascii')}"
+    data = ExtractedData(
+        product=ProductInfo(
+            name="ClearEdge Private Label",
+            supplier_name="Outside Chemical Company",
+            supplier_address="100 Vendor Road, Elsewhere, TX",
+            supplier_phone="555-0100",
+        ),
+        ghs=GHSClassification(),
+        transport=TransportClassification(),
+    )
+
+    svg = generator.generate_svg(data, mode="workplace", size="pail", branding={"mode": "clearedge"})
+
+    assert generator.logo_data_uri == expected_logo_data_uri
+    assert 'id="brand-logo"' in svg
+    assert expected_logo_data_uri in svg
+    assert 'preserveAspectRatio="xMinYMid meet"' in svg
+    assert "ClearEdge Solutions" in svg
+    assert "14301 CR Koon Highway, Newberry, SC 29108" in svg
+    assert "704-799-5769" in svg
+    assert "Outside Chemical Company" not in svg
+    assert "100 Vendor Road" not in svg
+
+
+def test_custom_label_uses_custom_logo_and_supplier_identity():
+    generator = LabelGenerator()
+    custom_logo = "data:image/png;base64,Y3VzdG9tLWxvZ28="
+    data = ExtractedData(
+        product=ProductInfo(
+            name="Customer Blend",
+            supplier_name="Customer Chemical Co.",
+            supplier_address="200 Customer Lane, Charlotte, NC",
+            supplier_phone="704-555-0199",
+        ),
+        ghs=GHSClassification(),
+        transport=TransportClassification(),
+    )
+
+    svg = generator.generate_svg(
+        data,
+        mode="workplace",
+        size="pail",
+        branding={"mode": "custom", "logo_data_uri": custom_logo},
+    )
+
+    assert custom_logo in svg
+    assert "Customer Chemical Co." in svg
+    assert "200 Customer Lane, Charlotte, NC" in svg
+    assert "704-555-0199" in svg
+    assert "ClearEdge Solutions" not in svg
+
+
 def test_long_product_name_wraps_inside_header_without_logo_box():
     generator = LabelGenerator()
     data = ExtractedData(
@@ -159,6 +217,22 @@ def test_shipment_fields_render_in_header():
     assert "441 lb" in svg
     assert svg.count("________") == 2
     assert 'font-size="13.5" font-weight="bold"' in svg
+
+
+def test_header_shipment_fields_fit_with_full_size_logo():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="Highway Shipped Product"),
+        ghs=GHSClassification(),
+        transport=TransportClassification(),
+        shipment=ShipmentInfo(lot_number="LOT-12345", expiration_date="12/2027", fill_amount="441 lb"),
+    )
+
+    svg = generator.generate_svg(data, mode="workplace", size="drum")
+
+    weight_match = re.search(r'<text x="(?P<x>\d+)" y="102" font-size="13.5"[^>]*>\s*441 lb', svg, re.S)
+    assert weight_match
+    assert int(weight_match.group("x")) <= 574
 
 
 def test_container_size_name_is_not_printed_on_label():
@@ -323,6 +397,7 @@ def test_dot_transport_panel_formats_id_number_with_prefix():
 
     assert "ID NUMBER:" in svg
     assert "UN1993" in svg
+    assert "Flammable liquids, n.o.s. (xylene)" in svg
 
 
 def test_dot_transport_panel_renders_optional_dot_marking_fields():

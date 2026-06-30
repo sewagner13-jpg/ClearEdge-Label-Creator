@@ -59,8 +59,29 @@ class FakeCorrectionValidator:
         )
 
 
+class FakeRequiredDotValidator:
+    def validate(self, extracted_data, mode: str):
+        required = {
+            "transport.un_number": extracted_data.transport.un_number,
+            "transport.proper_shipping_name": extracted_data.transport.proper_shipping_name,
+            "transport.hazard_class": extracted_data.transport.hazard_class,
+            "transport.packing_group": extracted_data.transport.packing_group,
+            "product.emergency_phone": extracted_data.product.emergency_phone,
+        }
+        errors = [
+            ValidationError(field=field, message="missing", severity="error")
+            for field, value in required.items()
+            if not value
+        ]
+        return ValidationResult(mode=mode, passed=not errors, errors=errors, warnings=[])
+
+
 class FakeLabelGenerator:
-    def generate_svg(self, extracted_data, mode="shipped_dot", size="pail", template_id=None):
+    def __init__(self):
+        self.last_branding = None
+
+    def generate_svg(self, extracted_data, mode="shipped_dot", size="pail", template_id=None, branding=None):
+        self.last_branding = branding
         return '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
 
     def generate_pdf(self, svg_content: str):
@@ -155,3 +176,73 @@ def test_corrections_endpoint_reruns_validation_and_enables_download(tmp_path):
         assert corrected["status"] == "ready"
         assert corrected["download"]["available"] is True
         assert corrected["extracted"]["transport"]["un_number"] == "UN1263"
+
+
+def test_generate_applies_operator_dot_fields_before_validation(tmp_path):
+    setup_fakes(tmp_path, passed=False)
+    main.validator = FakeRequiredDotValidator()
+
+    with TestClient(main.app) as client:
+        files = {"files": ("test_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
+        data = {
+            "product_name": "Highway Shipped Product",
+            "mode": "shipped_dot",
+            "size": "drum",
+            "transport_status": "regulated",
+            "un_number": "1993",
+            "proper_shipping_name": "Flammable liquids, n.o.s. (solvent blend)",
+            "hazard_class": "3",
+            "packing_group": "II",
+            "marine_pollutant": "no",
+            "limited_quantity": "No",
+            "emergency_phone": "800-424-9300",
+        }
+
+        generate_res = client.post("/api/v1/labels/generate", files=files, data=data)
+
+        assert generate_res.status_code == 200
+        payload = generate_res.json()
+        assert payload["status"] == "ready"
+        assert payload["download"]["available"] is True
+        assert payload["extracted"]["transport"]["un_number"] == "1993"
+        assert payload["extracted"]["transport"]["proper_shipping_name"] == "Flammable liquids, n.o.s. (solvent blend)"
+        assert payload["extracted"]["transport"]["hazard_class"] == "3"
+        assert payload["extracted"]["transport"]["packing_group"] == "II"
+        assert payload["extracted"]["transport"]["marine_pollutant"] is False
+        assert payload["extracted"]["transport"]["limited_quantity"] == "No"
+        assert payload["extracted"]["product"]["emergency_phone"] == "800-424-9300"
+        assert payload["extracted"]["product"]["supplier_name"] == "ClearEdge Solutions"
+        assert payload["extracted"]["product"]["supplier_address"] == "14301 CR Koon Highway, Newberry, SC 29108"
+        assert payload["extracted"]["product"]["supplier_phone"] == "704-799-5769"
+
+
+def test_generate_custom_brand_accepts_uploaded_logo_and_supplier_fields(tmp_path):
+    setup_fakes(tmp_path, passed=True)
+    fake_generator = FakeLabelGenerator()
+    main.label_generator = fake_generator
+
+    with TestClient(main.app) as client:
+        files = [
+            ("files", ("test_sds.pdf", b"%PDF-1.4 test", "application/pdf")),
+            ("brand_logo", ("customer-logo.png", b"fake-png", "image/png")),
+        ]
+        data = {
+            "product_name": "Customer Label",
+            "mode": "workplace",
+            "size": "pail",
+            "label_brand": "custom",
+            "supplier_name": "Customer Chemical Co.",
+            "supplier_address": "200 Customer Lane, Charlotte, NC",
+            "supplier_phone": "704-555-0199",
+        }
+
+        generate_res = client.post("/api/v1/labels/generate", files=files, data=data)
+
+        assert generate_res.status_code == 200
+        payload = generate_res.json()
+        assert payload["status"] == "ready"
+        assert payload["extracted"]["product"]["supplier_name"] == "Customer Chemical Co."
+        assert payload["extracted"]["product"]["supplier_address"] == "200 Customer Lane, Charlotte, NC"
+        assert payload["extracted"]["product"]["supplier_phone"] == "704-555-0199"
+        assert fake_generator.last_branding["mode"] == "custom"
+        assert fake_generator.last_branding["logo_data_uri"].startswith("data:image/png;base64,")

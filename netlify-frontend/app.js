@@ -21,6 +21,20 @@ const lotNumber = document.getElementById('lotNumber');
 const expirationDate = document.getElementById('expirationDate');
 const manufactureDate = document.getElementById('manufactureDate');
 const fillAmount = document.getElementById('fillAmount');
+const labelBrand = document.getElementById('labelBrand');
+const brandLogo = document.getElementById('brandLogo');
+const customBrandFields = document.getElementById('customBrandFields');
+const supplierName = document.getElementById('supplierName');
+const supplierAddress = document.getElementById('supplierAddress');
+const supplierPhone = document.getElementById('supplierPhone');
+const transportStatus = document.getElementById('transportStatus');
+const unNumber = document.getElementById('unNumber');
+const properShippingName = document.getElementById('properShippingName');
+const hazardClass = document.getElementById('hazardClass');
+const packingGroup = document.getElementById('packingGroup');
+const marinePollutant = document.getElementById('marinePollutant');
+const limitedQuantity = document.getElementById('limitedQuantity');
+const emergencyPhone = document.getElementById('emergencyPhone');
 const ghsPictogramSelect = document.getElementById('ghsPictogramSelect');
 const addGhsPictogram = document.getElementById('addGhsPictogram');
 const clearGhsPictograms = document.getElementById('clearGhsPictograms');
@@ -40,6 +54,14 @@ const GHS_PICTOGRAM_OPTIONS = {
 
 let selectedFiles = [];
 let selectedGhsPictograms = [];
+
+function updateBrandFields() {
+    const isCustom = labelBrand.value === 'custom';
+    customBrandFields.style.display = isCustom ? 'block' : 'none';
+}
+
+labelBrand.addEventListener('change', updateBrandFields);
+updateBrandFields();
 
 function ghsPictogramLabel(code) {
     return GHS_PICTOGRAM_OPTIONS[code] || code;
@@ -306,6 +328,24 @@ generateBtn.addEventListener('click', async () => {
     formData.append('expiration_date', expirationDate.value.trim());
     formData.append('manufacture_date', manufactureDate.value.trim());
     formData.append('fill_amount', fillAmount.value.trim());
+    formData.append('label_brand', labelBrand.value);
+    if (labelBrand.value === 'custom') {
+        const logoFile = brandLogo.files?.[0];
+        if (logoFile) {
+            formData.append('brand_logo', logoFile);
+        }
+        formData.append('supplier_name', supplierName.value.trim());
+        formData.append('supplier_address', supplierAddress.value.trim());
+        formData.append('supplier_phone', supplierPhone.value.trim());
+    }
+    formData.append('transport_status', transportStatus.value);
+    formData.append('un_number', unNumber.value.trim());
+    formData.append('proper_shipping_name', properShippingName.value.trim());
+    formData.append('hazard_class', hazardClass.value.trim());
+    formData.append('packing_group', packingGroup.value);
+    formData.append('marine_pollutant', marinePollutant.value);
+    formData.append('limited_quantity', limitedQuantity.value.trim());
+    formData.append('emergency_phone', emergencyPhone.value.trim());
     if (selectedGhsPictograms.length > 0) {
         formData.append('ghs_pictograms', JSON.stringify(selectedGhsPictograms));
     }
@@ -364,7 +404,35 @@ generateBtn.addEventListener('click', async () => {
                 ${data.extracted.transport.un_number ? `
                 <div class="field-group">
                     <div class="field-label">UN Number</div>
-                    <div class="field-value">UN ${data.extracted.transport.un_number}</div>
+                    <div class="field-value">${escapeHtml(data.extracted.transport.un_number)}</div>
+                </div>
+                ` : ''}
+
+                ${data.extracted.transport.proper_shipping_name ? `
+                <div class="field-group">
+                    <div class="field-label">Proper Shipping Name</div>
+                    <div class="field-value">${escapeHtml(data.extracted.transport.proper_shipping_name)}</div>
+                </div>
+                ` : ''}
+
+                ${data.extracted.transport.hazard_class ? `
+                <div class="field-group">
+                    <div class="field-label">Hazard Class</div>
+                    <div class="field-value">${escapeHtml(data.extracted.transport.hazard_class)}</div>
+                </div>
+                ` : ''}
+
+                ${data.extracted.transport.packing_group ? `
+                <div class="field-group">
+                    <div class="field-label">Packing Group</div>
+                    <div class="field-value">${escapeHtml(data.extracted.transport.packing_group)}</div>
+                </div>
+                ` : ''}
+
+                ${data.extracted.product.emergency_phone ? `
+                <div class="field-group">
+                    <div class="field-label">Emergency Phone</div>
+                    <div class="field-value">${escapeHtml(data.extracted.product.emergency_phone)}</div>
                 </div>
                 ` : ''}
 
