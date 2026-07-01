@@ -1054,6 +1054,7 @@ class LabelPipeline:
         preview_payload = {
             **metadata["preview"],
             "inline_svg": inline_svg,
+            "pages": LabelPipeline._preview_pages(metadata, inline_svg),
         }
         download_payload = {
             **metadata["download"],
@@ -1109,6 +1110,44 @@ class LabelPipeline:
         except OSError as exc:
             logger.warning("Could not inline preview SVG for %s: %s", metadata.get("label_id"), exc)
         return None
+
+    @staticmethod
+    def _preview_pages(metadata: dict, product_label_svg: Optional[str]) -> list[dict]:
+        """Build the in-app preview pages in the same order as the downloaded PDF."""
+        pages: list[dict] = []
+        preview_url = metadata.get("preview_url")
+        if product_label_svg or preview_url:
+            pages.append({
+                "page_number": 1,
+                "label": "Product label",
+                "media_type": "image/svg+xml",
+                "inline_svg": product_label_svg,
+                "url": preview_url,
+            })
+
+        dot_stickers = metadata.get("dot_stickers") or {}
+        if not dot_stickers.get("available"):
+            return pages
+
+        required_stickers = dot_stickers.get("stickers") or []
+        if not required_stickers:
+            return pages
+
+        try:
+            sticker_pages = DotStickerSheetRenderer().render_svg_pages(required_stickers)
+        except DotStickerSheetUnavailable as exc:
+            logger.warning("Could not build DOT sticker preview for %s: %s", metadata.get("label_id"), exc)
+            return pages
+
+        for index, sticker_svg in enumerate(sticker_pages, start=2):
+            pages.append({
+                "page_number": index,
+                "label": "DOT sticker sheet",
+                "media_type": "image/svg+xml",
+                "inline_svg": sticker_svg,
+                "url": None,
+            })
+        return pages
 
     @staticmethod
     def _read_pdf_data_url(metadata: dict) -> Optional[str]:

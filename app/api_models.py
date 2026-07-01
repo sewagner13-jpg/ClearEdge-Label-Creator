@@ -58,6 +58,7 @@ class PreviewPayload(BaseModel):
     url: Optional[str] = None
     media_type: Optional[str] = None
     inline_svg: Optional[str] = None
+    pages: Optional[List[dict]] = None
 
 
 class DownloadPayload(BaseModel):

@@ -189,6 +189,28 @@ h1 {
     font-weight: 700;
 }
 
+.label-preview-page {
+    margin-top: 14px;
+}
+
+.label-preview-page:first-of-type {
+    margin-top: 0;
+}
+
+.label-preview-page-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+    color: #110251;
+}
+
+.label-preview-page-heading a {
+    color: #110251;
+    font-weight: 700;
+}
+
 .label-preview-frame {
     width: 100%;
     height: 620px;
@@ -260,6 +282,11 @@ h1 {
     }
 
     .label-preview-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .label-preview-page-heading {
         align-items: flex-start;
         flex-direction: column;
     }

@@ -253,20 +253,43 @@ function renderBrandingSummary(branding) {
 function renderLabelPreview(data) {
     const inlineSvg = data?.preview?.inline_svg;
     const previewUrl = data?.preview?.url || data?.label?.preview_url;
-    if (!inlineSvg && !previewUrl) return '';
-    const frameSource = inlineSvg
-        ? `srcdoc="${escapeHtml(inlineSvg)}"`
-        : `src="${apiUrl(previewUrl)}"`;
+    const previewPages = Array.isArray(data?.preview?.pages) ? data.preview.pages : [];
+    const pages = previewPages.length
+        ? previewPages
+        : [{
+            page_number: 1,
+            label: 'Product label',
+            inline_svg: inlineSvg,
+            url: previewUrl,
+            media_type: data?.preview?.media_type || 'image/svg+xml'
+        }];
+    const renderablePages = pages.filter(page => page?.inline_svg || page?.url);
+    if (!renderablePages.length) return '';
+
+    const pageFrames = renderablePages.map((page, index) => {
+        const pageNumber = page.page_number || index + 1;
+        const pageLabel = page.label || `Preview page ${pageNumber}`;
+        const pageUrl = page.url ? apiUrl(page.url) : '';
+        const frameSource = page.inline_svg
+            ? `srcdoc="${escapeHtml(page.inline_svg)}"`
+            : `src="${escapeHtml(pageUrl)}"`;
+        return `
+            <section class="label-preview-page">
+                <div class="label-preview-page-heading">
+                    <strong>Page ${escapeHtml(pageNumber)}: ${escapeHtml(pageLabel)}</strong>
+                    ${pageUrl ? `<a href="${escapeHtml(pageUrl)}" target="_blank" rel="noopener">Open larger preview</a>` : ''}
+                </div>
+                <iframe class="label-preview-frame" title="Generated label preview page ${escapeHtml(pageNumber)}" ${frameSource}></iframe>
+            </section>
+        `;
+    }).join('');
 
     return `
         <div class="label-preview-panel">
             <div class="label-preview-heading">
                 <h3>Label Preview</h3>
-                ${previewUrl ? `
-                <a href="${apiUrl(previewUrl)}" target="_blank" rel="noopener">Open larger preview</a>
-                ` : ''}
             </div>
-            <iframe class="label-preview-frame" title="Generated label preview" ${frameSource}></iframe>
+            ${pageFrames}
         </div>
     `;
 }
