@@ -69,6 +69,29 @@ def test_generated_pdf_uses_full_requested_label_page_size():
     assert float(drum_page.mediabox.height) == 648
 
 
+def test_header_shipment_fields_do_not_overlap_long_product_name():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="Needs Review Smoke Product"),
+        ghs=GHSClassification(),
+        transport=TransportClassification(),
+        shipment=ShipmentInfo(
+            lot_number="SMOKE-REVIEW",
+            expiration_date="2027-07-01",
+            fill_amount="441 lb",
+        ),
+    )
+
+    svg = generator.generate_svg(data, mode="shipped_dot", size="pail", orientation="vertical")
+
+    assert 'x="262" y="108" font-size="10.5"' in svg
+    assert 'x="400" y="108" font-size="10.5"' in svg
+    assert 'x="508" y="108" font-size="10.5"' in svg
+    assert "SMOKE-REVIEW" in svg
+    assert "2027-07-01" in svg
+    assert "441 lb" in svg
+
+
 def test_fit_text_truncates_deterministically():
     text = "This is a very long product name that should be truncated"
     fitted = LabelGenerator._fit_text(text, 20)
@@ -379,17 +402,17 @@ def test_shipment_lot_and_expiration_have_header_spacing():
     )
 
     lot_value_match = re.search(
-        r'<text x="(?P<x>\d+)" y="102" font-size="15\.5"[^>]*>\s*LOT-1234567890\s*</text>',
+        r'<text x="(?P<x>\d+)" y="108" font-size="12\.5"[^>]*>\s*LOT-1234567890\s*</text>',
         svg,
     )
     exp_label_match = re.search(
-        r'<text x="(?P<x>\d+)" y="101" font-size="10\.5"[^>]*>\s*Exp\.:\s*</text>',
+        r'<text x="(?P<x>\d+)" y="94" font-size="8\.5"[^>]*>\s*Exp\.:\s*</text>',
         svg,
     )
 
     assert lot_value_match
     assert exp_label_match
-    assert int(exp_label_match.group("x")) - int(lot_value_match.group("x")) >= 135
+    assert int(exp_label_match.group("x")) - int(lot_value_match.group("x")) >= 180
 
 
 def test_long_product_name_wraps_inside_header_without_logo_box():
@@ -422,12 +445,12 @@ def test_shipment_fields_render_in_header():
 
     assert 'id="shipment-info"' in svg
     assert "Lot #:" in svg
-    assert 'font-size="15.5" font-weight="bold"' in svg
+    assert 'font-size="10.5" font-weight="bold"' in svg
     assert "Exp.:" in svg
     assert "Net Wt.:" in svg
     assert "441 lb" in svg
     assert svg.count("________") == 2
-    assert 'font-size="13.5" font-weight="bold"' in svg
+    assert 'y="108" font-size="10.5" font-weight="bold"' in svg
 
 
 def test_header_shipment_fields_fit_with_full_size_logo():
@@ -441,7 +464,7 @@ def test_header_shipment_fields_fit_with_full_size_logo():
 
     svg = generator.generate_svg(data, mode="workplace", size="drum")
 
-    weight_match = re.search(r'<text x="(?P<x>\d+)" y="102" font-size="13.5"[^>]*>\s*441 lb', svg, re.S)
+    weight_match = re.search(r'<text x="(?P<x>\d+)" y="108" font-size="10.5"[^>]*>\s*441 lb', svg, re.S)
     assert weight_match
     assert int(weight_match.group("x")) <= 574
 

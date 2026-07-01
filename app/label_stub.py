@@ -62,22 +62,22 @@ class LabelGenerator:
   {% endfor %}
   <g id="shipment-info">
     <line x1="{{ product_area_x }}" y1="83" x2="{{ width - 22 }}" y2="83" stroke="#D7D0E8" stroke-width="1"/>
-    <text x="{{ lot_label_x }}" y="101" font-size="10.5" font-weight="bold" fill="{{ brand_purple }}">
+    <text x="{{ lot_label_x }}" y="94" font-size="8.5" font-weight="bold" fill="{{ brand_purple }}">
       Lot #:
     </text>
-    <text x="{{ lot_value_x }}" y="102" font-size="15.5" font-weight="bold" fill="{{ text_color }}">
+    <text x="{{ lot_value_x }}" y="108" font-size="{{ shipment_value_font_size }}" font-weight="bold" fill="{{ text_color }}">
       {{ lot_number_display }}
     </text>
-    <text x="{{ expiration_label_x }}" y="101" font-size="10.5" font-weight="bold" fill="{{ brand_purple }}">
+    <text x="{{ expiration_label_x }}" y="94" font-size="8.5" font-weight="bold" fill="{{ brand_purple }}">
       Exp.:
     </text>
-    <text x="{{ expiration_value_x }}" y="102" font-size="13.5" font-weight="bold" fill="{{ text_color }}">
+    <text x="{{ expiration_value_x }}" y="108" font-size="{{ shipment_value_font_size }}" font-weight="bold" fill="{{ text_color }}">
       {{ expiration_date_display }}
     </text>
-    <text x="{{ weight_label_x }}" y="101" font-size="10.5" font-weight="bold" fill="{{ brand_purple }}">
+    <text x="{{ weight_label_x }}" y="94" font-size="8.5" font-weight="bold" fill="{{ brand_purple }}">
       Net Wt.:
     </text>
-    <text x="{{ weight_value_x }}" y="102" font-size="13.5" font-weight="bold" fill="{{ text_color }}">
+    <text x="{{ weight_value_x }}" y="108" font-size="{{ shipment_value_font_size }}" font-weight="bold" fill="{{ text_color }}">
       {{ fill_amount_display }}
     </text>
   </g>
@@ -593,12 +593,12 @@ class LabelGenerator:
         return {
             "lines": lines,
             "font_size": font_size,
-            "y": 48,
-            "line_gap": font_size + 5,
+            "y": 43,
+            "line_gap": min(font_size + 1, 30),
         }
 
     @classmethod
-    def _format_fill_amount(cls, fill_amount: Optional[str]) -> str:
+    def _format_fill_amount(cls, fill_amount: Optional[str], max_chars: int = 16) -> str:
         """Return fill amount with an explicit lb/kg unit for label readability."""
         fallback = "________"
         if not fill_amount:
@@ -620,29 +620,47 @@ class LabelGenerator:
             " kilograms",
         )
         if any(marker in f" {normalized}" for marker in unit_markers):
-            return cls._fit_text(clean, 16, fallback)
+            return cls._fit_text(clean, max_chars, fallback)
 
         numeric = normalized.replace(",", "").replace(" ", "")
         if numeric.replace(".", "", 1).isdigit():
-            return cls._fit_text(f"{clean} lb", 16, fallback)
+            return cls._fit_text(f"{clean} lb", max_chars, fallback)
 
-        return cls._fit_text(clean, 16, fallback)
+        return cls._fit_text(clean, max_chars, fallback)
 
     @staticmethod
     def _shipment_header_spacing(width: int, product_area_x: int) -> dict:
         """Keep Lot, Expiration, and Net Weight fields visually separated."""
-        if width >= 760:
-            expiration_label_offset = 190
-            expiration_value_offset = 228
+        available_width = max(280, width - product_area_x - 22)
+        if available_width >= 460:
+            lot_width = 185
+            expiration_width = 150
+            font_size = 12.5
+            lot_chars = 18
+            expiration_chars = 14
+            fill_chars = 14
         else:
-            expiration_label_offset = 158
-            expiration_value_offset = 194
+            lot_width = 138
+            expiration_width = 108
+            font_size = 10.5
+            lot_chars = 13
+            expiration_chars = 10
+            fill_chars = 10
+
+        expiration_x = product_area_x + lot_width
+        weight_x = product_area_x + lot_width + expiration_width
 
         return {
             "lot_label_x": product_area_x,
-            "lot_value_x": product_area_x + 42,
-            "expiration_label_x": product_area_x + expiration_label_offset,
-            "expiration_value_x": product_area_x + expiration_value_offset,
+            "lot_value_x": product_area_x,
+            "expiration_label_x": expiration_x,
+            "expiration_value_x": expiration_x,
+            "weight_label_x": weight_x,
+            "weight_value_x": weight_x,
+            "shipment_value_font_size": font_size,
+            "lot_max_chars": lot_chars,
+            "expiration_max_chars": expiration_chars,
+            "fill_max_chars": fill_chars,
         }
 
     @classmethod
@@ -1010,16 +1028,28 @@ class LabelGenerator:
             "lot_value_x": shipment_spacing["lot_value_x"],
             "expiration_label_x": shipment_spacing["expiration_label_x"],
             "expiration_value_x": shipment_spacing["expiration_value_x"],
-            "weight_label_x": width - 128,
-            "weight_value_x": width - 74,
+            "weight_label_x": shipment_spacing["weight_label_x"],
+            "weight_value_x": shipment_spacing["weight_value_x"],
+            "shipment_value_font_size": shipment_spacing["shipment_value_font_size"],
             "product_name_font_size": heading["font_size"],
             "product_name_y": heading["y"],
             "product_name_line_gap": heading["line_gap"],
             "product_name_lines": heading["lines"],
             "product_name": " ".join(heading["lines"]),
-            "lot_number_display": self._fit_text(shipment.lot_number, 14, "________"),
-            "expiration_date_display": self._fit_text(shipment.expiration_date, 14, "________"),
-            "fill_amount_display": self._format_fill_amount(shipment.fill_amount),
+            "lot_number_display": self._fit_text(
+                shipment.lot_number,
+                shipment_spacing["lot_max_chars"],
+                "________",
+            ),
+            "expiration_date_display": self._fit_text(
+                shipment.expiration_date,
+                shipment_spacing["expiration_max_chars"],
+                "________",
+            ),
+            "fill_amount_display": self._format_fill_amount(
+                shipment.fill_amount,
+                shipment_spacing["fill_max_chars"],
+            ),
             "signal_word": data.ghs.signal_word,
             "pictograms": data.ghs.pictograms,
             "pictogram_icons": self._format_pictograms(data.ghs.pictograms),
