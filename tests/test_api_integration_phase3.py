@@ -345,6 +345,8 @@ def test_generate_regulated_dot_label_exposes_separate_sticker_pdf_when_download
         assert "artifact_path" not in payload["dot_stickers"]
         assert payload["dot_stickers"]["sticker_size_mm"] == 100
         assert [item["hazard_class"] for item in payload["dot_stickers"]["stickers"]] == ["3", "8"]
+        assert payload["preview"]["page_count"] == 2
+        assert payload["download"]["page_count"] == 2
         assert [page["page_number"] for page in payload["preview"]["pages"]] == [1, 2]
         assert payload["preview"]["pages"][0]["label"] == "Product label"
         assert payload["preview"]["pages"][0]["url"] == f"/api/v1/labels/{label_id}/preview.svg"
@@ -353,6 +355,12 @@ def test_generate_regulated_dot_label_exposes_separate_sticker_pdf_when_download
         assert payload["preview"]["pages"][1]["url"] == (
             f"/api/v1/labels/{label_id}/dot-stickers/preview-page-1.svg"
         )
+        assert payload["dot_stickers"]["preview_pages"] == [{
+            "page_number": 2,
+            "label": "DOT sticker sheet",
+            "media_type": "image/svg+xml",
+            "url": f"/api/v1/labels/{label_id}/dot-stickers/preview-page-1.svg",
+        }]
 
         sticker_preview = client.get(payload["preview"]["pages"][1]["url"])
         assert sticker_preview.status_code == 200
@@ -375,6 +383,90 @@ def test_generate_regulated_dot_label_exposes_separate_sticker_pdf_when_download
 
         inline_pdf = PdfReader(BytesIO(base64.b64decode(payload["download"]["data_url"].split(",", 1)[1])))
         assert len(inline_pdf.pages) == 2
+
+
+def test_not_regulated_dot_label_explains_no_sticker_page(tmp_path):
+    setup_fakes(tmp_path, passed=True)
+
+    with TestClient(main.app) as client:
+        files = {"files": ("test_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
+        data = {
+            "product_name": "Not Regulated Product",
+            "mode": "shipped_dot",
+            "size": "drum",
+            "fill_amount": "441 lb",
+            "transport_status": "not_regulated",
+        }
+
+        generate_res = client.post("/api/v1/labels/generate", files=files, data=data)
+
+        assert generate_res.status_code == 200
+        payload = generate_res.json()
+        assert payload["preview"]["page_count"] == 1
+        assert payload["download"]["page_count"] == 1
+        assert len(payload["preview"]["pages"]) == 1
+        assert payload["dot_stickers"]["available"] is False
+        assert payload["dot_stickers"]["preview_pages"] == []
+        assert payload["dot_stickers"]["reason"] == "No DOT sticker page required: product is not regulated for transport."
+
+
+def test_regulated_dot_label_without_hazard_class_explains_missing_sticker_page(tmp_path):
+    setup_fakes(tmp_path, passed=True)
+
+    with TestClient(main.app) as client:
+        files = {"files": ("test_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
+        data = {
+            "product_name": "Missing Hazard Class Product",
+            "mode": "shipped_dot",
+            "size": "drum",
+            "fill_amount": "441 lb",
+            "transport_status": "regulated",
+            "un_number": "UN1993",
+            "proper_shipping_name": "Flammable liquid, n.o.s. (solvent)",
+            "packing_group": "II",
+        }
+
+        generate_res = client.post("/api/v1/labels/generate", files=files, data=data)
+
+        assert generate_res.status_code == 200
+        payload = generate_res.json()
+        assert payload["preview"]["page_count"] == 1
+        assert payload["download"]["page_count"] == 1
+        assert payload["dot_stickers"]["available"] is False
+        assert payload["dot_stickers"]["preview_pages"] == []
+        assert payload["dot_stickers"]["reason"] == (
+            "DOT sticker sheet not generated - enter hazard class."
+        )
+
+
+def test_unsupported_dot_label_class_explains_missing_sticker_asset(tmp_path):
+    setup_fakes(tmp_path, passed=True)
+
+    with TestClient(main.app) as client:
+        files = {"files": ("test_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
+        data = {
+            "product_name": "Unsupported Sticker Product",
+            "mode": "shipped_dot",
+            "size": "drum",
+            "fill_amount": "441 lb",
+            "transport_status": "regulated",
+            "un_number": "UN2810",
+            "proper_shipping_name": "Toxic liquid, organic, n.o.s.",
+            "hazard_class": "6.1",
+            "packing_group": "II",
+        }
+
+        generate_res = client.post("/api/v1/labels/generate", files=files, data=data)
+
+        assert generate_res.status_code == 200
+        payload = generate_res.json()
+        assert payload["preview"]["page_count"] == 1
+        assert payload["download"]["page_count"] == 1
+        assert payload["dot_stickers"]["available"] is False
+        assert payload["dot_stickers"]["preview_pages"] == []
+        assert payload["dot_stickers"]["reason"] == (
+            "DOT sticker sheet not generated - approved DOT sticker asset is missing for hazard class 6.1."
+        )
 
 
 def test_blocked_dot_label_keeps_sticker_pdf_download_blocked_until_override(tmp_path):

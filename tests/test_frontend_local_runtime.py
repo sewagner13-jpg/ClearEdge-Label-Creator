@@ -55,6 +55,8 @@ def test_frontend_handles_dot_sticker_pdf_download_contract():
     assert "dot_sticker_pdf_url" in app_js
     assert "Download DOT Stickers PDF" in app_js
     assert "A separate DOT sticker PDF is also available" in app_js
+    assert "DOT sticker sheet not generated" in app_js
+    assert "No DOT sticker page required" in app_js
 
 
 def test_frontend_shows_review_notes_without_blocked_download_copy():
@@ -69,6 +71,10 @@ def test_frontend_renders_inline_preview_and_download_data_url_first():
     app_js = (REPO_ROOT / "netlify-frontend" / "app.js").read_text()
 
     assert "preview?.pages" in app_js
+    assert "preview?.page_count" in app_js
+    assert "label-preview-grid" in app_js
+    assert "label-preview-card" in app_js
+    assert "Page ${escapeHtml(pageNumber)} - ${escapeHtml(pageLabel)}" in app_js
     assert "label-preview-page" in app_js
     assert "const frameSource = pageUrl" in app_js
     assert "preview?.inline_svg" in app_js
@@ -76,6 +82,8 @@ def test_frontend_renders_inline_preview_and_download_data_url_first():
     assert "download_data_url" in app_js
     assert "data_url" in app_js
     assert "const downloadHref = downloadUrl ?" in app_js
+    assert "Download Full Label PDF" in app_js
+    assert "formatPageCount" in app_js
 
 
 def test_backend_root_serves_local_frontend():

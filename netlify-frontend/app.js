@@ -250,6 +250,37 @@ function renderBrandingSummary(branding) {
     `;
 }
 
+function formatPageCount(pageCount) {
+    const count = Number(pageCount || 0);
+    if (!count) return '';
+    return `${count} ${count === 1 ? 'page' : 'pages'}`;
+}
+
+function formatPreviewPageLabel(label) {
+    const value = String(label || '').trim();
+    const knownLabels = {
+        'Product label': 'Product Label',
+        'DOT sticker sheet': 'DOT Sticker Sheet'
+    };
+    return knownLabels[value] || value || 'Preview Page';
+}
+
+function renderDotStickerPreviewStatus(dotStickers, pages) {
+    const hasStickerPreview = pages.some(page => String(page?.label || '').toLowerCase().includes('dot sticker'));
+    if (hasStickerPreview || !dotStickers) return '';
+
+    const reason = dotStickers.reason || 'DOT sticker sheet not generated - review DOT shipping data.';
+    const isNoStickerRequired = reason.startsWith('No DOT sticker page required');
+    const title = isNoStickerRequired ? 'No DOT sticker page required' : 'DOT sticker sheet not generated';
+
+    return `
+        <div class="dot-sticker-status-card">
+            <strong>${escapeHtml(title)}</strong>
+            <span>${escapeHtml(reason)}</span>
+        </div>
+    `;
+}
+
 function renderLabelPreview(data) {
     const inlineSvg = data?.preview?.inline_svg;
     const previewUrl = data?.preview?.url || data?.label?.preview_url;
@@ -265,21 +296,27 @@ function renderLabelPreview(data) {
         }];
     const renderablePages = pages.filter(page => page?.inline_svg || page?.url);
     if (!renderablePages.length) return '';
+    const previewPageCount = data?.preview?.page_count || renderablePages.length;
 
     const pageFrames = renderablePages.map((page, index) => {
         const pageNumber = page.page_number || index + 1;
-        const pageLabel = page.label || `Preview page ${pageNumber}`;
+        const pageLabel = formatPreviewPageLabel(page.label || `Preview page ${pageNumber}`);
         const pageUrl = page.url ? apiUrl(page.url) : '';
         const frameSource = pageUrl
-            ? `src="${escapeHtml(pageUrl)}"`
+            ? `data="${escapeHtml(pageUrl)}"`
             : `srcdoc="${escapeHtml(page.inline_svg)}"`;
+        const previewSurface = pageUrl
+            ? `<object class="label-preview-object" type="${escapeHtml(page.media_type || 'image/svg+xml')}" ${frameSource}>
+                    <a href="${escapeHtml(pageUrl)}" target="_blank" rel="noopener">Open preview page</a>
+               </object>`
+            : `<iframe class="label-preview-frame" title="Generated label preview page ${escapeHtml(pageNumber)}" ${frameSource}></iframe>`;
         return `
-            <section class="label-preview-page">
+            <section class="label-preview-page label-preview-card">
                 <div class="label-preview-page-heading">
-                    <strong>Page ${escapeHtml(pageNumber)}: ${escapeHtml(pageLabel)}</strong>
+                    <strong>Page ${escapeHtml(pageNumber)} - ${escapeHtml(pageLabel)}</strong>
                     ${pageUrl ? `<a href="${escapeHtml(pageUrl)}" target="_blank" rel="noopener">Open larger preview</a>` : ''}
                 </div>
-                <iframe class="label-preview-frame" title="Generated label preview page ${escapeHtml(pageNumber)}" ${frameSource}></iframe>
+                ${previewSurface}
             </section>
         `;
     }).join('');
@@ -287,9 +324,12 @@ function renderLabelPreview(data) {
     return `
         <div class="label-preview-panel">
             <div class="label-preview-heading">
-                <h3>Label Preview</h3>
+                <h3>Label Preview${formatPageCount(previewPageCount) ? ` (${formatPageCount(previewPageCount)})` : ''}</h3>
             </div>
-            ${pageFrames}
+            <div class="label-preview-grid">
+                ${pageFrames}
+                ${renderDotStickerPreviewStatus(data.dot_stickers, renderablePages)}
+            </div>
         </div>
     `;
 }
@@ -437,19 +477,22 @@ function removeFile(index) {
     generateBtn.disabled = selectedFiles.length === 0;
 }
 
-function renderActionLinks(label, download) {
+function renderActionLinks(label, download, options = {}) {
     const downloadUrl = label?.download_url;
     const downloadDataUrl = label?.download_data_url || download?.data_url;
     const downloadHref = downloadUrl ? apiUrl(downloadUrl) : downloadDataUrl;
+    const downloadPageCount = download?.page_count || label?.page_count;
+    const downloadPageText = formatPageCount(downloadPageCount);
     const dotStickerPdfUrl = label?.dot_sticker_pdf_url;
     const canvaCsvUrl = label?.canva_csv_url;
     const canvaJsonUrl = label?.canva_json_url;
     const canvaFieldMapUrl = `${API_URL}/api/v1/canva/template-fields`;
+    const showCanvaHandoff = options.includeCanva !== false && Boolean(canvaCsvUrl || canvaJsonUrl);
 
     return `
         ${downloadHref ? `
         <a href="${escapeHtml(downloadHref)}" download="clearedge-label.pdf" style="text-decoration: none;">
-            <button class="btn">📥 Download Label PDF</button>
+            <button class="btn">Download Full Label PDF${downloadPageText ? ` (${downloadPageText})` : ''}</button>
         </a>
         ` : ''}
         ${dotStickerPdfUrl ? `
@@ -457,7 +500,7 @@ function renderActionLinks(label, download) {
             <button class="btn" type="button">Download DOT Stickers PDF</button>
         </a>
         ` : ''}
-        ${canvaCsvUrl || canvaJsonUrl ? `
+        ${showCanvaHandoff ? `
         <div style="margin-top: 14px;">
             <h3>Canva Handoff</h3>
             <p style="margin: 6px 0 12px; color: #555;">
@@ -717,6 +760,10 @@ generateBtn.addEventListener('click', async () => {
                 <strong>${statusLabel(data.status)}</strong>
             </div>
 
+            <div class="result-actions result-actions-top">
+                ${renderActionLinks(data.label, data.download, { includeCanva: false })}
+            </div>
+
             ${renderLabelPreview(data)}
 
             <h3>Extracted Information</h3>
@@ -820,7 +867,9 @@ generateBtn.addEventListener('click', async () => {
             ${renderAgentCoreReview(data.agentcore_review)}
 
             <div id="actionPanel" style="margin-top: 20px;">
-                ${renderActionLinks(data.label, data.download)}
+                <div class="result-actions">
+                    ${renderActionLinks(data.label, data.download)}
+                </div>
                 ${renderValidationPanel(data.validation)}
             </div>
         `;

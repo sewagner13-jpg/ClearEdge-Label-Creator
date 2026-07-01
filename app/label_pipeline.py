@@ -26,6 +26,7 @@ from .dot_sticker_sheet import (
     DOT_STICKER_SIZE_MM,
     DotStickerSheetRenderer,
     DotStickerSheetUnavailable,
+    unsupported_dot_sticker_classes,
 )
 from .rule_based_extractor import RuleBasedExtractor
 from .schema import Evidence, ExtractedData, FieldConfidence, ValidationError, ValidationResult
@@ -1051,14 +1052,18 @@ class LabelPipeline:
     def _response_payload(metadata: dict) -> dict:
         inline_svg = LabelPipeline._read_preview_svg(metadata)
         download_data_url = LabelPipeline._read_pdf_data_url(metadata)
+        preview_pages = LabelPipeline._preview_pages(metadata, inline_svg)
+        download_page_count = LabelPipeline._read_pdf_page_count(metadata) or len(preview_pages)
         preview_payload = {
             **metadata["preview"],
             "inline_svg": inline_svg,
-            "pages": LabelPipeline._preview_pages(metadata, inline_svg),
+            "pages": preview_pages,
+            "page_count": len(preview_pages),
         }
         download_payload = {
             **metadata["download"],
             "data_url": download_data_url,
+            "page_count": download_page_count,
         }
         return {
             "label_id": metadata["label_id"],
@@ -1109,6 +1114,19 @@ class LabelPipeline:
                 return path.read_text()
         except OSError as exc:
             logger.warning("Could not inline preview SVG for %s: %s", metadata.get("label_id"), exc)
+        return None
+
+    @staticmethod
+    def _read_pdf_page_count(metadata: dict) -> Optional[int]:
+        artifact_path = metadata.get("artifact_path")
+        if not artifact_path:
+            return None
+        try:
+            path = Path(artifact_path)
+            if path.exists():
+                return len(PdfReader(str(path)).pages)
+        except Exception as exc:
+            logger.warning("Could not count PDF pages for %s: %s", metadata.get("label_id"), exc)
         return None
 
     @staticmethod
@@ -1182,9 +1200,23 @@ class LabelPipeline:
         sticker_url = f"/api/v1/labels/{label_id}/dot-stickers.pdf" if sticker_artifact_exists else None
 
         if not dot_shipping_review.get("separate_dot_sticker_required"):
-            reason = "No separate DOT sticker PDF is required for this label."
+            if not dot_shipping_review.get("applicable"):
+                reason = "No DOT sticker page required: label mode does not require DOT stickers."
+            elif dot_shipping_review.get("dot_exception_status") == "not_regulated":
+                reason = "No DOT sticker page required: product is not regulated for transport."
+            elif dot_shipping_review.get("dot_exception_status") == "regulated":
+                reason = "DOT sticker sheet not generated - enter hazard class."
+            else:
+                reason = "No DOT sticker page required: DOT review did not require a separate hazard sticker."
         elif not sticker_artifact_exists:
-            reason = "DOT sticker PDF unavailable because an approved DOT sticker asset is missing."
+            unsupported_classes = unsupported_dot_sticker_classes(required_stickers)
+            if unsupported_classes:
+                reason = (
+                    "DOT sticker sheet not generated - approved DOT sticker asset is missing for hazard class "
+                    f"{', '.join(unsupported_classes)}."
+                )
+            else:
+                reason = "DOT sticker sheet not generated - approved DOT sticker asset is missing."
         else:
             reason = None
 
@@ -1194,8 +1226,31 @@ class LabelPipeline:
             "sticker_size_mm": DOT_STICKER_SIZE_MM,
             "sheet_size": "US Letter",
             "stickers": required_stickers,
+            "preview_pages": LabelPipeline._dot_sticker_preview_pages(
+                label_id,
+                required_stickers,
+                sticker_artifact_exists,
+            ),
             "reason": reason,
         }
+
+    @staticmethod
+    def _dot_sticker_preview_pages(label_id: str, required_stickers: list[dict], available: bool) -> list[dict]:
+        if not available or not required_stickers:
+            return []
+        try:
+            sticker_pages = DotStickerSheetRenderer().render_svg_pages(required_stickers)
+        except DotStickerSheetUnavailable:
+            return []
+        return [
+            {
+                "page_number": index + 1,
+                "label": "DOT sticker sheet",
+                "media_type": "image/svg+xml",
+                "url": f"/api/v1/labels/{label_id}/dot-stickers/preview-page-{index}.svg",
+            }
+            for index, _page in enumerate(sticker_pages, start=1)
+        ]
 
     @staticmethod
     def _is_missing(value) -> bool:
