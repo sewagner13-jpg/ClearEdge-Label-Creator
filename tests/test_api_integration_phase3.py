@@ -151,17 +151,20 @@ def test_generate_blocked_then_override_then_download(tmp_path):
         assert generate_res.status_code == 200
         payload = generate_res.json()
         label_id = payload["label_id"]
-        assert payload["label"]["download_url"] is None
+        assert payload["status"] == "needs_review"
+        assert payload["label"]["download_url"] == f"/api/v1/labels/{label_id}/download"
+        assert payload["download"]["available"] is True
         assert payload["preview"]["available"] is True
         assert payload["label"]["preview_url"].endswith(f"/{label_id}/preview.svg")
 
         preview = client.get(payload["label"]["preview_url"])
         assert preview.status_code == 200
         assert "image/svg+xml" in preview.headers["content-type"]
+        assert "attachment" not in preview.headers.get("content-disposition", "").lower()
         assert b"<svg" in preview.content
 
         blocked_download = client.get(f"/api/v1/labels/{label_id}/download")
-        assert blocked_download.status_code == 403
+        assert blocked_download.status_code == 200
 
         override_res = client.post(
             f"/api/v1/labels/{label_id}/override-approval",
@@ -247,7 +250,8 @@ def test_corrections_endpoint_reruns_validation_and_enables_download(tmp_path):
         assert generate_res.status_code == 200
         payload = generate_res.json()
         label_id = payload["label_id"]
-        assert payload["status"] == "blocked"
+        assert payload["status"] == "needs_review"
+        assert payload["download"]["available"] is True
 
         correction_res = client.patch(
             f"/api/v1/labels/{label_id}/corrections",
@@ -360,10 +364,10 @@ def test_blocked_dot_label_keeps_sticker_pdf_download_blocked_until_override(tmp
         payload = generate_res.json()
         label_id = payload["label_id"]
 
-        assert payload["label"]["dot_sticker_pdf_url"] is None
-        assert payload["dot_stickers"]["available"] is False
-        blocked_stickers = client.get(f"/api/v1/labels/{label_id}/dot-stickers.pdf")
-        assert blocked_stickers.status_code == 403
+        assert payload["label"]["dot_sticker_pdf_url"] == f"/api/v1/labels/{label_id}/dot-stickers.pdf"
+        assert payload["dot_stickers"]["available"] is True
+        sticker_download = client.get(f"/api/v1/labels/{label_id}/dot-stickers.pdf")
+        assert sticker_download.status_code == 200
 
         override_res = client.post(
             f"/api/v1/labels/{label_id}/override-approval",

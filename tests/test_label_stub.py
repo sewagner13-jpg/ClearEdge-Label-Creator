@@ -1,6 +1,9 @@
 from pathlib import Path
 import base64
+from io import BytesIO
 import re
+
+from pypdf import PdfReader
 
 from app.label_stub import LabelGenerator
 from app.schema import (
@@ -41,8 +44,29 @@ def test_horizontal_orientation_uses_same_template_dimensions_rotated():
     vertical_svg = generator.generate_svg(data, mode="workplace", size="pail", orientation="vertical")
     horizontal_svg = generator.generate_svg(data, mode="workplace", size="pail", orientation="horizontal")
 
-    assert '<svg width="612" height="792"' in vertical_svg
-    assert '<svg width="792" height="612"' in horizontal_svg
+    assert '<svg width="612pt" height="792pt"' in vertical_svg
+    assert '<svg width="792pt" height="612pt"' in horizontal_svg
+
+
+def test_generated_pdf_uses_full_requested_label_page_size():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="ClearEdge PDF Size Test"),
+        ghs=GHSClassification(),
+        transport=TransportClassification(),
+    )
+
+    pail_svg = generator.generate_svg(data, mode="workplace", size="pail", orientation="vertical")
+    pail_pdf = generator.generate_pdf(pail_svg)
+    pail_page = PdfReader(BytesIO(pail_pdf)).pages[0]
+    assert float(pail_page.mediabox.width) == 612
+    assert float(pail_page.mediabox.height) == 792
+
+    drum_svg = generator.generate_svg(data, mode="workplace", size="drum", orientation="horizontal")
+    drum_pdf = generator.generate_pdf(drum_svg)
+    drum_page = PdfReader(BytesIO(drum_pdf)).pages[0]
+    assert float(drum_page.mediabox.width) == 864
+    assert float(drum_page.mediabox.height) == 648
 
 
 def test_fit_text_truncates_deterministically():

@@ -248,12 +248,12 @@ async def test_agentcore_conflict_forces_needs_review(tmp_path, monkeypatch):
     )
 
     assert result["status"] == "needs_review"
-    assert result["download"]["available"] is False
+    assert result["download"]["available"] is True
     assert any(error["field"] == "agentcore.transport.un_number" for error in result["errors"])
 
 
 @pytest.mark.asyncio
-async def test_agentcore_blocking_issue_blocks_download(tmp_path, monkeypatch):
+async def test_agentcore_blocking_issue_marks_needs_review_without_blocking_download(tmp_path, monkeypatch):
     monkeypatch.setattr(label_pipeline.settings, "agentcore_enabled", True)
     review = {
         "status": "reviewed",
@@ -277,8 +277,8 @@ async def test_agentcore_blocking_issue_blocks_download(tmp_path, monkeypatch):
         size="pail",
     )
 
-    assert result["status"] == "blocked"
-    assert result["download"]["available"] is False
+    assert result["status"] == "needs_review"
+    assert result["download"]["available"] is True
     assert any(error["field"] == "agentcore.transport.proper_shipping_name" for error in result["errors"])
 
 

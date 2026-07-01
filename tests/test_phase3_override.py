@@ -1,7 +1,4 @@
 import asyncio
-from pathlib import Path
-
-from fastapi import HTTPException
 
 from app import main
 
@@ -31,7 +28,7 @@ def test_override_approval_enables_download_url(tmp_path):
     assert result["download_url"].endswith(f"/{label_id}/download")
 
 
-def test_download_blocked_without_override(tmp_path):
+def test_download_available_without_override_for_operator_review(tmp_path):
     label_id = "label_blocked"
     main.LABELS_DIR = tmp_path
     (tmp_path / f"{label_id}.pdf").write_bytes(b"%PDF-1.4 test")
@@ -43,9 +40,5 @@ def test_download_blocked_without_override(tmp_path):
         "download_url": None,
     }
 
-    try:
-        asyncio.run(main.download_label_v1(label_id))
-        assert False, "Expected HTTPException"
-    except HTTPException as exc:
-        assert exc.status_code == 403
-        assert "DOWNLOAD_BLOCKED_VALIDATION_FAILED" in str(exc.detail)
+    response = asyncio.run(main.download_label_v1(label_id))
+    assert str(response.path).endswith(f"{label_id}.pdf")

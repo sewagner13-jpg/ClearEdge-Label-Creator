@@ -56,6 +56,14 @@ def test_frontend_handles_dot_sticker_pdf_download_contract():
     assert "DOT sticker PDF available" in app_js
 
 
+def test_frontend_shows_review_notes_without_blocked_download_copy():
+    app_js = (REPO_ROOT / "netlify-frontend" / "app.js").read_text()
+
+    assert "Download blocked" not in app_js
+    assert "Approve Override & Enable Download" not in app_js
+    assert "Review before downloading or printing" in app_js
+
+
 def test_backend_root_serves_local_frontend():
     with TestClient(app) as client:
         response = client.get("/")

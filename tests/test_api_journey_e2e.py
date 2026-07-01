@@ -78,7 +78,7 @@ def setup_fakes(tmp_path: Path):
     main.agentcore_client = None
 
 
-def test_operator_journey_blocked_to_override_to_download(tmp_path):
+def test_operator_journey_needs_review_to_override_to_download(tmp_path):
     setup_fakes(tmp_path)
 
     with TestClient(main.app) as client:
@@ -87,26 +87,28 @@ def test_operator_journey_blocked_to_override_to_download(tmp_path):
         assert readiness.status_code == 200
         assert "checks" in readiness.json()
 
-        # 2) Generate blocked label
+        # 2) Generate label with validation review notes
         files = {"files": ("test_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
         data = {"product_name": "Journey Product", "mode": "shipped_dot", "size": "pail"}
         generate = client.post("/api/v1/labels/generate", files=files, data=data)
         assert generate.status_code == 200
         payload = generate.json()
         label_id = payload["label_id"]
-        assert payload["label"]["download_url"] is None
-        assert payload["label"]["canva_csv_url"] is None
+        assert payload["status"] == "needs_review"
+        assert payload["label"]["download_url"].endswith(f"/{label_id}/download")
+        assert payload["label"]["canva_csv_url"].endswith(f"/{label_id}/canva-export.csv")
+        assert payload["download"]["available"] is True
 
-        # 3) Metadata reflects blocked status
+        # 3) Metadata reflects needs-review status
         meta1 = client.get(f"/api/v1/labels/{label_id}")
         assert meta1.status_code == 200
-        assert meta1.json()["status"] == "blocked"
+        assert meta1.json()["status"] == "needs_review"
 
-        # 4) Blocked download
-        blocked_download = client.get(f"/api/v1/labels/{label_id}/download")
-        assert blocked_download.status_code == 403
-        blocked_canva_export = client.get(f"/api/v1/labels/{label_id}/canva-export.csv")
-        assert blocked_canva_export.status_code == 403
+        # 4) Preview/export remain available for operator review
+        review_download = client.get(f"/api/v1/labels/{label_id}/download")
+        assert review_download.status_code == 200
+        review_canva_export = client.get(f"/api/v1/labels/{label_id}/canva-export.csv")
+        assert review_canva_export.status_code == 200
 
         # 5) Override approval
         override = client.post(

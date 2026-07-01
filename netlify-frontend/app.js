@@ -269,7 +269,7 @@ function statusLabel(status) {
     const labels = {
         ready: 'Ready to download',
         needs_review: 'Needs review',
-        blocked: 'Blocked',
+        blocked: 'Needs review',
         override_approved: 'Override approved'
     };
     return labels[status] || 'Label generated';
@@ -472,9 +472,12 @@ function renderValidationPanel(validation) {
 
     return `
         <div style="margin-top: 14px; padding: 14px; border: 1px solid #ddd; border-radius: 6px; background: #fff;">
+            <div style="margin-bottom: 10px; color:#110251; font-weight:700;">
+                Review before downloading or printing.
+            </div>
             ${errors.length ? `
             <div style="margin-bottom: 12px;">
-                <strong>Blocking compliance issues</strong>
+                <strong>Review items</strong>
                 <ul style="margin: 8px 0 0 18px; padding: 0;">
                     ${errors.map(renderIssue).join('')}
                 </ul>
@@ -527,7 +530,7 @@ function renderDotShippingReview(review, dotStickers) {
             ` : ''}
             ${blockers.length ? `
             <div style="margin-bottom: 10px;">
-                <strong>DOT blockers</strong>
+                <strong>DOT review items</strong>
                 <ul style="margin: 8px 0 0 18px; padding: 0;">${blockers.map(renderItem).join('')}</ul>
             </div>
             ` : ''}
@@ -786,60 +789,10 @@ generateBtn.addEventListener('click', async () => {
             ${renderAgentCoreReview(data.agentcore_review)}
 
             <div id="actionPanel" style="margin-top: 20px;">
-                ${data.label?.download_url ? `
                 ${renderActionLinks(data.label)}
-                ` : `
-                <div class="error-message">
-                    <strong>Download blocked:</strong> ${escapeHtml(data.download?.reason || 'Validation failed. Fix required compliance issues first.')}
-                </div>
                 ${renderValidationPanel(data.validation)}
-                <div style="margin-top: 12px; display: grid; gap: 8px; max-width: 500px;">
-                    <input id="overrideApprover" placeholder="Approver name" style="padding:8px; border:1px solid #ccc; border-radius:4px;" />
-                    <textarea id="overrideReason" placeholder="Override reason (required)" rows="3" style="padding:8px; border:1px solid #ccc; border-radius:4px;"></textarea>
-                    <button class="btn" id="overrideBtn" style="max-width: 260px;">Approve Override & Enable Download</button>
-                </div>
-                `}
             </div>
         `;
-
-        const overrideBtn = document.getElementById('overrideBtn');
-        if (overrideBtn) {
-            overrideBtn.addEventListener('click', async () => {
-                const approver = document.getElementById('overrideApprover')?.value?.trim();
-                const reason = document.getElementById('overrideReason')?.value?.trim();
-
-                if (!approver || !reason) {
-                    alert('Approver and reason are required for override approval.');
-                    return;
-                }
-
-                try {
-                    const overrideResponse = await fetch(`${API_URL}/api/v1/labels/${data.label_id}/override-approval`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ approver, reason })
-                    });
-
-                    if (!overrideResponse.ok) {
-                        const err = await overrideResponse.text();
-                        throw new Error(err || 'Override request failed');
-                    }
-
-                    const overrideData = await overrideResponse.json();
-                    const actionPanel = document.getElementById('actionPanel');
-                    if (actionPanel) {
-                        actionPanel.innerHTML = `
-                            <div class="success-message">
-                                <strong>Override approved.</strong> Label PDF and Canva handoff files are now available.
-                            </div>
-                            ${renderActionLinks(overrideData)}
-                        `;
-                    }
-                } catch (overrideError) {
-                    alert(`Override failed: ${overrideError.message}`);
-                }
-            });
-        }
 
     } catch (error) {
         loading.classList.remove('show');

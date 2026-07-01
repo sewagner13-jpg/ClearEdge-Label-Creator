@@ -28,7 +28,7 @@ class LabelGenerator:
     CLEAREDGE_LOGO_ASPECT_RATIO = 2794 / 596
 
     SVG_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
-<svg width="{{ width }}" height="{{ height }}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" font-family="{{ body_font }}">
+<svg width="{{ width }}pt" height="{{ height }}pt" viewBox="0 0 {{ width }} {{ height }}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" font-family="{{ body_font }}">
   <!-- Background -->
   <rect width="{{ width }}" height="{{ height }}" fill="white"/>
   <rect x="5" y="5" width="{{ width - 10 }}" height="{{ height - 10 }}" fill="none" stroke="black" stroke-width="2"/>

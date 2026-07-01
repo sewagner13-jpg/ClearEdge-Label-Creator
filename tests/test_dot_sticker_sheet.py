@@ -8,6 +8,8 @@ from app.dot_sticker_sheet import (
     DOT_STICKERS_PER_PAGE,
     DotStickerSheetRenderer,
     DotStickerSheetUnavailable,
+    US_LETTER_HEIGHT_PT,
+    US_LETTER_WIDTH_PT,
 )
 
 
@@ -32,7 +34,10 @@ def test_one_required_dot_sticker_fills_letter_sheet_with_four_100mm_placements(
     assert f'height="{DOT_STICKER_SIZE_PT:.3f}"' in pages[0]
 
     pdf = renderer.generate_pdf([_sticker("3")])
-    assert len(PdfReader(BytesIO(pdf)).pages) == 1
+    reader = PdfReader(BytesIO(pdf))
+    assert len(reader.pages) == 1
+    assert float(reader.pages[0].mediabox.width) == US_LETTER_WIDTH_PT
+    assert float(reader.pages[0].mediabox.height) == US_LETTER_HEIGHT_PT
 
 
 def test_multiple_required_dot_sticker_types_alternate_on_sheet():

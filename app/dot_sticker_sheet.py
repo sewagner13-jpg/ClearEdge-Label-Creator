@@ -163,8 +163,8 @@ class DotStickerSheetRenderer:
 
         return (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
-            f'<svg xmlns="http://www.w3.org/2000/svg" width="{US_LETTER_WIDTH_PT}" '
-            f'height="{US_LETTER_HEIGHT_PT}" viewBox="0 0 {US_LETTER_WIDTH_PT} {US_LETTER_HEIGHT_PT}">\n'
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{US_LETTER_WIDTH_PT}pt" '
+            f'height="{US_LETTER_HEIGHT_PT}pt" viewBox="0 0 {US_LETTER_WIDTH_PT} {US_LETTER_HEIGHT_PT}">\n'
             '<rect width="100%" height="100%" fill="white"/>\n'
             + "\n".join(images)
             + "\n</svg>\n"

@@ -957,8 +957,8 @@ class LabelPipeline:
         dot_sticker_path: Optional[Path] = None,
     ) -> dict:
         preview_url = f"/api/v1/labels/{label_id}/preview.svg"
-        download_url = f"/api/v1/labels/{label_id}/download" if status == "ready" else None
-        canva_export_urls = canva_urls(label_id, status == "ready")
+        download_url = f"/api/v1/labels/{label_id}/download"
+        canva_export_urls = canva_urls(label_id, True)
         extracted_payload = extracted_data.model_dump(mode="json")
         dot_shipping_review = dot_shipping_review or build_dot_shipping_review(extracted_data, mode)
         dot_stickers = self._dot_stickers_payload(
@@ -967,14 +967,6 @@ class LabelPipeline:
             dot_shipping_review=dot_shipping_review,
             dot_sticker_path=dot_sticker_path,
         )
-        download_reason = None
-        if not download_url:
-            download_reason = (
-                "AgentCore review requires operator review before download."
-                if status == "needs_review"
-                else "Validation failed. Fix required compliance issues first."
-            )
-
         metadata = {
             "label_id": label_id,
             "product_name": product_name,
@@ -995,9 +987,9 @@ class LabelPipeline:
                 "media_type": "image/svg+xml",
             },
             "download": {
-                "available": bool(download_url),
+                "available": True,
                 "url": download_url,
-                "reason": download_reason,
+                "reason": None,
             },
             "status": status,
             "override_approved": False,
@@ -1017,16 +1009,7 @@ class LabelPipeline:
     @staticmethod
     def _label_status(validation_result: ValidationResult, agentcore_needs_review: bool, review: dict) -> str:
         if validation_result.errors:
-            agentcore_conflict_fields = {
-                f"agentcore.{field_review.get('field_path') or 'review'}"
-                for field_review in review.get("field_reviews") or []
-                if str(field_review.get("status") or "").lower() == "conflict"
-            }
-            only_agentcore_conflicts = (
-                bool(agentcore_conflict_fields)
-                and all(error.field in agentcore_conflict_fields for error in validation_result.errors)
-            )
-            return "needs_review" if only_agentcore_conflicts else "blocked"
+            return "needs_review"
         if agentcore_needs_review:
             return "needs_review"
         return "ready" if validation_result.passed else "blocked"
@@ -1083,14 +1066,12 @@ class LabelPipeline:
     ) -> dict:
         required_stickers = dot_shipping_review.get("required_stickers") or []
         sticker_artifact_exists = bool(dot_sticker_path and dot_sticker_path.exists())
-        sticker_url = f"/api/v1/labels/{label_id}/dot-stickers.pdf" if sticker_artifact_exists and status == "ready" else None
+        sticker_url = f"/api/v1/labels/{label_id}/dot-stickers.pdf" if sticker_artifact_exists else None
 
         if not dot_shipping_review.get("separate_dot_sticker_required"):
             reason = "No separate DOT sticker PDF is required for this label."
         elif not sticker_artifact_exists:
             reason = "DOT sticker PDF unavailable because an approved DOT sticker asset is missing."
-        elif status != "ready":
-            reason = "DOT sticker PDF download is blocked until label validation passes or override is approved."
         else:
             reason = None
 

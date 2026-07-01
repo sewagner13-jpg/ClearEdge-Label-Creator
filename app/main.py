@@ -14,7 +14,7 @@ import os
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
@@ -216,8 +216,6 @@ def _get_exportable_label(label_id: str) -> tuple[str, dict]:
     metadata = label_metadata_store.get(safe_id)
     if not metadata:
         raise HTTPException(status_code=404, detail="Label not found")
-    if not metadata.get("validation_passed") and not metadata.get("override_approved"):
-        raise HTTPException(status_code=403, detail="CANVA_EXPORT_BLOCKED_VALIDATION_FAILED")
     if not metadata.get("canva_export"):
         raise HTTPException(status_code=404, detail="Canva export data not found")
     return safe_id, metadata
@@ -536,7 +534,11 @@ async def preview_label_svg(label_id: str):
     if not preview_path.exists():
         raise HTTPException(status_code=404, detail="Label preview not found")
 
-    return FileResponse(preview_path, media_type="image/svg+xml", filename=f"{safe_id}.svg")
+    return Response(
+        preview_path.read_bytes(),
+        media_type="image/svg+xml",
+        headers={"Content-Disposition": f'inline; filename="{safe_id}.svg"'},
+    )
 
 
 @app.get("/api/v1/labels/{label_id}/download")
@@ -547,12 +549,6 @@ async def download_label_v1(label_id: str):
     metadata = label_metadata_store.get(safe_id)
     if not metadata:
         raise HTTPException(status_code=404, detail="Label not found")
-    if not metadata.get("validation_passed") and not metadata.get("override_approved"):
-        raise HTTPException(
-            status_code=403,
-            detail="DOWNLOAD_BLOCKED_VALIDATION_FAILED"
-        )
-
     label_path = LABELS_DIR / f"{safe_id}.pdf"
     try:
         label_path_resolved = label_path.resolve()
@@ -577,12 +573,6 @@ async def download_dot_stickers_pdf_v1(label_id: str):
     metadata = label_metadata_store.get(safe_id)
     if not metadata:
         raise HTTPException(status_code=404, detail="Label not found")
-    if not metadata.get("validation_passed") and not metadata.get("override_approved"):
-        raise HTTPException(
-            status_code=403,
-            detail="DOT_STICKER_DOWNLOAD_BLOCKED_VALIDATION_FAILED"
-        )
-
     dot_stickers = metadata.get("dot_stickers") or {}
     if not metadata.get("dot_sticker_artifact_path"):
         raise HTTPException(status_code=404, detail=dot_stickers.get("reason") or "DOT sticker PDF not available")
