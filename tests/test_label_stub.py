@@ -276,7 +276,15 @@ def test_custom_label_can_include_clearedge_process_mark_without_replacing_custo
 
     assert custom_logo in svg
     assert 'id="clearedge-process-mark"' in svg
-    assert "Processed by ClearEdge" in svg
+    assert "Processed by ClearEdge" not in svg
+    logo_match = re.search(
+        r'id="clearedge-process-logo" x="(?P<x>\d+)" y="(?P<y>\d+)" '
+        r'width="(?P<width>\d+)" height="(?P<height>\d+)"',
+        svg,
+    )
+    assert logo_match
+    assert int(logo_match.group("width")) >= 140
+    assert int(logo_match.group("height")) >= 24
     assert "Customer Chemical Co." in svg
 
 
@@ -320,6 +328,44 @@ def test_clearedge_label_does_not_duplicate_process_mark():
 
     assert 'id="clearedge-process-mark"' not in svg
     assert "Processed by ClearEdge" not in svg
+
+
+def test_shipment_lot_and_expiration_have_header_spacing():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="Customer Blend", supplier_name="Customer Chemical Co."),
+        shipment=ShipmentInfo(
+            lot_number="LOT-1234567890",
+            expiration_date="2027-12-31",
+            fill_amount="441 lb",
+        ),
+        ghs=GHSClassification(),
+        transport=TransportClassification(),
+    )
+
+    svg = generator.generate_svg(
+        data,
+        mode="workplace",
+        size="drum",
+        orientation="horizontal",
+        branding={
+            "mode": "custom",
+            "logo_data_uri": "data:image/png;base64,Y3VzdG9tLWxvZ28=",
+        },
+    )
+
+    lot_value_match = re.search(
+        r'<text x="(?P<x>\d+)" y="102" font-size="15\.5"[^>]*>\s*LOT-1234567890\s*</text>',
+        svg,
+    )
+    exp_label_match = re.search(
+        r'<text x="(?P<x>\d+)" y="101" font-size="10\.5"[^>]*>\s*Exp\.:\s*</text>',
+        svg,
+    )
+
+    assert lot_value_match
+    assert exp_label_match
+    assert int(exp_label_match.group("x")) - int(lot_value_match.group("x")) >= 135
 
 
 def test_long_product_name_wraps_inside_header_without_logo_box():

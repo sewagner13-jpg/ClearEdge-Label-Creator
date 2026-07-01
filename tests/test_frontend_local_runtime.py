@@ -29,7 +29,7 @@ def test_frontend_custom_branding_exposes_clearedge_process_mark_toggle():
     app_js = (REPO_ROOT / "netlify-frontend" / "app.js").read_text()
 
     assert 'id="showClearedgeMark"' in index_html
-    assert "Show ClearEdge involvement mark" in index_html
+    assert "Show ClearEdge logo mark" in index_html
     assert "const showClearedgeMark" in app_js
     assert "show_clearedge_mark" in app_js
     assert "showClearedgeMark.checked ? 'true' : 'false'" in app_js

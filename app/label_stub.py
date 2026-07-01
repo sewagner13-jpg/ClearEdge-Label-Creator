@@ -305,18 +305,15 @@ class LabelGenerator:
     </text>
 
     {% if show_clearedge_mark %}
-    <g id="clearedge-process-mark" transform="translate({{ process_mark_x }}, {{ height - 40 }})">
-      <rect x="0" y="0" width="{{ process_mark_width }}" height="26" fill="#FFFFFF" stroke="{{ brand_purple }}" stroke-width="1.2" rx="4"/>
+    <g id="clearedge-process-mark" transform="translate({{ process_mark_x }}, {{ height - process_mark_bottom_offset }})">
+      <rect x="0" y="0" width="{{ process_mark_width }}" height="{{ process_mark_height }}" fill="#FFFFFF" stroke="{{ brand_purple }}" stroke-width="1.2" rx="4"/>
       {% if clearedge_mark_logo_data_uri %}
-      <image id="clearedge-process-logo" x="8" y="7" width="{{ process_mark_logo_width }}" height="13"
+      <image id="clearedge-process-logo" x="{{ process_mark_logo_x }}" y="{{ process_mark_logo_y }}" width="{{ process_mark_logo_width }}" height="{{ process_mark_logo_height }}"
              href="{{ clearedge_mark_logo_data_uri }}" xlink:href="{{ clearedge_mark_logo_data_uri }}"
-             preserveAspectRatio="xMinYMid meet"/>
-      <text x="{{ process_mark_text_x }}" y="17" font-size="{{ process_mark_font_size }}" font-weight="bold" fill="{{ brand_purple }}">
-        Processed by ClearEdge
-      </text>
+             preserveAspectRatio="xMidYMid meet"/>
       {% else %}
-      <text x="{{ process_mark_width // 2 }}" y="17" font-size="9" font-weight="bold" fill="{{ brand_purple }}" text-anchor="middle">
-        Processed by ClearEdge
+      <text x="{{ process_mark_width // 2 }}" y="{{ process_mark_height - 11 }}" font-size="10" font-weight="bold" fill="{{ brand_purple }}" text-anchor="middle">
+        ClearEdge
       </text>
       {% endif %}
     </g>
@@ -631,6 +628,23 @@ class LabelGenerator:
 
         return cls._fit_text(clean, 16, fallback)
 
+    @staticmethod
+    def _shipment_header_spacing(width: int, product_area_x: int) -> dict:
+        """Keep Lot, Expiration, and Net Weight fields visually separated."""
+        if width >= 760:
+            expiration_label_offset = 190
+            expiration_value_offset = 228
+        else:
+            expiration_label_offset = 158
+            expiration_value_offset = 194
+
+        return {
+            "lot_label_x": product_area_x,
+            "lot_value_x": product_area_x + 42,
+            "expiration_label_x": product_area_x + expiration_label_offset,
+            "expiration_value_x": product_area_x + expiration_value_offset,
+        }
+
     @classmethod
     def _format_identification_number(cls, un_number: Optional[str]) -> str:
         """Render a DOT identification number with a UN/NA/ID prefix."""
@@ -930,11 +944,14 @@ class LabelGenerator:
             logo_width = 198 if width <= 612 else 220
             logo_height = 88
             logo_y = 20
-        process_mark_width = 208 if width >= 760 else 176
-        process_mark_logo_width = 74 if width >= 760 else 56
-        process_mark_font_size = 8.5 if width >= 760 else 7.6
+        process_mark_width = 210 if width >= 760 else 180
+        process_mark_height = 40 if width >= 760 else 36
+        process_mark_logo_width = process_mark_width - 20
+        process_mark_logo_height = process_mark_height - 12
+        process_mark_bottom_offset = process_mark_height + 13
         product_area_x = 20 + logo_width + 24
         product_area_width = width - product_area_x - 22
+        shipment_spacing = self._shipment_header_spacing(width, product_area_x)
         heading = self._format_product_heading(data.product.name, product_area_width)
         product_uses = self._format_product_uses(data.product.product_uses, width=width)
         shipment = data.shipment
@@ -978,18 +995,21 @@ class LabelGenerator:
             "show_clearedge_mark": resolved_branding.get("show_clearedge_mark", False),
             "process_mark_width": process_mark_width,
             "process_mark_x": width - process_mark_width - 20,
+            "process_mark_height": process_mark_height,
+            "process_mark_bottom_offset": process_mark_bottom_offset,
             "process_mark_logo_width": process_mark_logo_width,
-            "process_mark_text_x": process_mark_logo_width + 18,
-            "process_mark_font_size": process_mark_font_size,
+            "process_mark_logo_height": process_mark_logo_height,
+            "process_mark_logo_x": (process_mark_width - process_mark_logo_width) // 2,
+            "process_mark_logo_y": (process_mark_height - process_mark_logo_height) // 2,
             "logo_width": logo_width,
             "logo_height": logo_height,
             "logo_y": logo_y,
             "product_area_x": product_area_x,
             "product_text_x": product_area_x + (product_area_width // 2),
-            "lot_label_x": product_area_x,
-            "lot_value_x": product_area_x + 42,
-            "expiration_label_x": product_area_x + 146,
-            "expiration_value_x": product_area_x + 182,
+            "lot_label_x": shipment_spacing["lot_label_x"],
+            "lot_value_x": shipment_spacing["lot_value_x"],
+            "expiration_label_x": shipment_spacing["expiration_label_x"],
+            "expiration_value_x": shipment_spacing["expiration_value_x"],
             "weight_label_x": width - 128,
             "weight_value_x": width - 74,
             "product_name_font_size": heading["font_size"],
