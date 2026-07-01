@@ -5,6 +5,7 @@ Tests for compliance validation engine.
 import pytest
 
 from app.validator import ComplianceValidator
+from app.dot_shipping import build_dot_shipping_review
 from app.schema import (
     ExtractedData,
     ProductInfo,
@@ -151,6 +152,36 @@ class TestComplianceValidator:
         assert any(
             warning.field == "transport.combustible_liquid_exception"
             and "may qualify" in warning.message
+            for warning in result.warnings
+        )
+
+    def test_combustible_liquid_non_bulk_still_requires_class_3_sticker_sheet(self, validator):
+        """A visible Class 3 DOT label needs a sticker sheet even when an exception may apply."""
+        data = ExtractedData(
+            product=ProductInfo(name="Combustible Blend"),
+            shipment=ShipmentInfo(fill_amount="470 lb", container_type="drum"),
+            ghs=GHSClassification(),
+            transport=TransportClassification(
+                un_number="NA1993",
+                proper_shipping_name="COMBUSTIBLE LIQUID, N.O.S (2-methoxy-1-methylethyl acetate)",
+                hazard_class="3",
+                packing_group="III",
+                marine_pollutant=False,
+                hazardous_substance=False,
+                hazardous_waste=False,
+            )
+        )
+
+        result = validator.validate(data, mode="shipped_dot")
+        shipping_review = build_dot_shipping_review(data, "shipped_dot")
+
+        assert result.passed is True
+        assert shipping_review["dot_exception_status"] == "combustible_liquid_non_bulk_exception_possible"
+        assert shipping_review["separate_dot_sticker_required"] is True
+        assert [item["hazard_class"] for item in shipping_review["required_stickers"]] == ["3"]
+        assert any(
+            warning.field == "transport.dot_hazard_label"
+            and "hazard class 3" in warning.message
             for warning in result.warnings
         )
 

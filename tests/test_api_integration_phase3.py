@@ -385,6 +385,60 @@ def test_generate_regulated_dot_label_exposes_separate_sticker_pdf_when_download
         assert len(inline_pdf.pages) == 2
 
 
+def test_generate_combustible_class_3_label_still_exposes_sticker_sheet(tmp_path):
+    setup_fakes(tmp_path, passed=True)
+    main.label_generator = LabelGenerator()
+
+    with TestClient(main.app) as client:
+        files = {"files": ("test_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
+        data = {
+            "product_name": "Combustible Class 3 Product",
+            "mode": "shipped_dot",
+            "size": "drum",
+            "fill_amount": "470 lb",
+            "transport_status": "regulated",
+            "un_number": "NA1993",
+            "proper_shipping_name": "COMBUSTIBLE LIQUID, N.O.S (2-methoxy-1-methylethyl acetate)",
+            "hazard_class": "3",
+            "packing_group": "III",
+            "marine_pollutant": "false",
+            "hazardous_substance": "false",
+            "hazardous_waste": "false",
+        }
+
+        generate_res = client.post("/api/v1/labels/generate", files=files, data=data)
+
+        assert generate_res.status_code == 200
+        payload = generate_res.json()
+        label_id = payload["label_id"]
+        assert payload["dot_shipping_review"]["dot_exception_status"] == (
+            "combustible_liquid_non_bulk_exception_possible"
+        )
+        assert payload["dot_shipping_review"]["separate_dot_sticker_required"] is True
+        assert [item["hazard_class"] for item in payload["dot_shipping_review"]["required_stickers"]] == ["3"]
+        assert payload["dot_stickers"]["available"] is True
+        assert payload["dot_stickers"]["reason"] is None
+        assert payload["preview"]["page_count"] == 2
+        assert payload["download"]["page_count"] == 2
+        assert payload["preview"]["pages"][1]["label"] == "DOT sticker sheet"
+        assert payload["preview"]["pages"][1]["url"] == (
+            f"/api/v1/labels/{label_id}/dot-stickers/preview-page-1.svg"
+        )
+
+        sticker_preview = client.get(payload["preview"]["pages"][1]["url"])
+        assert sticker_preview.status_code == 200
+        assert "image/svg+xml" in sticker_preview.headers["content-type"]
+        assert sticker_preview.text.count('class="dot-sticker-background"') == 4
+        assert 'data-hazard-class="3"' in sticker_preview.text
+
+        label_res = client.get(payload["label"]["download_url"])
+        assert label_res.status_code == 200
+        label_pdf = PdfReader(BytesIO(label_res.content))
+        assert len(label_pdf.pages) == 2
+        assert float(label_pdf.pages[1].mediabox.width) == US_LETTER_WIDTH_PT
+        assert float(label_pdf.pages[1].mediabox.height) == US_LETTER_HEIGHT_PT
+
+
 def test_not_regulated_dot_label_explains_no_sticker_page(tmp_path):
     setup_fakes(tmp_path, passed=True)
 

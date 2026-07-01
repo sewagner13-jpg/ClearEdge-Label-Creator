@@ -2,7 +2,7 @@ import base64
 from io import BytesIO
 
 import pytest
-from pypdf import PdfReader
+from pypdf import PdfReader, PdfWriter
 
 from app import label_pipeline
 from app.dot_sticker_sheet import US_LETTER_HEIGHT_PT, US_LETTER_WIDTH_PT
@@ -61,7 +61,11 @@ class FakeLabelGenerator:
         return "<svg></svg>"
 
     def generate_pdf(self, svg_content: str):
-        return b"%PDF-1.4 fake"
+        writer = PdfWriter()
+        writer.add_blank_page(width=288, height=432)
+        output = BytesIO()
+        writer.write(output)
+        return output.getvalue()
 
 
 class FakeAgentCore:

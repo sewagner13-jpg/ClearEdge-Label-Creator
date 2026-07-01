@@ -111,17 +111,19 @@ def build_dot_shipping_review(data: ExtractedData, mode: str) -> dict:
                 "field": "transport.combustible_liquid_exception",
                 "message": (
                     "This non-bulk combustible liquid may qualify for the domestic highway "
-                    "combustible-liquid exception. Confirm shipment facts before applying DOT stickers."
+                    "combustible-liquid exception. The sticker sheet is generated because a DOT "
+                    "hazard class is shown; confirm the final exterior marking decision before shipment."
                 ),
             })
 
     regulated_for_label_actions = (
         not blockers
-        and dot_exception_status not in {"not_regulated", "combustible_liquid_non_bulk_exception_possible"}
+        and dot_exception_status != "not_regulated"
     )
+    regulated_for_sticker_generation = dot_exception_status != "not_regulated"
 
     required_stickers = []
-    if regulated_for_label_actions and data.transport.hazard_class:
+    if regulated_for_sticker_generation and data.transport.hazard_class:
         required_stickers.extend(_required_dot_stickers(data))
         required_actions.append({
             "code": "APPLY_SEPARATE_DOT_HAZARD_LABEL",
