@@ -187,6 +187,14 @@ class TransportClassification(BaseModel):
         None,
         description="Marine pollutant status"
     )
+    hazardous_substance: Optional[bool] = Field(
+        None,
+        description="True when SDS/DOT data identifies the material as a hazardous substance or RQ"
+    )
+    hazardous_waste: Optional[bool] = Field(
+        None,
+        description="True when SDS/DOT data identifies the material as a hazardous waste"
+    )
     limited_quantity: Optional[str] = Field(
         None,
         description="Limited quantity threshold"

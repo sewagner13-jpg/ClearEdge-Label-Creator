@@ -11,24 +11,13 @@ from .schema import (
     ValidationResult,
     ValidationError
 )
+from .dot_shipping import build_dot_shipping_review, is_not_regulated_for_transport
 
 logger = logging.getLogger(__name__)
 
 
 class ComplianceValidator:
     """Validates extracted data for compliance with DOT/OSHA/GHS requirements."""
-
-    NOT_REGULATED_MARKERS = (
-        "not regulated",
-        "not restricted",
-        "not dangerous goods",
-        "not classified as dangerous",
-        "not classified as a dangerous good",
-        "not hazardous for transport",
-        "not subject to dot",
-        "non-regulated",
-        "non regulated",
-    )
 
     # GHS pictograms that overlap with DOT hazard classes
     DOT_GHS_OVERLAP = {
@@ -101,7 +90,27 @@ class ComplianceValidator:
         warnings: List[ValidationError]
     ):
         """Validate for shipped DOT compliance."""
-        if self._is_not_regulated_for_transport(data):
+        shipping_review = build_dot_shipping_review(data, "shipped_dot")
+        for blocker in shipping_review.get("blockers") or []:
+            errors.append(ValidationError(
+                field=blocker.get("field") or "transport",
+                message=blocker.get("message") or "DOT shipping review requires correction",
+                severity="error",
+            ))
+        for warning in shipping_review.get("warnings") or []:
+            warnings.append(ValidationError(
+                field=warning.get("field") or "transport",
+                message=warning.get("message") or "DOT shipping review warning",
+                severity="warning",
+            ))
+        for action in shipping_review.get("required_actions") or []:
+            warnings.append(ValidationError(
+                field=action.get("field") or "transport",
+                message=action.get("message") or "DOT shipping action is required outside this product label",
+                severity="warning",
+            ))
+
+        if is_not_regulated_for_transport(data):
             if not data.product.emergency_phone:
                 warnings.append(ValidationError(
                     field="product.emergency_phone",
@@ -174,21 +183,6 @@ class ComplianceValidator:
                 message="Emergency phone number recommended for shipping labels",
                 severity="warning"
             ))
-
-    def _is_not_regulated_for_transport(self, data: ExtractedData) -> bool:
-        """Return true only when transport data explicitly says no DOT regulation applies."""
-        transport = data.transport
-        if transport.not_regulated is True:
-            return True
-
-        fields = (
-            transport.proper_shipping_name,
-            transport.hazard_class,
-            transport.un_number,
-            transport.special_provisions,
-        )
-        joined = " ".join(str(field).lower() for field in fields if field)
-        return any(marker in joined for marker in self.NOT_REGULATED_MARKERS)
 
     @staticmethod
     def _normalize_hazard_class(hazard_class: str | None) -> str | None:

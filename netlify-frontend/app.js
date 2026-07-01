@@ -46,6 +46,8 @@ const properShippingName = document.getElementById('properShippingName');
 const hazardClass = document.getElementById('hazardClass');
 const packingGroup = document.getElementById('packingGroup');
 const marinePollutant = document.getElementById('marinePollutant');
+const hazardousSubstance = document.getElementById('hazardousSubstance');
+const hazardousWaste = document.getElementById('hazardousWaste');
 const limitedQuantity = document.getElementById('limitedQuantity');
 const emergencyPhone = document.getElementById('emergencyPhone');
 const ghsPictogramSelect = document.getElementById('ghsPictogramSelect');
@@ -483,6 +485,56 @@ function renderValidationPanel(validation) {
     `;
 }
 
+function renderDotShippingReview(review) {
+    if (!review || !review.applicable) return '';
+
+    const blockers = review.blockers || [];
+    const warnings = review.warnings || [];
+    const actions = review.required_actions || [];
+
+    const renderItem = item => `
+        <li style="margin-bottom: 6px;">
+            <strong>${escapeHtml(item.code || item.field || 'DOT review')}:</strong>
+            ${escapeHtml(item.message || '')}
+        </li>
+    `;
+
+    return `
+        <div style="margin-top: 14px; padding: 14px; border: 1px solid #110251; border-radius: 6px; background: #F8F6FF;">
+            <h3 style="margin-top:0;">DOT Shipping Review</h3>
+            <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px;">
+                <div><strong>Status:</strong> ${escapeHtml(review.status || 'unknown')}</div>
+                <div><strong>Package:</strong> ${escapeHtml(containerTypeLabel(review.container_type) || review.container_type || 'Unknown')}</div>
+                <div><strong>Category:</strong> ${escapeHtml(review.package_category || 'Unknown')}</div>
+            </div>
+            ${review.separate_dot_sticker_required ? `
+            <div style="margin-bottom: 10px; padding: 10px; border-left: 4px solid #110251; background: #FFFFFF;">
+                <strong>Separate DOT sticker required:</strong>
+                Apply the required DOT hazard label sticker separately from this product label.
+            </div>
+            ` : ''}
+            ${blockers.length ? `
+            <div style="margin-bottom: 10px;">
+                <strong>DOT blockers</strong>
+                <ul style="margin: 8px 0 0 18px; padding: 0;">${blockers.map(renderItem).join('')}</ul>
+            </div>
+            ` : ''}
+            ${actions.length ? `
+            <div style="margin-bottom: 10px;">
+                <strong>Required outside-label actions</strong>
+                <ul style="margin: 8px 0 0 18px; padding: 0;">${actions.map(renderItem).join('')}</ul>
+            </div>
+            ` : ''}
+            ${warnings.length ? `
+            <div>
+                <strong>DOT review notes</strong>
+                <ul style="margin: 8px 0 0 18px; padding: 0;">${warnings.map(renderItem).join('')}</ul>
+            </div>
+            ` : ''}
+        </div>
+    `;
+}
+
 function renderAgentCoreReview(review) {
     if (!review) return '';
 
@@ -580,6 +632,8 @@ generateBtn.addEventListener('click', async () => {
     formData.append('hazard_class', hazardClass.value.trim());
     formData.append('packing_group', packingGroup.value);
     formData.append('marine_pollutant', marinePollutant.value);
+    formData.append('hazardous_substance', hazardousSubstance.value);
+    formData.append('hazardous_waste', hazardousWaste.value);
     formData.append('limited_quantity', limitedQuantity.value.trim());
     formData.append('emergency_phone', emergencyPhone.value.trim());
     if (selectedGhsPictograms.length > 0) {
@@ -713,6 +767,8 @@ generateBtn.addEventListener('click', async () => {
             </div>
 
             ${renderBrandingSummary(data.branding)}
+
+            ${renderDotShippingReview(data.dot_shipping_review)}
 
             ${renderAgentCoreReview(data.agentcore_review)}
 

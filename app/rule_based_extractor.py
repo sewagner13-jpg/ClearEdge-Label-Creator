@@ -149,6 +149,21 @@ class RuleBasedExtractor:
             data.transport.marine_pollutant = marine["match"].lower().endswith("yes")
             cls._add_evidence(data, "transport.marine_pollutant", str(data.transport.marine_pollutant), marine)
 
+        hazardous_substance = cls._find_regex(r"Hazardous\s*Substance\s*(?:\(RQ\))?\s*:?\s*(yes|no)", sources, flags=re.IGNORECASE)
+        if hazardous_substance:
+            data.transport.hazardous_substance = hazardous_substance["match"].lower().endswith("yes")
+            cls._add_evidence(
+                data,
+                "transport.hazardous_substance",
+                str(data.transport.hazardous_substance),
+                hazardous_substance,
+            )
+
+        hazardous_waste = cls._find_regex(r"Hazardous\s*Waste\s*:?\s*(yes|no)", sources, flags=re.IGNORECASE)
+        if hazardous_waste:
+            data.transport.hazardous_waste = hazardous_waste["match"].lower().endswith("yes")
+            cls._add_evidence(data, "transport.hazardous_waste", str(data.transport.hazardous_waste), hazardous_waste)
+
         limited = cls._find_regex(r"Limited\s*Quantity\s*:?\s*([^\n]+)", sources, flags=re.IGNORECASE)
         if limited:
             data.transport.limited_quantity = limited["match"].strip()

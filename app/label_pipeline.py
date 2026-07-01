@@ -19,6 +19,7 @@ from .canva_export import (
     parse_ghs_pictogram_selection,
 )
 from .config import settings
+from .dot_shipping import build_dot_shipping_review
 from .rule_based_extractor import RuleBasedExtractor
 from .schema import Evidence, ExtractedData, FieldConfidence, ValidationError, ValidationResult
 
@@ -182,6 +183,8 @@ class LabelPipeline:
         hazard_class: Optional[str] = None,
         packing_group: Optional[str] = None,
         marine_pollutant: Optional[str] = None,
+        hazardous_substance: Optional[str] = None,
+        hazardous_waste: Optional[str] = None,
         limited_quantity: Optional[str] = None,
     ) -> dict:
         """Run the label generation workflow."""
@@ -238,6 +241,8 @@ class LabelPipeline:
             hazard_class=hazard_class,
             packing_group=packing_group,
             marine_pollutant=marine_pollutant,
+            hazardous_substance=hazardous_substance,
+            hazardous_waste=hazardous_waste,
             limited_quantity=limited_quantity,
         )
 
@@ -435,6 +440,8 @@ class LabelPipeline:
         hazard_class: Optional[str],
         packing_group: Optional[str],
         marine_pollutant: Optional[str],
+        hazardous_substance: Optional[str],
+        hazardous_waste: Optional[str],
         limited_quantity: Optional[str],
     ) -> None:
         extracted_data.shipment.lot_number = clean_operator_field(lot_number)
@@ -461,6 +468,8 @@ class LabelPipeline:
             hazard_class=hazard_class,
             packing_group=packing_group,
             marine_pollutant=marine_pollutant,
+            hazardous_substance=hazardous_substance,
+            hazardous_waste=hazardous_waste,
             limited_quantity=limited_quantity,
         )
 
@@ -631,6 +640,8 @@ class LabelPipeline:
         hazard_class: Optional[str],
         packing_group: Optional[str],
         marine_pollutant: Optional[str],
+        hazardous_substance: Optional[str],
+        hazardous_waste: Optional[str],
         limited_quantity: Optional[str],
     ) -> None:
         status = cls._normalize_transport_status(transport_status)
@@ -644,6 +655,8 @@ class LabelPipeline:
         entered_hazard_class = clean_operator_field(hazard_class)
         entered_packing_group = cls._normalize_packing_group(packing_group)
         entered_marine_pollutant = cls._parse_optional_bool(marine_pollutant, "marine_pollutant")
+        entered_hazardous_substance = cls._parse_optional_bool(hazardous_substance, "hazardous_substance")
+        entered_hazardous_waste = cls._parse_optional_bool(hazardous_waste, "hazardous_waste")
         entered_limited_quantity = clean_operator_field(limited_quantity)
 
         applied = False
@@ -661,6 +674,12 @@ class LabelPipeline:
             applied = True
         if entered_marine_pollutant is not None:
             extracted_data.transport.marine_pollutant = entered_marine_pollutant
+            applied = True
+        if entered_hazardous_substance is not None:
+            extracted_data.transport.hazardous_substance = entered_hazardous_substance
+            applied = True
+        if entered_hazardous_waste is not None:
+            extracted_data.transport.hazardous_waste = entered_hazardous_waste
             applied = True
         if entered_limited_quantity:
             extracted_data.transport.limited_quantity = entered_limited_quantity
@@ -876,6 +895,7 @@ class LabelPipeline:
         download_url = f"/api/v1/labels/{label_id}/download" if status == "ready" else None
         canva_export_urls = canva_urls(label_id, status == "ready")
         extracted_payload = extracted_data.model_dump(mode="json")
+        dot_shipping_review = build_dot_shipping_review(extracted_data, mode)
         download_reason = None
         if not download_url:
             download_reason = (
@@ -914,6 +934,7 @@ class LabelPipeline:
             "override_approver": None,
             "override_timestamp": None,
             "extracted": extracted_payload,
+            "dot_shipping_review": dot_shipping_review,
             "agentcore_review": agentcore_review,
             "branding": branding or {"mode": "clearedge", "logo_data_uri": None, "logo_filename": None},
         }
@@ -960,6 +981,7 @@ class LabelPipeline:
             },
             "preview": metadata["preview"],
             "download": metadata["download"],
+            "dot_shipping_review": metadata.get("dot_shipping_review"),
             "agentcore_review": metadata.get("agentcore_review"),
             "branding": metadata.get("branding"),
             "warnings": metadata["warnings"],

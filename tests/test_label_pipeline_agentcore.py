@@ -8,6 +8,7 @@ from app.schema import (
     ExtractedTextPage,
     GHSClassification,
     ProductInfo,
+    ShipmentInfo,
     TransportClassification,
     ValidationResult,
 )
@@ -139,6 +140,30 @@ async def test_agentcore_disabled_review_degrades_to_openai_only(tmp_path, monke
     assert result["status"] == "ready"
     assert result["agentcore_review"]["status"] == "disabled"
     assert result["download"]["available"] is True
+
+
+@pytest.mark.asyncio
+async def test_pipeline_response_includes_dot_shipping_review_for_separate_stickers(tmp_path, monkeypatch):
+    monkeypatch.setattr(label_pipeline.settings, "agentcore_enabled", False)
+    extracted = base_extracted(un_number="UN1263")
+    extracted.shipment = ShipmentInfo(fill_amount="441 lb", container_type="drum")
+    pipeline, _store = make_pipeline(tmp_path, extracted)
+
+    result = await pipeline.generate_label_from_uploads(
+        files=[_upload("test_sds.pdf")],
+        product_name="Sticker Review Product",
+        mode="shipped_dot",
+        size="drum",
+        fill_amount="441 lb",
+    )
+
+    assert result["status"] == "ready"
+    assert result["download"]["available"] is True
+    assert result["dot_shipping_review"]["separate_dot_sticker_required"] is True
+    assert any(
+        action["code"] == "APPLY_SEPARATE_DOT_HAZARD_LABEL"
+        for action in result["dot_shipping_review"]["required_actions"]
+    )
 
 
 @pytest.mark.asyncio

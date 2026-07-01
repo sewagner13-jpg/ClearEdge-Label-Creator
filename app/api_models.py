@@ -97,6 +97,7 @@ class GenerateLabelResponse(BaseModel):
     label: LabelPayload
     preview: Optional[PreviewPayload] = None
     download: Optional[DownloadPayload] = None
+    dot_shipping_review: Optional[dict] = None
     agentcore_review: Optional[dict] = None
     branding: Optional[dict] = None
     warnings: List[dict]

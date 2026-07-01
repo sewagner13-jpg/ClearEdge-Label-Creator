@@ -56,7 +56,11 @@ CANVA_TEMPLATE_FIELDS = {
     "packing_group": "DOT packing group.",
     "packing_group_display": "DOT packing group formatted for the label.",
     "marine_pollutant": "Marine pollutant value.",
+    "hazardous_substance": "Hazardous substance/RQ value.",
+    "hazardous_waste": "Hazardous waste value.",
     "limited_quantity": "Limited quantity value.",
+    "dot_shipping_review_status": "DOT shipping review status.",
+    "dot_external_actions": "Separate DOT sticker or package marking actions.",
     "transport_summary": "Concise transport summary for a Canva text block.",
     "special_provisions": "DOT special provisions.",
     "erg_guide_number": "ERG guide number.",
@@ -202,10 +206,14 @@ def build_canva_export(extracted: dict, metadata: dict) -> dict:
         "packing_group": packing_group,
         "packing_group_display": packing_group,
         "marine_pollutant": _optional_value(transport.get("marine_pollutant")),
+        "hazardous_substance": _optional_value(transport.get("hazardous_substance")),
+        "hazardous_waste": _optional_value(transport.get("hazardous_waste")),
         "limited_quantity": _optional_value(transport.get("limited_quantity")),
         "transport_summary": _transport_summary(transport),
         "special_provisions": _join_optional_values(transport.get("special_provisions")),
         "erg_guide_number": transport.get("erg_guide_number") or "",
+        "dot_shipping_review_status": (metadata.get("dot_shipping_review") or {}).get("status") or "",
+        "dot_external_actions": _format_dot_external_actions(metadata.get("dot_shipping_review") or {}),
         "nfpa_health": nfpa_health,
         "nfpa_flammability": nfpa_flammability,
         "nfpa_instability": nfpa_instability,
@@ -304,3 +312,12 @@ def _transport_summary(transport: dict) -> str:
     if packing_group:
         parts.append(f"PG {packing_group}")
     return " | ".join(parts)
+
+
+def _format_dot_external_actions(review: dict) -> str:
+    actions = review.get("required_actions") or []
+    return " | ".join(
+        str(action.get("message") or "").strip()
+        for action in actions
+        if str(action.get("message") or "").strip()
+    )

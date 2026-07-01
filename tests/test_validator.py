@@ -10,7 +10,8 @@ from app.schema import (
     ProductInfo,
     GHSClassification,
     TransportClassification,
-    HazardStatement
+    HazardStatement,
+    ShipmentInfo,
 )
 
 
@@ -55,6 +56,7 @@ class TestComplianceValidator:
         """Valid shipped DOT data passes validation."""
         data = ExtractedData(
             product=ProductInfo(name="Acetone"),
+            shipment=ShipmentInfo(fill_amount="441 lb", container_type="drum"),
             ghs=GHSClassification(),
             transport=TransportClassification(
                 un_number="UN1090",
@@ -66,10 +68,97 @@ class TestComplianceValidator:
         result = validator.validate(data, mode="shipped_dot")
         assert result.passed is True
 
+    def test_shipped_dot_requires_container_type_for_regulated_package(self, validator):
+        """Regulated shipped labels must know the package type before being ready."""
+        data = ExtractedData(
+            product=ProductInfo(name="Acetone"),
+            ghs=GHSClassification(),
+            transport=TransportClassification(
+                un_number="UN1090",
+                proper_shipping_name="Acetone",
+                hazard_class="3",
+                packing_group="II",
+            )
+        )
+
+        result = validator.validate(data, mode="shipped_dot")
+
+        assert result.passed is False
+        assert any(error.field == "shipment.container_type" for error in result.errors)
+
+    def test_shipped_dot_warns_to_apply_separate_dot_sticker_when_regulated(self, validator):
+        """The product label can pass while instructing operators to apply DOT stickers separately."""
+        data = ExtractedData(
+            product=ProductInfo(name="Acetone"),
+            shipment=ShipmentInfo(fill_amount="441 lb", container_type="drum"),
+            ghs=GHSClassification(),
+            transport=TransportClassification(
+                un_number="UN1090",
+                proper_shipping_name="Acetone",
+                hazard_class="3",
+                packing_group="II",
+            )
+        )
+
+        result = validator.validate(data, mode="shipped_dot")
+
+        assert result.passed is True
+        assert any(
+            warning.field == "transport.dot_hazard_label"
+            and "separate DOT hazard label sticker" in warning.message
+            for warning in result.warnings
+        )
+
+    def test_combustible_liquid_non_bulk_requires_exception_facts(self, validator):
+        """Combustible-liquid exception review needs haz substance/waste/marine facts."""
+        data = ExtractedData(
+            product=ProductInfo(name="Combustible Blend"),
+            shipment=ShipmentInfo(fill_amount="441 lb", container_type="drum"),
+            ghs=GHSClassification(),
+            transport=TransportClassification(
+                un_number="NA1993",
+                proper_shipping_name="COMBUSTIBLE LIQUID, N.O.S. (glycol ether)",
+                hazard_class="3",
+                packing_group="III",
+            )
+        )
+
+        result = validator.validate(data, mode="shipped_dot")
+
+        assert result.passed is False
+        assert any(error.field == "transport.combustible_liquid_exception" for error in result.errors)
+
+    def test_combustible_liquid_non_bulk_passes_when_exception_facts_are_known(self, validator):
+        """Known non-bulk combustible exception facts should not block the label."""
+        data = ExtractedData(
+            product=ProductInfo(name="Combustible Blend"),
+            shipment=ShipmentInfo(fill_amount="441 lb", container_type="drum"),
+            ghs=GHSClassification(),
+            transport=TransportClassification(
+                un_number="NA1993",
+                proper_shipping_name="COMBUSTIBLE LIQUID, N.O.S. (glycol ether)",
+                hazard_class="3",
+                packing_group="III",
+                marine_pollutant=False,
+                hazardous_substance=False,
+                hazardous_waste=False,
+            )
+        )
+
+        result = validator.validate(data, mode="shipped_dot")
+
+        assert result.passed is True
+        assert any(
+            warning.field == "transport.combustible_liquid_exception"
+            and "may qualify" in warning.message
+            for warning in result.warnings
+        )
+
     def test_shipped_dot_blocks_unsupported_dot_hazard_label_asset(self, validator):
         """Shipped DOT labels must have a supported DOT hazard label asset."""
         data = ExtractedData(
             product=ProductInfo(name="Toxic Liquid"),
+            shipment=ShipmentInfo(fill_amount="441 lb", container_type="drum"),
             ghs=GHSClassification(),
             transport=TransportClassification(
                 un_number="UN2810",
@@ -92,6 +181,7 @@ class TestComplianceValidator:
         """N.O.S. shipping names need parenthetical technical detail before download."""
         data = ExtractedData(
             product=ProductInfo(name="Flammable Blend"),
+            shipment=ShipmentInfo(fill_amount="441 lb", container_type="drum"),
             ghs=GHSClassification(),
             transport=TransportClassification(
                 un_number="UN1993",
@@ -114,6 +204,7 @@ class TestComplianceValidator:
         """Supported DOT hazard classes can be extracted as words like 'Class 8'."""
         data = ExtractedData(
             product=ProductInfo(name="Corrosive Liquid"),
+            shipment=ShipmentInfo(fill_amount="441 lb", container_type="drum"),
             ghs=GHSClassification(),
             transport=TransportClassification(
                 un_number="UN1760",
@@ -162,6 +253,7 @@ class TestComplianceValidator:
         """Missing packing group generates warning."""
         data = ExtractedData(
             product=ProductInfo(name="Test"),
+            shipment=ShipmentInfo(fill_amount="441 lb", container_type="drum"),
             ghs=GHSClassification(),
             transport=TransportClassification(
                 un_number="UN1090",
@@ -186,6 +278,7 @@ class TestComplianceValidator:
         """DOT/GHS pictogram overlap generates warning."""
         data = ExtractedData(
             product=ProductInfo(name="Flammable Liquid"),
+            shipment=ShipmentInfo(fill_amount="441 lb", container_type="drum"),
             ghs=GHSClassification(
                 signal_word="Danger",
                 pictograms=["GHS02"]  # Flammable - overlaps with class 3

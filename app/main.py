@@ -291,6 +291,8 @@ async def generate_label_v1(
     hazard_class: Optional[str] = Form(None),
     packing_group: Optional[str] = Form(None),
     marine_pollutant: Optional[str] = Form(None),
+    hazardous_substance: Optional[str] = Form(None),
+    hazardous_waste: Optional[str] = Form(None),
     limited_quantity: Optional[str] = Form(None),
 ):
     """Phase 1 label generation endpoint with unified response payload."""
@@ -333,6 +335,8 @@ async def generate_label_v1(
             hazard_class=hazard_class,
             packing_group=packing_group,
             marine_pollutant=marine_pollutant,
+            hazardous_substance=hazardous_substance,
+            hazardous_waste=hazardous_waste,
             limited_quantity=limited_quantity,
         )
     except HTTPException:

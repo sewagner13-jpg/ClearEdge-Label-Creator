@@ -35,6 +35,14 @@ def test_frontend_custom_branding_exposes_clearedge_process_mark_toggle():
     assert "showClearedgeMark.checked ? 'true' : 'false'" in app_js
 
 
+def test_frontend_renders_dot_shipping_review_panel():
+    app_js = (REPO_ROOT / "netlify-frontend" / "app.js").read_text()
+
+    assert "function renderDotShippingReview" in app_js
+    assert "dot_shipping_review" in app_js
+    assert "Separate DOT sticker required" in app_js
+
+
 def test_backend_root_serves_local_frontend():
     with TestClient(app) as client:
         response = client.get("/")

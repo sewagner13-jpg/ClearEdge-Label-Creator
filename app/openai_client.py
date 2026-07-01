@@ -59,6 +59,8 @@ SCHEMA TO FOLLOW:
     "hazard_class": "string|null (e.g., 3, 6.1, 8)",
     "packing_group": "I|II|III|null",
     "marine_pollutant": true|false|null,
+    "hazardous_substance": true|false|null,
+    "hazardous_waste": true|false|null,
     "limited_quantity": "string|null",
     "special_provisions": "string|null",
     "erg_guide_number": "string|null"
@@ -88,6 +90,7 @@ TRANSPORT CLASSIFICATION (Section 14):
 - Extract UN number, proper shipping name, hazard class, packing group
 - Look for DOT, IATA, IMDG classifications
 - Marine pollutant status if mentioned
+- Hazardous substance/RQ and hazardous waste status if mentioned
 - If Section 14 explicitly says the product is not regulated, not restricted, not dangerous goods,
   or not hazardous for transport, set transport.not_regulated=true and do not invent UN/DOT fields
 
@@ -296,6 +299,9 @@ PRODUCT USES:
 
         transport = data.setdefault("transport", {})
         transport["packing_group"] = OpenAIClient._normalize_packing_group(transport.get("packing_group"))
+        transport["marine_pollutant"] = OpenAIClient._normalize_optional_bool(transport.get("marine_pollutant"))
+        transport["hazardous_substance"] = OpenAIClient._normalize_optional_bool(transport.get("hazardous_substance"))
+        transport["hazardous_waste"] = OpenAIClient._normalize_optional_bool(transport.get("hazardous_waste"))
         transport["special_provisions"] = OpenAIClient._normalize_optional_text(transport.get("special_provisions"))
         transport["limited_quantity"] = OpenAIClient._normalize_limited_quantity(transport.get("limited_quantity"))
 
@@ -370,6 +376,19 @@ PRODUCT USES:
         if isinstance(value, bool):
             return "Yes" if value else "No"
         return OpenAIClient._normalize_optional_text(value)
+
+    @staticmethod
+    def _normalize_optional_bool(value) -> Optional[bool]:
+        if value is None or isinstance(value, bool):
+            return value
+        clean = str(value).strip().lower()
+        if clean in {"", "auto", "unknown", "not listed", "n/a", "na", "null", "none"}:
+            return None
+        if clean in {"true", "yes", "y", "1"}:
+            return True
+        if clean in {"false", "no", "n", "0"}:
+            return False
+        return None
 
     def _repair_and_parse(self, response_text: str, product_name: str) -> ExtractedData:
         """Attempt to repair malformed JSON (single retry)."""
