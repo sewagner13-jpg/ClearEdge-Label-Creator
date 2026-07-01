@@ -135,6 +135,21 @@ class RuleBasedExtractor:
 
         cls._set_regex(data, "transport.un_number", r"\b(UN\s*[0-9]{4})\b", sources, transform=lambda value: value.replace(" ", "").upper())
         cls._set_regex(data, "transport.hazard_class", r"Hazard\s*Class\s*:?\s*([0-9](?:\.[0-9])?)", sources)
+        subsidiary = cls._find_regex(
+            r"Subsidiary\s*(?:Hazards?|Risks?|Class(?:es)?)\s*:?\s*([0-9.,;\s]+)",
+            sources,
+            flags=re.IGNORECASE,
+        )
+        if subsidiary:
+            classes = cls._hazard_class_list(subsidiary["match"])
+            if classes:
+                data.transport.subsidiary_hazard_classes = classes
+                cls._add_evidence(
+                    data,
+                    "transport.subsidiary_hazard_classes",
+                    ", ".join(classes),
+                    subsidiary,
+                )
         cls._set_regex(data, "transport.packing_group", r"Packing\s*Group\s*:?\s*(I{1,3})\b", sources)
 
         shipping_name = cls._shipping_name_from_text(compact)
@@ -187,6 +202,17 @@ class RuleBasedExtractor:
         if "flammableliquids,n.o.s." in compact:
             return "Flammable liquids, n.o.s."
         return None
+
+    @staticmethod
+    def _hazard_class_list(value: str) -> list[str]:
+        classes = []
+        seen = set()
+        for match in re.finditer(r"\b[0-9](?:\.[0-9])?\b", value or ""):
+            hazard_class = match.group(0)
+            if hazard_class not in seen:
+                classes.append(hazard_class)
+                seen.add(hazard_class)
+        return classes
 
     @classmethod
     def _extract_product_uses(cls, sources) -> list[str]:

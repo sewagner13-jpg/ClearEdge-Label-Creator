@@ -44,6 +44,7 @@ const transportStatus = document.getElementById('transportStatus');
 const unNumber = document.getElementById('unNumber');
 const properShippingName = document.getElementById('properShippingName');
 const hazardClass = document.getElementById('hazardClass');
+const subsidiaryHazardClasses = document.getElementById('subsidiaryHazardClasses');
 const packingGroup = document.getElementById('packingGroup');
 const marinePollutant = document.getElementById('marinePollutant');
 const hazardousSubstance = document.getElementById('hazardousSubstance');
@@ -409,6 +410,7 @@ function removeFile(index) {
 
 function renderActionLinks(label) {
     const downloadUrl = label?.download_url;
+    const dotStickerPdfUrl = label?.dot_sticker_pdf_url;
     const canvaCsvUrl = label?.canva_csv_url;
     const canvaJsonUrl = label?.canva_json_url;
     const canvaFieldMapUrl = `${API_URL}/api/v1/canva/template-fields`;
@@ -417,6 +419,11 @@ function renderActionLinks(label) {
         ${downloadUrl ? `
         <a href="${API_URL}${downloadUrl}" download style="text-decoration: none;">
             <button class="btn">📥 Download Label PDF</button>
+        </a>
+        ` : ''}
+        ${dotStickerPdfUrl ? `
+        <a href="${API_URL}${dotStickerPdfUrl}" download style="text-decoration: none; margin-left: 8px;">
+            <button class="btn" type="button">Download DOT Stickers PDF</button>
         </a>
         ` : ''}
         ${canvaCsvUrl || canvaJsonUrl ? `
@@ -485,7 +492,7 @@ function renderValidationPanel(validation) {
     `;
 }
 
-function renderDotShippingReview(review) {
+function renderDotShippingReview(review, dotStickers) {
     if (!review || !review.applicable) return '';
 
     const blockers = review.blockers || [];
@@ -511,6 +518,11 @@ function renderDotShippingReview(review) {
             <div style="margin-bottom: 10px; padding: 10px; border-left: 4px solid #110251; background: #FFFFFF;">
                 <strong>Separate DOT sticker required:</strong>
                 Apply the required DOT hazard label sticker separately from this product label.
+                ${dotStickers?.available ? `
+                <div style="margin-top: 6px; color: #110251; font-weight: 700;">DOT sticker PDF available.</div>
+                ` : dotStickers?.reason ? `
+                <div style="margin-top: 6px; color: #555;">${escapeHtml(dotStickers.reason)}</div>
+                ` : ''}
             </div>
             ` : ''}
             ${blockers.length ? `
@@ -630,6 +642,7 @@ generateBtn.addEventListener('click', async () => {
     formData.append('un_number', unNumber.value.trim());
     formData.append('proper_shipping_name', properShippingName.value.trim());
     formData.append('hazard_class', hazardClass.value.trim());
+    formData.append('subsidiary_hazard_classes', subsidiaryHazardClasses.value.trim());
     formData.append('packing_group', packingGroup.value);
     formData.append('marine_pollutant', marinePollutant.value);
     formData.append('hazardous_substance', hazardousSubstance.value);
@@ -768,7 +781,7 @@ generateBtn.addEventListener('click', async () => {
 
             ${renderBrandingSummary(data.branding)}
 
-            ${renderDotShippingReview(data.dot_shipping_review)}
+            ${renderDotShippingReview(data.dot_shipping_review, data.dot_stickers)}
 
             ${renderAgentCoreReview(data.agentcore_review)}
 

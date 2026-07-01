@@ -57,6 +57,7 @@ SCHEMA TO FOLLOW:
     "un_number": "string|null (e.g., UN1090)",
     "proper_shipping_name": "string|null",
     "hazard_class": "string|null (e.g., 3, 6.1, 8)",
+    "subsidiary_hazard_classes": ["string"]|[],
     "packing_group": "I|II|III|null",
     "marine_pollutant": true|false|null,
     "hazardous_substance": true|false|null,
@@ -88,6 +89,8 @@ SCHEMA TO FOLLOW:
 
 TRANSPORT CLASSIFICATION (Section 14):
 - Extract UN number, proper shipping name, hazard class, packing group
+- Extract subsidiary hazard classes/risks if Section 14 lists "subsidiary hazard",
+  "subsidiary risk", or similar
 - Look for DOT, IATA, IMDG classifications
 - Marine pollutant status if mentioned
 - Hazardous substance/RQ and hazardous waste status if mentioned
@@ -304,6 +307,9 @@ PRODUCT USES:
         transport["hazardous_waste"] = OpenAIClient._normalize_optional_bool(transport.get("hazardous_waste"))
         transport["special_provisions"] = OpenAIClient._normalize_optional_text(transport.get("special_provisions"))
         transport["limited_quantity"] = OpenAIClient._normalize_limited_quantity(transport.get("limited_quantity"))
+        transport["subsidiary_hazard_classes"] = OpenAIClient._normalize_string_list(
+            transport.get("subsidiary_hazard_classes")
+        )
 
     @staticmethod
     def _normalize_string_list(value) -> list[str]:

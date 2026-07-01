@@ -45,6 +45,7 @@ class LabelPayload(BaseModel):
     container_type: Optional[str] = None
     preview_url: Optional[str] = None
     download_url: Optional[str] = None
+    dot_sticker_pdf_url: Optional[str] = None
     canva_csv_url: Optional[str] = None
     canva_json_url: Optional[str] = None
 
@@ -98,6 +99,7 @@ class GenerateLabelResponse(BaseModel):
     preview: Optional[PreviewPayload] = None
     download: Optional[DownloadPayload] = None
     dot_shipping_review: Optional[dict] = None
+    dot_stickers: Optional[dict] = None
     agentcore_review: Optional[dict] = None
     branding: Optional[dict] = None
     warnings: List[dict]

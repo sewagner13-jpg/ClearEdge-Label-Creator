@@ -83,3 +83,25 @@ def test_rule_based_extractor_captures_compact_product_uses_from_tds():
         "Sealant additive",
     ]
     assert any(item.field_path == "product.product_uses" and item.doc == "TDS" for item in extracted.evidence)
+
+
+def test_rule_based_extractor_captures_subsidiary_hazard_classes_from_section_14():
+    extracted = RuleBasedExtractor.extract(
+        sds_text=_text(
+            """
+            Section 14 Transport Information
+            UN Number: UN2924
+            Proper Shipping Name: FLAMMABLE LIQUID, CORROSIVE, N.O.S. (solvent, acid)
+            Hazard Class: 3
+            Subsidiary Risk: 8
+            Packing Group: II
+            """
+        ),
+        tds_text=None,
+        product_name="Subsidiary Risk Product",
+        warning="AI failed",
+    )
+
+    assert extracted.transport.hazard_class == "3"
+    assert extracted.transport.subsidiary_hazard_classes == ["8"]
+    assert any(item.field_path == "transport.subsidiary_hazard_classes" for item in extracted.evidence)

@@ -218,6 +218,50 @@ class TestComplianceValidator:
 
         assert result.passed is True
 
+    def test_shipped_dot_supported_subsidiary_hazard_class_is_required_sticker_not_blocker(self, validator):
+        """Supported subsidiary hazard classes should become additional sticker metadata."""
+        data = ExtractedData(
+            product=ProductInfo(name="Flammable Corrosive Liquid"),
+            shipment=ShipmentInfo(fill_amount="441 lb", container_type="drum"),
+            ghs=GHSClassification(),
+            transport=TransportClassification(
+                un_number="UN2924",
+                proper_shipping_name="Flammable liquid, corrosive, n.o.s. (solvent, acid)",
+                hazard_class="3",
+                subsidiary_hazard_classes=["8"],
+                packing_group="II",
+            )
+        )
+
+        result = validator.validate(data, mode="shipped_dot")
+
+        assert result.passed is True
+        assert not any(error.field == "transport.subsidiary_hazard_classes" for error in result.errors)
+
+    def test_shipped_dot_blocks_unsupported_subsidiary_hazard_label_asset(self, validator):
+        """Subsidiary hazard stickers must also use approved DOT assets."""
+        data = ExtractedData(
+            product=ProductInfo(name="Flammable Toxic Liquid"),
+            shipment=ShipmentInfo(fill_amount="441 lb", container_type="drum"),
+            ghs=GHSClassification(),
+            transport=TransportClassification(
+                un_number="UN1992",
+                proper_shipping_name="Flammable liquid, toxic, n.o.s. (solvent, aniline)",
+                hazard_class="3",
+                subsidiary_hazard_classes=["6.1"],
+                packing_group="II",
+            )
+        )
+
+        result = validator.validate(data, mode="shipped_dot")
+
+        assert result.passed is False
+        assert any(
+            error.field == "transport.subsidiary_hazard_classes"
+            and "DOT hazard label asset is not available" in error.message
+            for error in result.errors
+        )
+
     def test_shipped_dot_not_regulated_transport_passes_without_dot_fields(self, validator):
         """Products explicitly not regulated for transport should not require UN/DOT fields."""
         data = ExtractedData(

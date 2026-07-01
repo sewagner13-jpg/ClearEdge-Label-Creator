@@ -294,6 +294,7 @@ async def generate_label_v1(
     hazardous_substance: Optional[str] = Form(None),
     hazardous_waste: Optional[str] = Form(None),
     limited_quantity: Optional[str] = Form(None),
+    subsidiary_hazard_classes: Optional[str] = Form(None),
 ):
     """Phase 1 label generation endpoint with unified response payload."""
     try:
@@ -338,6 +339,7 @@ async def generate_label_v1(
             hazardous_substance=hazardous_substance,
             hazardous_waste=hazardous_waste,
             limited_quantity=limited_quantity,
+            subsidiary_hazard_classes=subsidiary_hazard_classes,
         )
     except HTTPException:
         raise
@@ -435,6 +437,13 @@ async def override_label_approval(label_id: str, request: OverrideApprovalReques
         "url": metadata["download_url"],
         "reason": None,
     }
+    dot_stickers = metadata.get("dot_stickers")
+    if dot_stickers and metadata.get("dot_sticker_artifact_path"):
+        sticker_path = Path(metadata["dot_sticker_artifact_path"])
+        if sticker_path.exists():
+            dot_stickers["available"] = True
+            dot_stickers["url"] = f"/api/v1/labels/{label_id}/dot-stickers.pdf"
+            dot_stickers["reason"] = None
     if metadata.get("canva_export"):
         metadata["canva_export"]["validation_status"] = metadata["status"]
         metadata["canva_export"]["override_approved"] = "True"
@@ -448,6 +457,8 @@ async def override_label_approval(label_id: str, request: OverrideApprovalReques
         "status": metadata["status"],
         "override_approved": True,
         "download_url": metadata["download_url"],
+        "dot_sticker_pdf_url": metadata.get("dot_stickers", {}).get("url"),
+        "dot_stickers": metadata.get("dot_stickers"),
         "canva_csv_url": metadata.get("canva_csv_url"),
         "canva_json_url": metadata.get("canva_json_url"),
     }
@@ -557,6 +568,44 @@ async def download_label_v1(label_id: str):
         raise HTTPException(status_code=404, detail="Label not found")
 
     return FileResponse(label_path, media_type="application/pdf", filename=f"{safe_id}.pdf")
+
+
+@app.get("/api/v1/labels/{label_id}/dot-stickers.pdf")
+async def download_dot_stickers_pdf_v1(label_id: str):
+    """Download the separate DOT sticker sheet PDF with the same approval gate as labels."""
+    safe_id = _safe_label_id(label_id)
+    metadata = label_metadata_store.get(safe_id)
+    if not metadata:
+        raise HTTPException(status_code=404, detail="Label not found")
+    if not metadata.get("validation_passed") and not metadata.get("override_approved"):
+        raise HTTPException(
+            status_code=403,
+            detail="DOT_STICKER_DOWNLOAD_BLOCKED_VALIDATION_FAILED"
+        )
+
+    dot_stickers = metadata.get("dot_stickers") or {}
+    if not metadata.get("dot_sticker_artifact_path"):
+        raise HTTPException(status_code=404, detail=dot_stickers.get("reason") or "DOT sticker PDF not available")
+
+    sticker_path = Path(metadata["dot_sticker_artifact_path"])
+    try:
+        sticker_path_resolved = sticker_path.resolve()
+        labels_dir_resolved = LABELS_DIR.resolve()
+        if not str(sticker_path_resolved).startswith(str(labels_dir_resolved)):
+            raise HTTPException(status_code=403, detail="Access denied")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if not sticker_path.exists():
+        raise HTTPException(status_code=404, detail="DOT sticker PDF not found")
+
+    return FileResponse(
+        sticker_path,
+        media_type="application/pdf",
+        filename=f"{safe_id}-dot-stickers.pdf",
+    )
 
 
 if __name__ == "__main__":

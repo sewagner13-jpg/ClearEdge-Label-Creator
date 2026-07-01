@@ -20,6 +20,11 @@ from .canva_export import (
 )
 from .config import settings
 from .dot_shipping import build_dot_shipping_review
+from .dot_sticker_sheet import (
+    DOT_STICKER_SIZE_MM,
+    DotStickerSheetRenderer,
+    DotStickerSheetUnavailable,
+)
 from .rule_based_extractor import RuleBasedExtractor
 from .schema import Evidence, ExtractedData, FieldConfidence, ValidationError, ValidationResult
 
@@ -186,6 +191,7 @@ class LabelPipeline:
         hazardous_substance: Optional[str] = None,
         hazardous_waste: Optional[str] = None,
         limited_quantity: Optional[str] = None,
+        subsidiary_hazard_classes: Optional[str] = None,
     ) -> dict:
         """Run the label generation workflow."""
         cleaned_product_name = self._validate_product_name(product_name)
@@ -244,6 +250,7 @@ class LabelPipeline:
             hazardous_substance=hazardous_substance,
             hazardous_waste=hazardous_waste,
             limited_quantity=limited_quantity,
+            subsidiary_hazard_classes=subsidiary_hazard_classes,
         )
 
         agentcore_review = self._run_agentcore_review(
@@ -268,6 +275,8 @@ class LabelPipeline:
             branding=branding,
         )
         status = self._label_status(validation_result, agentcore_needs_review, agentcore_review)
+        dot_shipping_review = build_dot_shipping_review(extracted_data, mode)
+        dot_sticker_path = self._render_dot_sticker_pdf(label_id, dot_shipping_review)
 
         metadata = self._build_metadata(
             label_id=label_id,
@@ -280,6 +289,8 @@ class LabelPipeline:
             status=status,
             agentcore_review=agentcore_review,
             branding=branding,
+            dot_shipping_review=dot_shipping_review,
+            dot_sticker_path=dot_sticker_path,
         )
         metadata["artifact_path"] = str(label_path)
         self.metadata_store[label_id] = metadata
@@ -313,6 +324,8 @@ class LabelPipeline:
             orientation=metadata.get("orientation") or "vertical",
             branding=metadata.get("branding"),
         )
+        dot_shipping_review = build_dot_shipping_review(extracted_data, metadata["mode"])
+        dot_sticker_path = self._render_dot_sticker_pdf(label_id, dot_shipping_review)
 
         metadata.update(
             self._build_metadata(
@@ -326,6 +339,8 @@ class LabelPipeline:
                 status=status,
                 agentcore_review=metadata.get("agentcore_review") or disabled_agentcore_review(),
                 branding=metadata.get("branding"),
+                dot_shipping_review=dot_shipping_review,
+                dot_sticker_path=dot_sticker_path,
             )
         )
         metadata.setdefault("correction_history", []).append({
@@ -443,6 +458,7 @@ class LabelPipeline:
         hazardous_substance: Optional[str],
         hazardous_waste: Optional[str],
         limited_quantity: Optional[str],
+        subsidiary_hazard_classes: Optional[str],
     ) -> None:
         extracted_data.shipment.lot_number = clean_operator_field(lot_number)
         extracted_data.shipment.expiration_date = clean_operator_field(expiration_date)
@@ -471,6 +487,7 @@ class LabelPipeline:
             hazardous_substance=hazardous_substance,
             hazardous_waste=hazardous_waste,
             limited_quantity=limited_quantity,
+            subsidiary_hazard_classes=subsidiary_hazard_classes,
         )
 
         operator_pictograms = parse_ghs_pictogram_selection(ghs_pictograms)
@@ -643,6 +660,7 @@ class LabelPipeline:
         hazardous_substance: Optional[str],
         hazardous_waste: Optional[str],
         limited_quantity: Optional[str],
+        subsidiary_hazard_classes: Optional[str],
     ) -> None:
         status = cls._normalize_transport_status(transport_status)
         if status == "regulated":
@@ -658,6 +676,7 @@ class LabelPipeline:
         entered_hazardous_substance = cls._parse_optional_bool(hazardous_substance, "hazardous_substance")
         entered_hazardous_waste = cls._parse_optional_bool(hazardous_waste, "hazardous_waste")
         entered_limited_quantity = clean_operator_field(limited_quantity)
+        entered_subsidiary_classes = cls._normalize_hazard_class_list(subsidiary_hazard_classes)
 
         applied = False
         if entered_un_number:
@@ -683,6 +702,9 @@ class LabelPipeline:
             applied = True
         if entered_limited_quantity:
             extracted_data.transport.limited_quantity = entered_limited_quantity
+            applied = True
+        if entered_subsidiary_classes:
+            extracted_data.transport.subsidiary_hazard_classes = entered_subsidiary_classes
             applied = True
         if status != "auto":
             applied = True
@@ -736,6 +758,28 @@ class LabelPipeline:
         if normalized in {"false", "no", "n", "0"}:
             return False
         raise LabelPipelineError(400, f"INVALID_BOOLEAN_FIELD: {field_name} must be yes, no, or auto")
+
+    @staticmethod
+    def _normalize_hazard_class_list(value: Optional[str]) -> list[str]:
+        cleaned = clean_operator_field(value)
+        if not cleaned:
+            return []
+
+        classes = []
+        seen = set()
+        for item in re.split(r"[,;|]", cleaned):
+            normalized = " ".join(item.strip().split())
+            if not normalized:
+                continue
+            lowered = normalized.lower()
+            if lowered in {"none", "n/a", "na", "not applicable", "not listed", "void"}:
+                continue
+            if lowered.startswith("class "):
+                normalized = normalized[6:].strip()
+            if normalized not in seen:
+                classes.append(normalized)
+                seen.add(normalized)
+        return classes
 
     @staticmethod
     def _normalize_orientation(value: Optional[str]) -> str:
@@ -877,6 +921,25 @@ class LabelPipeline:
             logger.error("Label rendering failed for %s: %s", label_id, exc, exc_info=True)
             raise LabelPipelineError(500, f"LABEL_RENDERING_FAILED: {exc}") from exc
 
+    def _render_dot_sticker_pdf(self, label_id: str, dot_shipping_review: dict) -> Optional[Path]:
+        """Render the separate DOT sticker sheet artifact when required."""
+        if not dot_shipping_review.get("separate_dot_sticker_required"):
+            return None
+
+        required_stickers = dot_shipping_review.get("required_stickers") or []
+        if not required_stickers:
+            return None
+
+        try:
+            sticker_path = self.labels_dir / f"{label_id}-dot-stickers.pdf"
+            return DotStickerSheetRenderer().write_pdf(required_stickers, sticker_path)
+        except DotStickerSheetUnavailable as exc:
+            logger.warning("DOT sticker sheet unavailable for %s: %s", label_id, exc)
+            return None
+        except Exception as exc:
+            logger.error("DOT sticker rendering failed for %s: %s", label_id, exc, exc_info=True)
+            raise LabelPipelineError(500, f"DOT_STICKER_RENDERING_FAILED: {exc}") from exc
+
     def _build_metadata(
         self,
         *,
@@ -890,12 +953,20 @@ class LabelPipeline:
         status: str,
         agentcore_review: dict,
         branding: Optional[dict] = None,
+        dot_shipping_review: Optional[dict] = None,
+        dot_sticker_path: Optional[Path] = None,
     ) -> dict:
         preview_url = f"/api/v1/labels/{label_id}/preview.svg"
         download_url = f"/api/v1/labels/{label_id}/download" if status == "ready" else None
         canva_export_urls = canva_urls(label_id, status == "ready")
         extracted_payload = extracted_data.model_dump(mode="json")
-        dot_shipping_review = build_dot_shipping_review(extracted_data, mode)
+        dot_shipping_review = dot_shipping_review or build_dot_shipping_review(extracted_data, mode)
+        dot_stickers = self._dot_stickers_payload(
+            label_id=label_id,
+            status=status,
+            dot_shipping_review=dot_shipping_review,
+            dot_sticker_path=dot_sticker_path,
+        )
         download_reason = None
         if not download_url:
             download_reason = (
@@ -935,6 +1006,8 @@ class LabelPipeline:
             "override_timestamp": None,
             "extracted": extracted_payload,
             "dot_shipping_review": dot_shipping_review,
+            "dot_stickers": dot_stickers,
+            "dot_sticker_artifact_path": str(dot_sticker_path) if dot_sticker_path else None,
             "agentcore_review": agentcore_review,
             "branding": branding or {"mode": "clearedge", "logo_data_uri": None, "logo_filename": None},
         }
@@ -976,12 +1049,14 @@ class LabelPipeline:
                 "container_type": metadata.get("container_type"),
                 "preview_url": metadata["preview_url"],
                 "download_url": metadata["download_url"],
+                "dot_sticker_pdf_url": metadata.get("dot_stickers", {}).get("url"),
                 "canva_csv_url": metadata["canva_csv_url"],
                 "canva_json_url": metadata["canva_json_url"],
             },
             "preview": metadata["preview"],
             "download": metadata["download"],
             "dot_shipping_review": metadata.get("dot_shipping_review"),
+            "dot_stickers": metadata.get("dot_stickers"),
             "agentcore_review": metadata.get("agentcore_review"),
             "branding": metadata.get("branding"),
             "warnings": metadata["warnings"],
@@ -997,6 +1072,36 @@ class LabelPipeline:
     def _new_label_id(product_name: str) -> str:
         safe_product_name = re.sub(r"[^a-zA-Z0-9_-]", "", product_name[:50])
         return f"label_{safe_product_name}_{uuid.uuid4().hex[:8]}"
+
+    @staticmethod
+    def _dot_stickers_payload(
+        *,
+        label_id: str,
+        status: str,
+        dot_shipping_review: dict,
+        dot_sticker_path: Optional[Path],
+    ) -> dict:
+        required_stickers = dot_shipping_review.get("required_stickers") or []
+        sticker_artifact_exists = bool(dot_sticker_path and dot_sticker_path.exists())
+        sticker_url = f"/api/v1/labels/{label_id}/dot-stickers.pdf" if sticker_artifact_exists and status == "ready" else None
+
+        if not dot_shipping_review.get("separate_dot_sticker_required"):
+            reason = "No separate DOT sticker PDF is required for this label."
+        elif not sticker_artifact_exists:
+            reason = "DOT sticker PDF unavailable because an approved DOT sticker asset is missing."
+        elif status != "ready":
+            reason = "DOT sticker PDF download is blocked until label validation passes or override is approved."
+        else:
+            reason = None
+
+        return {
+            "available": bool(sticker_url),
+            "url": sticker_url,
+            "sticker_size_mm": DOT_STICKER_SIZE_MM,
+            "sheet_size": "US Letter",
+            "stickers": required_stickers,
+            "reason": reason,
+        }
 
     @staticmethod
     def _is_missing(value) -> bool:

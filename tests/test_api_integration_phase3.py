@@ -303,6 +303,80 @@ def test_generate_applies_operator_dot_fields_before_validation(tmp_path):
         assert payload["extracted"]["product"]["supplier_phone"] == "704-799-5769"
 
 
+def test_generate_regulated_dot_label_exposes_separate_sticker_pdf_when_download_is_allowed(tmp_path):
+    setup_fakes(tmp_path, passed=True)
+
+    with TestClient(main.app) as client:
+        files = {"files": ("test_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
+        data = {
+            "product_name": "Sticker Product",
+            "mode": "shipped_dot",
+            "size": "drum",
+            "fill_amount": "441 lb",
+            "transport_status": "regulated",
+            "un_number": "UN2924",
+            "proper_shipping_name": "Flammable liquid, corrosive, n.o.s. (solvent, acid)",
+            "hazard_class": "3",
+            "subsidiary_hazard_classes": "8",
+            "packing_group": "II",
+        }
+
+        generate_res = client.post("/api/v1/labels/generate", files=files, data=data)
+
+        assert generate_res.status_code == 200
+        payload = generate_res.json()
+        label_id = payload["label_id"]
+        assert payload["label"]["dot_sticker_pdf_url"] == f"/api/v1/labels/{label_id}/dot-stickers.pdf"
+        assert payload["dot_stickers"]["available"] is True
+        assert "artifact_path" not in payload["dot_stickers"]
+        assert payload["dot_stickers"]["sticker_size_mm"] == 100
+        assert [item["hazard_class"] for item in payload["dot_stickers"]["stickers"]] == ["3", "8"]
+
+        sticker_res = client.get(payload["label"]["dot_sticker_pdf_url"])
+        assert sticker_res.status_code == 200
+        assert sticker_res.headers["content-type"] == "application/pdf"
+        assert sticker_res.content.startswith(b"%PDF")
+
+
+def test_blocked_dot_label_keeps_sticker_pdf_download_blocked_until_override(tmp_path):
+    setup_fakes(tmp_path, passed=False)
+
+    with TestClient(main.app) as client:
+        files = {"files": ("test_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
+        data = {
+            "product_name": "Blocked Sticker Product",
+            "mode": "shipped_dot",
+            "size": "drum",
+            "fill_amount": "441 lb",
+            "transport_status": "regulated",
+            "un_number": "UN1993",
+            "proper_shipping_name": "Flammable liquid, n.o.s. (solvent)",
+            "hazard_class": "3",
+            "packing_group": "II",
+        }
+
+        generate_res = client.post("/api/v1/labels/generate", files=files, data=data)
+        assert generate_res.status_code == 200
+        payload = generate_res.json()
+        label_id = payload["label_id"]
+
+        assert payload["label"]["dot_sticker_pdf_url"] is None
+        assert payload["dot_stickers"]["available"] is False
+        blocked_stickers = client.get(f"/api/v1/labels/{label_id}/dot-stickers.pdf")
+        assert blocked_stickers.status_code == 403
+
+        override_res = client.post(
+            f"/api/v1/labels/{label_id}/override-approval",
+            json={"approver": "QA Lead", "reason": "Reviewed SDS and approved shipping sticker release"},
+        )
+        assert override_res.status_code == 200
+        assert override_res.json()["dot_sticker_pdf_url"] == f"/api/v1/labels/{label_id}/dot-stickers.pdf"
+
+        allowed_stickers = client.get(f"/api/v1/labels/{label_id}/dot-stickers.pdf")
+        assert allowed_stickers.status_code == 200
+        assert allowed_stickers.headers["content-type"] == "application/pdf"
+
+
 def test_generate_accepts_orientation_and_infers_container_type_from_weight(tmp_path):
     setup_fakes(tmp_path, passed=True)
     fake_generator = FakeLabelGenerator()

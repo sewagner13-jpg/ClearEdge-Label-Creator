@@ -179,6 +179,10 @@ class TransportClassification(BaseModel):
         None,
         description="Primary hazard class (e.g., 3, 6.1, 8)"
     )
+    subsidiary_hazard_classes: List[str] = Field(
+        default_factory=list,
+        description="Subsidiary hazard classes or risks from SDS Section 14, e.g. 8 or 6.1"
+    )
     packing_group: Optional[Literal["I", "II", "III"]] = Field(
         None,
         description="Packing group"
@@ -207,6 +211,37 @@ class TransportClassification(BaseModel):
         None,
         description="Emergency Response Guidebook number"
     )
+
+    @field_validator("subsidiary_hazard_classes", mode="before")
+    @classmethod
+    def normalize_subsidiary_hazard_classes(cls, v) -> List[str]:
+        """Normalize scalar/list subsidiary hazard output into a deduped string list."""
+        if v is None:
+            return []
+        if isinstance(v, str):
+            values = [
+                item.strip()
+                for item in v.replace("|", ",").replace(";", ",").split(",")
+                if item.strip()
+            ]
+        else:
+            values = list(v)
+
+        normalized = []
+        seen = set()
+        for item in values:
+            clean = " ".join(str(item).strip().split())
+            if not clean:
+                continue
+            lowered = clean.lower()
+            if lowered in {"none", "null", "n/a", "na", "not applicable", "void", "not listed"}:
+                continue
+            if lowered.startswith("class "):
+                clean = clean[6:].strip()
+            if clean not in seen:
+                normalized.append(clean)
+                seen.add(clean)
+        return normalized
 
 
 class NFPA704Ratings(BaseModel):

@@ -43,6 +43,19 @@ def test_frontend_renders_dot_shipping_review_panel():
     assert "Separate DOT sticker required" in app_js
 
 
+def test_frontend_handles_dot_sticker_pdf_download_contract():
+    index_html = (REPO_ROOT / "netlify-frontend" / "index.html").read_text()
+    app_js = (REPO_ROOT / "netlify-frontend" / "app.js").read_text()
+
+    assert 'id="subsidiaryHazardClasses"' in index_html
+    assert "Subsidiary Hazard Classes" in index_html
+    assert "const subsidiaryHazardClasses" in app_js
+    assert "subsidiary_hazard_classes" in app_js
+    assert "dot_sticker_pdf_url" in app_js
+    assert "Download DOT Stickers PDF" in app_js
+    assert "DOT sticker PDF available" in app_js
+
+
 def test_backend_root_serves_local_frontend():
     with TestClient(app) as client:
         response = client.get("/")

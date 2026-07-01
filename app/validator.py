@@ -11,6 +11,7 @@ from .schema import (
     ValidationResult,
     ValidationError
 )
+from .dot_sticker_sheet import SUPPORTED_DOT_STICKER_CLASSES, normalize_dot_hazard_class
 from .dot_shipping import build_dot_shipping_review, is_not_regulated_for_transport
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ class ComplianceValidator:
         "6.1": ["GHS06"],  # Toxic -> Acute toxicity
         "8": ["GHS05"],  # Corrosive -> Corrosive
     }
-    SUPPORTED_DOT_LABEL_CLASSES = {"3", "8", "9"}
+    SUPPORTED_DOT_LABEL_CLASSES = set(SUPPORTED_DOT_STICKER_CLASSES)
 
     def validate(
         self,
@@ -109,6 +110,7 @@ class ComplianceValidator:
                 message=action.get("message") or "DOT shipping action is required outside this product label",
                 severity="warning",
             ))
+        self._validate_required_dot_stickers(shipping_review, errors)
 
         if is_not_regulated_for_transport(data):
             if not data.product.emergency_phone:
@@ -187,20 +189,29 @@ class ComplianceValidator:
     @staticmethod
     def _normalize_hazard_class(hazard_class: str | None) -> str | None:
         """Normalize DOT hazard class wording for supported-label checks."""
-        if not hazard_class:
-            return None
-        clean = str(hazard_class).strip().lower()
-        if "not regulated" in clean or "not applicable" in clean:
-            return None
-        if clean.startswith("class "):
-            clean = clean[6:]
-        for candidate in ("6.1", "5.1", "5.2", "2.1", "2.2", "2.3", "4.1", "4.2", "4.3"):
-            if candidate in clean:
-                return candidate
-        for char in clean:
-            if char.isdigit():
-                return char
-        return None
+        return normalize_dot_hazard_class(hazard_class)
+
+    def _validate_required_dot_stickers(self, shipping_review: dict, errors: List[ValidationError]) -> None:
+        """Block downloads when a required DOT sticker lacks an approved asset."""
+        for sticker in shipping_review.get("required_stickers") or []:
+            hazard_class = self._normalize_hazard_class(sticker.get("asset_key") or sticker.get("hazard_class"))
+            if not hazard_class:
+                continue
+            if hazard_class in self.SUPPORTED_DOT_LABEL_CLASSES:
+                continue
+            field = (
+                "transport.subsidiary_hazard_classes"
+                if sticker.get("source") == "subsidiary"
+                else "transport.hazard_class"
+            )
+            errors.append(ValidationError(
+                field=field,
+                message=(
+                    f"DOT hazard label asset is not available for hazard class {hazard_class}. "
+                    "Add the approved DOT label asset before downloading this shipped label."
+                ),
+                severity="error",
+            ))
 
     @staticmethod
     def _shipping_name_needs_technical_name(proper_shipping_name: str | None) -> bool:

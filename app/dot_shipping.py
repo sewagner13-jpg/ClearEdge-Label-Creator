@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+from .dot_sticker_sheet import dot_label_name_for_class, normalize_dot_hazard_class
 from .schema import ExtractedData
 
 
@@ -37,6 +38,7 @@ def build_dot_shipping_review(data: ExtractedData, mode: str) -> dict:
             "package_category": None,
             "dot_exception_status": "not_applicable",
             "separate_dot_sticker_required": False,
+            "required_stickers": [],
             "blockers": [],
             "warnings": [],
             "required_actions": [],
@@ -60,6 +62,7 @@ def build_dot_shipping_review(data: ExtractedData, mode: str) -> dict:
             "package_category": package_category,
             "dot_exception_status": dot_exception_status,
             "separate_dot_sticker_required": False,
+            "required_stickers": [],
             "blockers": [],
             "warnings": [],
             "required_actions": [],
@@ -117,13 +120,15 @@ def build_dot_shipping_review(data: ExtractedData, mode: str) -> dict:
         and dot_exception_status not in {"not_regulated", "combustible_liquid_non_bulk_exception_possible"}
     )
 
+    required_stickers = []
     if regulated_for_label_actions and data.transport.hazard_class:
+        required_stickers.extend(_required_dot_stickers(data))
         required_actions.append({
             "code": "APPLY_SEPARATE_DOT_HAZARD_LABEL",
             "field": "transport.dot_hazard_label",
             "message": (
-                f"Apply a separate DOT hazard label sticker for hazard class "
-                f"{data.transport.hazard_class} on the package."
+                "Apply separate DOT hazard label sticker(s) for hazard class "
+                f"{_format_hazard_classes(required_stickers) or data.transport.hazard_class} on the package."
             ),
         })
 
@@ -170,10 +175,8 @@ def build_dot_shipping_review(data: ExtractedData, mode: str) -> dict:
         "container_type": container_type,
         "package_category": package_category,
         "dot_exception_status": dot_exception_status,
-        "separate_dot_sticker_required": any(
-            action["code"] == "APPLY_SEPARATE_DOT_HAZARD_LABEL"
-            for action in required_actions
-        ),
+        "separate_dot_sticker_required": bool(required_stickers),
+        "required_stickers": required_stickers,
         "blockers": blockers,
         "warnings": warnings,
         "required_actions": required_actions,
@@ -219,6 +222,42 @@ def is_combustible_liquid(data: ExtractedData) -> bool:
         if value
     )
     return "combustible liquid" in values
+
+
+def _required_dot_stickers(data: ExtractedData) -> list[dict]:
+    stickers = []
+    seen = set()
+
+    def add_sticker(raw_class: str | None, source: str) -> None:
+        normalized = normalize_dot_hazard_class(raw_class)
+        if not normalized:
+            return
+        key = (normalized, source)
+        if key in seen:
+            return
+        seen.add(key)
+        stickers.append({
+            "hazard_class": normalized,
+            "label_name": dot_label_name_for_class(normalized) or f"Class {normalized}",
+            "asset_key": normalized,
+            "source": source,
+            "quantity": 1,
+        })
+
+    add_sticker(data.transport.hazard_class, "primary")
+    for subsidiary_class in data.transport.subsidiary_hazard_classes:
+        add_sticker(subsidiary_class, "subsidiary")
+    return stickers
+
+
+def _format_hazard_classes(stickers: list[dict]) -> str:
+    if not stickers:
+        return ""
+    return ", ".join(
+        f"{sticker.get('hazard_class')} ({sticker.get('source')})"
+        for sticker in stickers
+        if sticker.get("hazard_class")
+    )
 
 
 def _truthy_limited_quantity(value: Optional[str]) -> bool:
