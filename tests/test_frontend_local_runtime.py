@@ -64,6 +64,15 @@ def test_frontend_shows_review_notes_without_blocked_download_copy():
     assert "Review before downloading or printing" in app_js
 
 
+def test_frontend_renders_inline_preview_and_download_data_url_first():
+    app_js = (REPO_ROOT / "netlify-frontend" / "app.js").read_text()
+
+    assert "preview?.inline_svg" in app_js
+    assert "srcdoc=" in app_js
+    assert "download_data_url" in app_js
+    assert "data_url" in app_js
+
+
 def test_backend_root_serves_local_frontend():
     with TestClient(app) as client:
         response = client.get("/")

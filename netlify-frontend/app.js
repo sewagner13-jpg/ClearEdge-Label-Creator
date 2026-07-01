@@ -251,16 +251,22 @@ function renderBrandingSummary(branding) {
 }
 
 function renderLabelPreview(data) {
+    const inlineSvg = data?.preview?.inline_svg;
     const previewUrl = data?.preview?.url || data?.label?.preview_url;
-    if (!previewUrl) return '';
+    if (!inlineSvg && !previewUrl) return '';
+    const frameSource = inlineSvg
+        ? `srcdoc="${escapeHtml(inlineSvg)}"`
+        : `src="${apiUrl(previewUrl)}"`;
 
     return `
         <div class="label-preview-panel">
             <div class="label-preview-heading">
                 <h3>Label Preview</h3>
+                ${previewUrl ? `
                 <a href="${apiUrl(previewUrl)}" target="_blank" rel="noopener">Open larger preview</a>
+                ` : ''}
             </div>
-            <iframe class="label-preview-frame" title="Generated label preview" src="${apiUrl(previewUrl)}"></iframe>
+            <iframe class="label-preview-frame" title="Generated label preview" ${frameSource}></iframe>
         </div>
     `;
 }
@@ -408,16 +414,18 @@ function removeFile(index) {
     generateBtn.disabled = selectedFiles.length === 0;
 }
 
-function renderActionLinks(label) {
+function renderActionLinks(label, download) {
     const downloadUrl = label?.download_url;
+    const downloadDataUrl = label?.download_data_url || download?.data_url;
+    const downloadHref = downloadDataUrl || (downloadUrl ? `${API_URL}${downloadUrl}` : '');
     const dotStickerPdfUrl = label?.dot_sticker_pdf_url;
     const canvaCsvUrl = label?.canva_csv_url;
     const canvaJsonUrl = label?.canva_json_url;
     const canvaFieldMapUrl = `${API_URL}/api/v1/canva/template-fields`;
 
     return `
-        ${downloadUrl ? `
-        <a href="${API_URL}${downloadUrl}" download style="text-decoration: none;">
+        ${downloadHref ? `
+        <a href="${escapeHtml(downloadHref)}" download="clearedge-label.pdf" style="text-decoration: none;">
             <button class="btn">📥 Download Label PDF</button>
         </a>
         ` : ''}
@@ -789,7 +797,7 @@ generateBtn.addEventListener('click', async () => {
             ${renderAgentCoreReview(data.agentcore_review)}
 
             <div id="actionPanel" style="margin-top: 20px;">
-                ${renderActionLinks(data.label)}
+                ${renderActionLinks(data.label, data.download)}
                 ${renderValidationPanel(data.validation)}
             </div>
         `;

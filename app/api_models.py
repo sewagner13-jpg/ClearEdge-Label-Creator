@@ -45,6 +45,7 @@ class LabelPayload(BaseModel):
     container_type: Optional[str] = None
     preview_url: Optional[str] = None
     download_url: Optional[str] = None
+    download_data_url: Optional[str] = None
     dot_sticker_pdf_url: Optional[str] = None
     canva_csv_url: Optional[str] = None
     canva_json_url: Optional[str] = None
@@ -56,6 +57,7 @@ class PreviewPayload(BaseModel):
     available: bool
     url: Optional[str] = None
     media_type: Optional[str] = None
+    inline_svg: Optional[str] = None
 
 
 class DownloadPayload(BaseModel):
@@ -64,6 +66,7 @@ class DownloadPayload(BaseModel):
     available: bool
     url: Optional[str] = None
     reason: Optional[str] = None
+    data_url: Optional[str] = None
 
 
 class AuditPayload(BaseModel):

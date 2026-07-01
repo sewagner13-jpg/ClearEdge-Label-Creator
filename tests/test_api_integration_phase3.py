@@ -154,7 +154,10 @@ def test_generate_blocked_then_override_then_download(tmp_path):
         assert payload["status"] == "needs_review"
         assert payload["label"]["download_url"] == f"/api/v1/labels/{label_id}/download"
         assert payload["download"]["available"] is True
+        assert payload["download"]["data_url"].startswith("data:application/pdf;base64,")
+        assert payload["label"]["download_data_url"].startswith("data:application/pdf;base64,")
         assert payload["preview"]["available"] is True
+        assert payload["preview"]["inline_svg"].lstrip().startswith("<svg")
         assert payload["label"]["preview_url"].endswith(f"/{label_id}/preview.svg")
 
         preview = client.get(payload["label"]["preview_url"])

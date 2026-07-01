@@ -293,6 +293,7 @@ class LabelPipeline:
             dot_sticker_path=dot_sticker_path,
         )
         metadata["artifact_path"] = str(label_path)
+        metadata["preview_artifact_path"] = str(label_path.with_suffix(".svg"))
         self.metadata_store[label_id] = metadata
         self.save_metadata_store()
 
@@ -316,7 +317,7 @@ class LabelPipeline:
 
         validation_result = self.validator.validate(extracted_data, metadata["mode"])
         status = "ready" if validation_result.passed else "blocked"
-        self._render_pdf(
+        label_path = self._render_pdf(
             label_id,
             extracted_data,
             metadata["mode"],
@@ -343,6 +344,8 @@ class LabelPipeline:
                 dot_sticker_path=dot_sticker_path,
             )
         )
+        metadata["artifact_path"] = str(label_path)
+        metadata["preview_artifact_path"] = str(label_path.with_suffix(".svg"))
         metadata.setdefault("correction_history", []).append({
             "updated_by": request.updated_by.strip(),
             "reason": request.reason.strip(),
@@ -1016,6 +1019,16 @@ class LabelPipeline:
 
     @staticmethod
     def _response_payload(metadata: dict) -> dict:
+        inline_svg = LabelPipeline._read_preview_svg(metadata)
+        download_data_url = LabelPipeline._read_pdf_data_url(metadata)
+        preview_payload = {
+            **metadata["preview"],
+            "inline_svg": inline_svg,
+        }
+        download_payload = {
+            **metadata["download"],
+            "data_url": download_data_url,
+        }
         return {
             "label_id": metadata["label_id"],
             "status": metadata["status"],
@@ -1032,12 +1045,13 @@ class LabelPipeline:
                 "container_type": metadata.get("container_type"),
                 "preview_url": metadata["preview_url"],
                 "download_url": metadata["download_url"],
+                "download_data_url": download_data_url,
                 "dot_sticker_pdf_url": metadata.get("dot_stickers", {}).get("url"),
                 "canva_csv_url": metadata["canva_csv_url"],
                 "canva_json_url": metadata["canva_json_url"],
             },
-            "preview": metadata["preview"],
-            "download": metadata["download"],
+            "preview": preview_payload,
+            "download": download_payload,
             "dot_shipping_review": metadata.get("dot_shipping_review"),
             "dot_stickers": metadata.get("dot_stickers"),
             "agentcore_review": metadata.get("agentcore_review"),
@@ -1050,6 +1064,35 @@ class LabelPipeline:
             },
             "success": True,
         }
+
+    @staticmethod
+    def _read_preview_svg(metadata: dict) -> Optional[str]:
+        preview_path = metadata.get("preview_artifact_path")
+        if not preview_path and metadata.get("artifact_path"):
+            preview_path = str(Path(metadata["artifact_path"]).with_suffix(".svg"))
+        if not preview_path:
+            return None
+        try:
+            path = Path(preview_path)
+            if path.exists():
+                return path.read_text()
+        except OSError as exc:
+            logger.warning("Could not inline preview SVG for %s: %s", metadata.get("label_id"), exc)
+        return None
+
+    @staticmethod
+    def _read_pdf_data_url(metadata: dict) -> Optional[str]:
+        artifact_path = metadata.get("artifact_path")
+        if not artifact_path:
+            return None
+        try:
+            path = Path(artifact_path)
+            if path.exists():
+                encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+                return f"data:application/pdf;base64,{encoded}"
+        except OSError as exc:
+            logger.warning("Could not inline PDF download for %s: %s", metadata.get("label_id"), exc)
+        return None
 
     @staticmethod
     def _new_label_id(product_name: str) -> str:
