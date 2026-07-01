@@ -1,3 +1,4 @@
+import base64
 from io import BytesIO
 
 from pypdf import PdfReader
@@ -38,6 +39,24 @@ def test_one_required_dot_sticker_fills_letter_sheet_with_four_100mm_placements(
     assert len(reader.pages) == 1
     assert float(reader.pages[0].mediabox.width) == US_LETTER_WIDTH_PT
     assert float(reader.pages[0].mediabox.height) == US_LETTER_HEIGHT_PT
+
+
+def test_dot_sticker_assets_are_normalized_to_square_viewbox():
+    renderer = DotStickerSheetRenderer()
+    asset = renderer.assets["3"]
+    raw_svg = base64.b64decode(asset.data_uri.split(",", 1)[1]).decode("utf-8")
+
+    assert 'viewBox="0 0 656 656"' in raw_svg
+    assert 'width="656"' in raw_svg
+    assert 'height="656"' in raw_svg
+
+
+def test_class_3_sticker_sheet_renders_required_red_background():
+    renderer = DotStickerSheetRenderer()
+    pages = renderer.render_svg_pages([_sticker("3")])
+
+    assert 'class="dot-sticker-background"' in pages[0]
+    assert 'fill="#D71920"' in pages[0]
 
 
 def test_multiple_required_dot_sticker_types_alternate_on_sheet():

@@ -1,9 +1,14 @@
+import base64
 from contextlib import asynccontextmanager
+from io import BytesIO
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from pypdf import PdfReader
 
 from app import main
+from app.dot_sticker_sheet import US_LETTER_HEIGHT_PT, US_LETTER_WIDTH_PT
+from app.label_stub import LabelGenerator
 from app.schema import (
     ExtractedData,
     ProductInfo,
@@ -275,6 +280,7 @@ def test_corrections_endpoint_reruns_validation_and_enables_download(tmp_path):
 def test_generate_applies_operator_dot_fields_before_validation(tmp_path):
     setup_fakes(tmp_path, passed=False)
     main.validator = FakeRequiredDotValidator()
+    main.label_generator = LabelGenerator()
 
     with TestClient(main.app) as client:
         files = {"files": ("test_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
@@ -312,6 +318,7 @@ def test_generate_applies_operator_dot_fields_before_validation(tmp_path):
 
 def test_generate_regulated_dot_label_exposes_separate_sticker_pdf_when_download_is_allowed(tmp_path):
     setup_fakes(tmp_path, passed=True)
+    main.label_generator = LabelGenerator()
 
     with TestClient(main.app) as client:
         files = {"files": ("test_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
@@ -344,9 +351,22 @@ def test_generate_regulated_dot_label_exposes_separate_sticker_pdf_when_download
         assert sticker_res.headers["content-type"] == "application/pdf"
         assert sticker_res.content.startswith(b"%PDF")
 
+        label_res = client.get(payload["label"]["download_url"])
+        assert label_res.status_code == 200
+        label_pdf = PdfReader(BytesIO(label_res.content))
+        assert len(label_pdf.pages) == 2
+        assert float(label_pdf.pages[0].mediabox.width) == 648
+        assert float(label_pdf.pages[0].mediabox.height) == 864
+        assert float(label_pdf.pages[1].mediabox.width) == US_LETTER_WIDTH_PT
+        assert float(label_pdf.pages[1].mediabox.height) == US_LETTER_HEIGHT_PT
+
+        inline_pdf = PdfReader(BytesIO(base64.b64decode(payload["download"]["data_url"].split(",", 1)[1])))
+        assert len(inline_pdf.pages) == 2
+
 
 def test_blocked_dot_label_keeps_sticker_pdf_download_blocked_until_override(tmp_path):
     setup_fakes(tmp_path, passed=False)
+    main.label_generator = LabelGenerator()
 
     with TestClient(main.app) as client:
         files = {"files": ("test_sds.pdf", b"%PDF-1.4 test", "application/pdf")}

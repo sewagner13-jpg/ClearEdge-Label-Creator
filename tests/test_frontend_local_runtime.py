@@ -40,7 +40,8 @@ def test_frontend_renders_dot_shipping_review_panel():
 
     assert "function renderDotShippingReview" in app_js
     assert "dot_shipping_review" in app_js
-    assert "Separate DOT sticker required" in app_js
+    assert "DOT sticker sheet required" in app_js
+    assert "includes the DOT-compliant sticker sheet after the product label" in app_js
 
 
 def test_frontend_handles_dot_sticker_pdf_download_contract():
@@ -53,7 +54,7 @@ def test_frontend_handles_dot_sticker_pdf_download_contract():
     assert "subsidiary_hazard_classes" in app_js
     assert "dot_sticker_pdf_url" in app_js
     assert "Download DOT Stickers PDF" in app_js
-    assert "DOT sticker PDF available" in app_js
+    assert "A separate DOT sticker PDF is also available" in app_js
 
 
 def test_frontend_shows_review_notes_without_blocked_download_copy():

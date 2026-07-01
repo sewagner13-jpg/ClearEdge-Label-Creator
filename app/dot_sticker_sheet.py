@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import html
 import io
+import re
 from dataclasses import dataclass
 from math import ceil
 from pathlib import Path
@@ -45,6 +46,9 @@ DOT_LABEL_ASSET_MANIFEST = {
     },
 }
 SUPPORTED_DOT_STICKER_CLASSES = frozenset(DOT_LABEL_ASSET_MANIFEST)
+DOT_LABEL_BACKGROUND_COLORS = {
+    "3": "#D71920",
+}
 
 
 class DotStickerSheetUnavailable(ValueError):
@@ -103,7 +107,8 @@ class DotStickerSheetRenderer:
             path = self.asset_dir / manifest["filename"]
             if not path.exists():
                 continue
-            encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+            svg_text = self._normalize_svg_square_viewbox(path.read_text())
+            encoded = base64.b64encode(svg_text.encode("utf-8")).decode("ascii")
             assets[asset_key] = DotStickerAsset(
                 hazard_class=manifest["hazard_class"],
                 label_name=manifest["label_name"],
@@ -111,6 +116,27 @@ class DotStickerSheetRenderer:
                 data_uri=f"data:image/svg+xml;base64,{encoded}",
             )
         return assets
+
+    @staticmethod
+    def _normalize_svg_square_viewbox(svg_text: str) -> str:
+        """Ensure legacy DOT SVG assets scale cleanly inside square sticker slots."""
+        svg_match = re.search(r"<svg\b(?P<attrs>[^>]*)>", svg_text, flags=re.IGNORECASE | re.DOTALL)
+        if not svg_match:
+            raise DotStickerSheetUnavailable("DOT_STICKER_ASSET_INVALID: SVG root not found")
+
+        attrs = svg_match.group("attrs")
+        width_match = re.search(r'\bwidth="(?P<value>[\d.]+)"', attrs)
+        height_match = re.search(r'\bheight="(?P<value>[\d.]+)"', attrs)
+        if not width_match or not height_match:
+            raise DotStickerSheetUnavailable("DOT_STICKER_ASSET_INVALID: SVG dimensions missing")
+
+        square_size = int(round(max(float(width_match.group("value")), float(height_match.group("value")))))
+        attrs = re.sub(r'\swidth="[^"]*"', f' width="{square_size}"', attrs, count=1)
+        attrs = re.sub(r'\sheight="[^"]*"', f' height="{square_size}"', attrs, count=1)
+        attrs = re.sub(r'\sviewBox="[^"]*"', "", attrs, count=1)
+        attrs = attrs.rstrip() + f' viewBox="0 0 {square_size} {square_size}"'
+
+        return svg_text[:svg_match.start()] + "<svg" + attrs + ">" + svg_text[svg_match.end():]
 
     def _expanded_stickers(self, stickers: list[dict]) -> list[dict]:
         requested = []
@@ -151,6 +177,17 @@ class DotStickerSheetRenderer:
         for index, sticker in enumerate(stickers):
             asset = self.assets[sticker["asset_key"]]
             x, y = positions[index]
+            background_color = DOT_LABEL_BACKGROUND_COLORS.get(asset.asset_key)
+            if background_color:
+                center_x = x + (DOT_STICKER_SIZE_PT / 2)
+                center_y = y + (DOT_STICKER_SIZE_PT / 2)
+                images.append(
+                    '<polygon class="dot-sticker-background" '
+                    f'id="dot-sticker-background-{page_number}-{index + 1}" '
+                    f'points="{center_x:.3f},{y:.3f} {x + DOT_STICKER_SIZE_PT:.3f},{center_y:.3f} '
+                    f'{center_x:.3f},{y + DOT_STICKER_SIZE_PT:.3f} {x:.3f},{center_y:.3f}" '
+                    f'fill="{background_color}"/>'
+                )
             images.append(
                 '<image class="dot-sticker" '
                 f'id="dot-sticker-{page_number}-{index + 1}" '

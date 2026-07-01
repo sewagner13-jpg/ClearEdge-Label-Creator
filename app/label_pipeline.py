@@ -1,6 +1,7 @@
 """Label generation pipeline orchestration."""
 
 import base64
+import io
 import logging
 import re
 import uuid
@@ -9,6 +10,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import UploadFile
+from pypdf import PdfReader, PdfWriter
 
 from .agentcore_client import disabled_agentcore_review, unavailable_agentcore_review
 from .api_models import CorrectionRequest
@@ -277,6 +279,7 @@ class LabelPipeline:
         status = self._label_status(validation_result, agentcore_needs_review, agentcore_review)
         dot_shipping_review = build_dot_shipping_review(extracted_data, mode)
         dot_sticker_path = self._render_dot_sticker_pdf(label_id, dot_shipping_review)
+        self._append_dot_sticker_pages_to_label_pdf(label_path, dot_sticker_path)
 
         metadata = self._build_metadata(
             label_id=label_id,
@@ -327,6 +330,7 @@ class LabelPipeline:
         )
         dot_shipping_review = build_dot_shipping_review(extracted_data, metadata["mode"])
         dot_sticker_path = self._render_dot_sticker_pdf(label_id, dot_shipping_review)
+        self._append_dot_sticker_pages_to_label_pdf(label_path, dot_sticker_path)
 
         metadata.update(
             self._build_metadata(
@@ -942,6 +946,32 @@ class LabelPipeline:
         except Exception as exc:
             logger.error("DOT sticker rendering failed for %s: %s", label_id, exc, exc_info=True)
             raise LabelPipelineError(500, f"DOT_STICKER_RENDERING_FAILED: {exc}") from exc
+
+    @staticmethod
+    def _append_dot_sticker_pages_to_label_pdf(label_path: Path, dot_sticker_path: Optional[Path]) -> None:
+        """Append DOT sticker sheet pages to the main label PDF when present."""
+        if not dot_sticker_path or not dot_sticker_path.exists():
+            return
+
+        try:
+            writer = PdfWriter()
+            for source_path in (label_path, dot_sticker_path):
+                reader = PdfReader(str(source_path))
+                for page in reader.pages:
+                    writer.add_page(page)
+
+            output = io.BytesIO()
+            writer.write(output)
+            label_path.write_bytes(output.getvalue())
+        except Exception as exc:
+            logger.error(
+                "Failed to append DOT sticker pages to %s from %s: %s",
+                label_path,
+                dot_sticker_path,
+                exc,
+                exc_info=True,
+            )
+            raise LabelPipelineError(500, f"DOT_STICKER_APPEND_FAILED: {exc}") from exc
 
     def _build_metadata(
         self,

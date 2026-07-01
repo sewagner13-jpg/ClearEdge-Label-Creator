@@ -1,6 +1,12 @@
+import base64
+from io import BytesIO
+
 import pytest
+from pypdf import PdfReader
 
 from app import label_pipeline
+from app.dot_sticker_sheet import US_LETTER_HEIGHT_PT, US_LETTER_WIDTH_PT
+from app.label_stub import LabelGenerator
 from app.label_pipeline import LabelPipeline
 from app.schema import (
     ExtractedData,
@@ -148,6 +154,7 @@ async def test_pipeline_response_includes_dot_shipping_review_for_separate_stick
     extracted = base_extracted(un_number="UN1263")
     extracted.shipment = ShipmentInfo(fill_amount="441 lb", container_type="drum")
     pipeline, _store = make_pipeline(tmp_path, extracted)
+    pipeline.label_generator = LabelGenerator()
 
     result = await pipeline.generate_label_from_uploads(
         files=[_upload("test_sds.pdf")],
@@ -164,6 +171,11 @@ async def test_pipeline_response_includes_dot_shipping_review_for_separate_stick
         action["code"] == "APPLY_SEPARATE_DOT_HAZARD_LABEL"
         for action in result["dot_shipping_review"]["required_actions"]
     )
+    pdf_bytes = base64.b64decode(result["download"]["data_url"].split(",", 1)[1])
+    reader = PdfReader(BytesIO(pdf_bytes))
+    assert len(reader.pages) == 2
+    assert float(reader.pages[1].mediabox.width) == US_LETTER_WIDTH_PT
+    assert float(reader.pages[1].mediabox.height) == US_LETTER_HEIGHT_PT
 
 
 @pytest.mark.asyncio

@@ -527,10 +527,10 @@ function renderDotShippingReview(review, dotStickers) {
             </div>
             ${review.separate_dot_sticker_required ? `
             <div style="margin-bottom: 10px; padding: 10px; border-left: 4px solid #110251; background: #FFFFFF;">
-                <strong>Separate DOT sticker required:</strong>
-                Apply the required DOT hazard label sticker separately from this product label.
+                <strong>DOT sticker sheet required:</strong>
+                The label PDF download includes the DOT-compliant sticker sheet after the product label.
                 ${dotStickers?.available ? `
-                <div style="margin-top: 6px; color: #110251; font-weight: 700;">DOT sticker PDF available.</div>
+                <div style="margin-top: 6px; color: #110251; font-weight: 700;">A separate DOT sticker PDF is also available.</div>
                 ` : dotStickers?.reason ? `
                 <div style="margin-top: 6px; color: #555;">${escapeHtml(dotStickers.reason)}</div>
                 ` : ''}
