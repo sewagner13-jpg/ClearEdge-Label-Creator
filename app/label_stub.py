@@ -291,7 +291,7 @@ class LabelGenerator:
   <!-- Footer Section -->
   <g id="footer">
     <line x1="10" y1="{{ height - 94 }}" x2="{{ width - 10 }}" y2="{{ height - 94 }}"
-          stroke="#5A2D82" stroke-width="2"/>
+          stroke="{{ brand_purple }}" stroke-width="2"/>
 
     <!-- Supplier Information -->
     <text x="20" y="{{ height - 77 }}" font-size="10.5" font-weight="bold" fill="{{ text_color }}">
@@ -303,6 +303,24 @@ class LabelGenerator:
     <text x="20" y="{{ height - 50 }}" font-size="8.5" fill="{{ text_color }}" opacity="0.75">
       {{ supplier_phone }}
     </text>
+
+    {% if show_clearedge_mark %}
+    <g id="clearedge-process-mark" transform="translate({{ process_mark_x }}, {{ height - 40 }})">
+      <rect x="0" y="0" width="{{ process_mark_width }}" height="26" fill="#FFFFFF" stroke="{{ brand_purple }}" stroke-width="1.2" rx="4"/>
+      {% if clearedge_mark_logo_data_uri %}
+      <image id="clearedge-process-logo" x="8" y="7" width="{{ process_mark_logo_width }}" height="13"
+             href="{{ clearedge_mark_logo_data_uri }}" xlink:href="{{ clearedge_mark_logo_data_uri }}"
+             preserveAspectRatio="xMinYMid meet"/>
+      <text x="{{ process_mark_text_x }}" y="17" font-size="{{ process_mark_font_size }}" font-weight="bold" fill="{{ brand_purple }}">
+        Processed by ClearEdge
+      </text>
+      {% else %}
+      <text x="{{ process_mark_width // 2 }}" y="17" font-size="9" font-weight="bold" fill="{{ brand_purple }}" text-anchor="middle">
+        Processed by ClearEdge
+      </text>
+      {% endif %}
+    </g>
+    {% endif %}
 
     <!-- Emergency Contact (prominent) -->
     {% if emergency_phone %}
@@ -329,7 +347,7 @@ class LabelGenerator:
         self.default_template_id = "clearedge_pail_v1"
         self.logo_data_uri = self._load_logo_data_uri()
         self.brand_palette = {
-            "primary": "#1B006E",
+            "primary": "#110251",
             "primary_light": "#F0E9FF",
             "accent": "#B67CFF",
             "text": "#222222",
@@ -868,6 +886,7 @@ class LabelGenerator:
             "supplier_name": data.product.supplier_name or "Custom Label",
             "supplier_address": data.product.supplier_address or "",
             "supplier_phone": data.product.supplier_phone or "",
+            "show_clearedge_mark": (branding or {}).get("show_clearedge_mark", True) is not False,
             "is_clearedge": False,
         }
 
@@ -911,6 +930,9 @@ class LabelGenerator:
             logo_width = 198 if width <= 612 else 220
             logo_height = 88
             logo_y = 20
+        process_mark_width = 208 if width >= 760 else 176
+        process_mark_logo_width = 74 if width >= 760 else 56
+        process_mark_font_size = 8.5 if width >= 760 else 7.6
         product_area_x = 20 + logo_width + 24
         product_area_width = width - product_area_x - 22
         heading = self._format_product_heading(data.product.name, product_area_width)
@@ -952,6 +974,13 @@ class LabelGenerator:
             "body_font": brand["body_font"],
             "mode": mode,
             "logo_data_uri": resolved_branding["logo_data_uri"],
+            "clearedge_mark_logo_data_uri": self.logo_data_uri,
+            "show_clearedge_mark": resolved_branding.get("show_clearedge_mark", False),
+            "process_mark_width": process_mark_width,
+            "process_mark_x": width - process_mark_width - 20,
+            "process_mark_logo_width": process_mark_logo_width,
+            "process_mark_text_x": process_mark_logo_width + 18,
+            "process_mark_font_size": process_mark_font_size,
             "logo_width": logo_width,
             "logo_height": logo_height,
             "logo_y": logo_y,

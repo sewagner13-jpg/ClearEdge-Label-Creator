@@ -24,6 +24,17 @@ def test_frontend_formats_failed_fetch_for_local_file_opens():
     assert "Open the app from http://localhost:8000" in app_js
 
 
+def test_frontend_custom_branding_exposes_clearedge_process_mark_toggle():
+    index_html = (REPO_ROOT / "netlify-frontend" / "index.html").read_text()
+    app_js = (REPO_ROOT / "netlify-frontend" / "app.js").read_text()
+
+    assert 'id="showClearedgeMark"' in index_html
+    assert "Show ClearEdge involvement mark" in index_html
+    assert "const showClearedgeMark" in app_js
+    assert "show_clearedge_mark" in app_js
+    assert "showClearedgeMark.checked ? 'true' : 'false'" in app_js
+
+
 def test_backend_root_serves_local_frontend():
     with TestClient(app) as client:
         response = client.get("/")

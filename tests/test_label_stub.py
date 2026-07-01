@@ -103,9 +103,28 @@ def test_label_uses_brand_purple_for_previous_red_accents():
     assert "#DC143C" not in svg
     assert "#E74C3C" not in svg
     assert "#FFE5E5" not in svg
-    assert svg.count("#1B006E") >= 6
+    assert svg.count("#110251") >= 6
     assert 'id="pictogram-GHS02"' in svg
     assert "data:image/png;base64" in svg
+
+
+def test_label_theme_uses_clearedge_royal_purple_without_changing_regulatory_colors():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="ClearEdge Purple Test"),
+        ghs=GHSClassification(signal_word="Warning", pictograms=["GHS07"]),
+        transport=TransportClassification(),
+        nfpa=NFPA704Ratings(health=1, flammability=2, instability=0),
+    )
+
+    svg = generator.generate_svg(data, mode="workplace", size="pail")
+
+    assert "#110251" in svg
+    assert "#1B006E" not in svg
+    assert "#ED1C24" in svg
+    assert "#0094D8" in svg
+    assert "#FFD700" in svg
+    assert 'id="pictogram-GHS07"' in svg
 
 
 def test_signal_word_replaces_ghs_heading_and_strip_stays_blank():
@@ -164,7 +183,7 @@ def test_product_name_uses_logo_purple():
 
     svg = generator.generate_svg(data, mode="workplace", size="drum")
 
-    assert 'font-weight="bold" fill="#1B006E"' in svg
+    assert 'font-weight="bold" fill="#110251"' in svg
     assert 'text-anchor="middle"' in svg
     assert "CE Flex Mod" in svg
 
@@ -228,6 +247,79 @@ def test_custom_label_uses_custom_logo_and_supplier_identity():
     assert "200 Customer Lane, Charlotte, NC" in svg
     assert "704-555-0199" in svg
     assert "ClearEdge Solutions" not in svg
+
+
+def test_custom_label_can_include_clearedge_process_mark_without_replacing_customer_logo():
+    generator = LabelGenerator()
+    custom_logo = "data:image/png;base64,Y3VzdG9tLWxvZ28="
+    data = ExtractedData(
+        product=ProductInfo(
+            name="Customer Blend",
+            supplier_name="Customer Chemical Co.",
+            supplier_address="200 Customer Lane, Charlotte, NC",
+            supplier_phone="704-555-0199",
+        ),
+        ghs=GHSClassification(),
+        transport=TransportClassification(),
+    )
+
+    svg = generator.generate_svg(
+        data,
+        mode="workplace",
+        size="pail",
+        branding={
+            "mode": "custom",
+            "logo_data_uri": custom_logo,
+            "show_clearedge_mark": True,
+        },
+    )
+
+    assert custom_logo in svg
+    assert 'id="clearedge-process-mark"' in svg
+    assert "Processed by ClearEdge" in svg
+    assert "Customer Chemical Co." in svg
+
+
+def test_custom_label_can_disable_clearedge_process_mark():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="Customer Blend", supplier_name="Customer Chemical Co."),
+        ghs=GHSClassification(),
+        transport=TransportClassification(),
+    )
+
+    svg = generator.generate_svg(
+        data,
+        mode="workplace",
+        size="pail",
+        branding={
+            "mode": "custom",
+            "logo_data_uri": "data:image/png;base64,Y3VzdG9tLWxvZ28=",
+            "show_clearedge_mark": False,
+        },
+    )
+
+    assert 'id="clearedge-process-mark"' not in svg
+    assert "Processed by ClearEdge" not in svg
+
+
+def test_clearedge_label_does_not_duplicate_process_mark():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="ClearEdge Owned Label"),
+        ghs=GHSClassification(),
+        transport=TransportClassification(),
+    )
+
+    svg = generator.generate_svg(
+        data,
+        mode="workplace",
+        size="pail",
+        branding={"mode": "clearedge", "show_clearedge_mark": True},
+    )
+
+    assert 'id="clearedge-process-mark"' not in svg
+    assert "Processed by ClearEdge" not in svg
 
 
 def test_long_product_name_wraps_inside_header_without_logo_box():
@@ -468,7 +560,7 @@ def test_product_name_is_prominent_on_customer_drum_label():
         branding={"mode": "custom", "logo_data_uri": "data:image/png;base64,Y3VzdG9t"},
     )
 
-    match = re.search(r'font-size="(?P<size>\d+)"\s+font-weight="bold" fill="#1B006E" text-anchor="middle">\s*Rucolac B-212', svg)
+    match = re.search(r'font-size="(?P<size>\d+)"\s+font-weight="bold" fill="#110251" text-anchor="middle">\s*Rucolac B-212', svg)
     assert match
     assert int(match.group("size")) >= 40
 
@@ -522,8 +614,8 @@ def test_dense_shipped_label_keeps_transport_panel_above_footer():
         branding={"mode": "custom", "logo_data_uri": "data:image/png;base64,Y3VzdG9t"},
     )
 
-    footer_line = re.search(r'<line x1="10" y1="(?P<y>\d+)" x2="\d+" y2="\d+"\s+stroke="#5A2D82"', svg)
-    transport_rect = re.search(r'<rect x="10" y="(?P<y>\d+)" width="\d+" height="(?P<height>\d+)"\s+fill="#FFF" stroke="#1B006E" stroke-width="4"', svg)
+    footer_line = re.search(r'<g id="footer">[\s\S]*?<line x1="10" y1="(?P<y>\d+)" x2="\d+" y2="\d+"\s+stroke="#110251"', svg)
+    transport_rect = re.search(r'<rect x="10" y="(?P<y>\d+)" width="\d+" height="(?P<height>\d+)"\s+fill="#FFF" stroke="#110251" stroke-width="4"', svg)
 
     assert footer_line
     assert transport_rect

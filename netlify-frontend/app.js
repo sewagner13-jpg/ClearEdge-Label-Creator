@@ -32,6 +32,7 @@ const savedLogoImage = document.getElementById('savedLogoImage');
 const savedLogoMeta = document.getElementById('savedLogoMeta');
 const saveBrandLogo = document.getElementById('saveBrandLogo');
 const brandLogoName = document.getElementById('brandLogoName');
+const showClearedgeMark = document.getElementById('showClearedgeMark');
 const customBrandFields = document.getElementById('customBrandFields');
 const suggestedLogoPanel = document.getElementById('suggestedLogoPanel');
 const suggestedLogoImage = document.getElementById('suggestedLogoImage');
@@ -321,9 +322,9 @@ function renderSelectedGhsPictograms() {
     }
 
     selectedGhsPictogramsEl.innerHTML = selectedGhsPictograms.map(code => `
-        <span style="display:inline-flex; align-items:center; gap:6px; padding:6px 8px; margin:0 6px 6px 0; border:1px solid #1B006E; border-radius:4px; color:#1B006E; background:#F0E9FF;">
+        <span style="display:inline-flex; align-items:center; gap:6px; padding:6px 8px; margin:0 6px 6px 0; border:1px solid #110251; border-radius:4px; color:#110251; background:#F0E9FF;">
             ${ghsPictogramLabel(code)}
-            <button type="button" data-ghs-remove="${code}" style="border:none; background:transparent; color:#1B006E; cursor:pointer; font-weight:700;">x</button>
+            <button type="button" data-ghs-remove="${code}" style="border:none; background:transparent; color:#110251; cursor:pointer; font-weight:700;">x</button>
         </span>
     `).join('');
 }
@@ -568,6 +569,7 @@ generateBtn.addEventListener('click', async () => {
         } else if (savedLogoSelect.value) {
             formData.append('brand_logo_id', savedLogoSelect.value);
         }
+        formData.append('show_clearedge_mark', showClearedgeMark.checked ? 'true' : 'false');
         formData.append('supplier_name', supplierName.value.trim());
         formData.append('supplier_address', supplierAddress.value.trim());
         formData.append('supplier_phone', supplierPhone.value.trim());

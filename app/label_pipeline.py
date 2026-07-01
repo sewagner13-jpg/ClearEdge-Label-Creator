@@ -167,6 +167,7 @@ class LabelPipeline:
         manufacture_date: Optional[str] = None,
         ghs_pictograms: Optional[str] = None,
         label_brand: Optional[str] = None,
+        show_clearedge_mark: bool = True,
         brand_logo: Optional[UploadFile] = None,
         brand_logo_id: Optional[str] = None,
         save_brand_logo: bool = False,
@@ -191,6 +192,7 @@ class LabelPipeline:
 
         branding = await self._build_branding(
             label_brand=label_brand,
+            show_clearedge_mark=show_clearedge_mark,
             brand_logo=brand_logo,
             brand_logo_id=brand_logo_id,
             save_brand_logo=save_brand_logo,
@@ -473,7 +475,8 @@ class LabelPipeline:
         self,
         *,
         label_brand: Optional[str],
-        brand_logo: Optional[UploadFile],
+        show_clearedge_mark: bool = True,
+        brand_logo: Optional[UploadFile] = None,
         brand_logo_id: Optional[str] = None,
         save_brand_logo: bool = False,
         brand_logo_name: Optional[str] = None,
@@ -527,6 +530,7 @@ class LabelPipeline:
             "logo_source": logo_source,
             "logo_id": logo_id,
             "logo_name": logo_name,
+            "show_clearedge_mark": bool(show_clearedge_mark) if mode == "custom" else False,
             "saved_logo": saved_logo,
             "suggested_logo": None,
         }

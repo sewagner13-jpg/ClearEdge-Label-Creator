@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     # Label Generation
     default_label_width: int = Field(default=800, ge=200, le=2000)
     default_label_height: int = Field(default=1000, ge=200, le=3000)
-    purple_header_color: str = Field(default="#5A2D82")
+    purple_header_color: str = Field(default="#110251")
 
     @field_validator("allowed_domains", mode="before")
     @classmethod

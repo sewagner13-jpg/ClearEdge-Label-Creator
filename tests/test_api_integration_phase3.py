@@ -343,6 +343,7 @@ def test_generate_custom_brand_accepts_uploaded_logo_and_supplier_fields(tmp_pat
             "mode": "workplace",
             "size": "pail",
             "label_brand": "custom",
+            "show_clearedge_mark": "false",
             "supplier_name": "Customer Chemical Co.",
             "supplier_address": "200 Customer Lane, Charlotte, NC",
             "supplier_phone": "704-555-0199",
@@ -357,6 +358,8 @@ def test_generate_custom_brand_accepts_uploaded_logo_and_supplier_fields(tmp_pat
         assert payload["extracted"]["product"]["supplier_address"] == "200 Customer Lane, Charlotte, NC"
         assert payload["extracted"]["product"]["supplier_phone"] == "704-555-0199"
         assert fake_generator.last_branding["mode"] == "custom"
+        assert fake_generator.last_branding["show_clearedge_mark"] is False
+        assert payload["branding"]["show_clearedge_mark"] is False
         assert fake_generator.last_branding["logo_data_uri"].startswith("data:image/png;base64,")
 
 
