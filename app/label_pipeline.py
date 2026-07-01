@@ -1139,13 +1139,14 @@ class LabelPipeline:
             logger.warning("Could not build DOT sticker preview for %s: %s", metadata.get("label_id"), exc)
             return pages
 
-        for index, sticker_svg in enumerate(sticker_pages, start=2):
+        label_id = metadata.get("label_id")
+        for sticker_page_index, _sticker_svg in enumerate(sticker_pages, start=1):
             pages.append({
-                "page_number": index,
+                "page_number": sticker_page_index + 1,
                 "label": "DOT sticker sheet",
                 "media_type": "image/svg+xml",
-                "inline_svg": sticker_svg,
-                "url": None,
+                "inline_svg": None,
+                "url": f"/api/v1/labels/{label_id}/dot-stickers/preview-page-{sticker_page_index}.svg",
             })
         return pages
 

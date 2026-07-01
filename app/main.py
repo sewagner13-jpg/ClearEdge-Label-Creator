@@ -38,6 +38,7 @@ from .canva_export import (
 )
 from .label_pipeline import LabelPipeline, LabelPipelineError
 from .logo_library import LogoLibrary, LogoLibraryError
+from .dot_sticker_sheet import DotStickerSheetRenderer, DotStickerSheetUnavailable
 from .label_storage import (
     load_metadata_store,
     metadata_file,
@@ -538,6 +539,41 @@ async def preview_label_svg(label_id: str):
         preview_path.read_bytes(),
         media_type="image/svg+xml",
         headers={"Content-Disposition": f'inline; filename="{safe_id}.svg"'},
+    )
+
+
+@app.get("/api/v1/labels/{label_id}/dot-stickers/preview-page-{page_number}.svg")
+async def preview_dot_sticker_sheet_svg(label_id: str, page_number: int):
+    """Return one DOT sticker sheet SVG page for in-app preview rendering."""
+    safe_id = _safe_label_id(label_id)
+    if page_number < 1:
+        raise HTTPException(status_code=400, detail="Invalid DOT sticker preview page")
+
+    metadata = label_metadata_store.get(safe_id)
+    if not metadata:
+        raise HTTPException(status_code=404, detail="Label not found")
+
+    dot_stickers = metadata.get("dot_stickers") or {}
+    required_stickers = dot_stickers.get("stickers") or []
+    if not dot_stickers.get("available") or not required_stickers:
+        raise HTTPException(status_code=404, detail=dot_stickers.get("reason") or "DOT sticker preview not available")
+
+    try:
+        sticker_pages = DotStickerSheetRenderer().render_svg_pages(required_stickers)
+    except DotStickerSheetUnavailable as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    page_index = page_number - 1
+    if page_index >= len(sticker_pages):
+        raise HTTPException(status_code=404, detail="DOT sticker preview page not found")
+
+    return Response(
+        sticker_pages[page_index].encode("utf-8"),
+        media_type="image/svg+xml",
+        headers={
+            "Content-Disposition": f'inline; filename="{safe_id}-dot-stickers-page-{page_number}.svg"',
+            "Cache-Control": "no-store",
+        },
     )
 
 

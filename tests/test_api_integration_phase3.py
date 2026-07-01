@@ -347,9 +347,17 @@ def test_generate_regulated_dot_label_exposes_separate_sticker_pdf_when_download
         assert [item["hazard_class"] for item in payload["dot_stickers"]["stickers"]] == ["3", "8"]
         assert [page["page_number"] for page in payload["preview"]["pages"]] == [1, 2]
         assert payload["preview"]["pages"][0]["label"] == "Product label"
+        assert payload["preview"]["pages"][0]["url"] == f"/api/v1/labels/{label_id}/preview.svg"
         assert "<svg" in payload["preview"]["pages"][0]["inline_svg"]
         assert payload["preview"]["pages"][1]["label"] == "DOT sticker sheet"
-        assert 'fill="#D71920"' in payload["preview"]["pages"][1]["inline_svg"]
+        assert payload["preview"]["pages"][1]["url"] == (
+            f"/api/v1/labels/{label_id}/dot-stickers/preview-page-1.svg"
+        )
+
+        sticker_preview = client.get(payload["preview"]["pages"][1]["url"])
+        assert sticker_preview.status_code == 200
+        assert "image/svg+xml" in sticker_preview.headers["content-type"]
+        assert 'fill="#D71920"' in sticker_preview.text
 
         sticker_res = client.get(payload["label"]["dot_sticker_pdf_url"])
         assert sticker_res.status_code == 200

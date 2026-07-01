@@ -70,10 +70,12 @@ def test_frontend_renders_inline_preview_and_download_data_url_first():
 
     assert "preview?.pages" in app_js
     assert "label-preview-page" in app_js
+    assert "const frameSource = pageUrl" in app_js
     assert "preview?.inline_svg" in app_js
     assert "srcdoc=" in app_js
     assert "download_data_url" in app_js
     assert "data_url" in app_js
+    assert "const downloadHref = downloadUrl ?" in app_js
 
 
 def test_backend_root_serves_local_frontend():

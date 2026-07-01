@@ -270,9 +270,9 @@ function renderLabelPreview(data) {
         const pageNumber = page.page_number || index + 1;
         const pageLabel = page.label || `Preview page ${pageNumber}`;
         const pageUrl = page.url ? apiUrl(page.url) : '';
-        const frameSource = page.inline_svg
-            ? `srcdoc="${escapeHtml(page.inline_svg)}"`
-            : `src="${escapeHtml(pageUrl)}"`;
+        const frameSource = pageUrl
+            ? `src="${escapeHtml(pageUrl)}"`
+            : `srcdoc="${escapeHtml(page.inline_svg)}"`;
         return `
             <section class="label-preview-page">
                 <div class="label-preview-page-heading">
@@ -440,7 +440,7 @@ function removeFile(index) {
 function renderActionLinks(label, download) {
     const downloadUrl = label?.download_url;
     const downloadDataUrl = label?.download_data_url || download?.data_url;
-    const downloadHref = downloadDataUrl || (downloadUrl ? `${API_URL}${downloadUrl}` : '');
+    const downloadHref = downloadUrl ? apiUrl(downloadUrl) : downloadDataUrl;
     const dotStickerPdfUrl = label?.dot_sticker_pdf_url;
     const canvaCsvUrl = label?.canva_csv_url;
     const canvaJsonUrl = label?.canva_json_url;
@@ -453,7 +453,7 @@ function renderActionLinks(label, download) {
         </a>
         ` : ''}
         ${dotStickerPdfUrl ? `
-        <a href="${API_URL}${dotStickerPdfUrl}" download style="text-decoration: none; margin-left: 8px;">
+        <a href="${escapeHtml(apiUrl(dotStickerPdfUrl))}" download style="text-decoration: none; margin-left: 8px;">
             <button class="btn" type="button">Download DOT Stickers PDF</button>
         </a>
         ` : ''}
