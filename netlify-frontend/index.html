@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <title>CLEAR EDGE Label Creator</title>
     <meta charset="UTF-8">
@@ -7,272 +7,340 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🏷️ CLEAR EDGE Label Creator</h1>
-            <p class="subtitle">AI-Powered DOT/OSHA Compliant Chemical Product Labels</p>
+    <header class="app-header">
+        <div>
+            <p class="eyebrow">ClearEdge Solutions</p>
+            <h1>CLEAR EDGE Label Creator</h1>
+            <p class="subtitle">Build source-backed chemical product labels from SDS/TDS PDFs, then preview and export print-ready PDFs.</p>
         </div>
+        <div class="header-status" aria-label="Application output summary">
+            <span>PDF label</span>
+            <span>DOT sticker sheet</span>
+            <span>Canva handoff</span>
+        </div>
+    </header>
 
-        <div class="card">
-            <h2>Upload SDS/TDS Documents</h2>
-            <p style="color: #666; margin: 10px 0 20px 0;">
-                Upload your Safety Data Sheet (SDS) and/or Technical Data Sheet (TDS) as PDF files.
-                Our AI will automatically extract all required information.
-            </p>
+    <main class="app-shell">
+        <section class="workflow-panel" aria-label="Label creation workflow">
+            <nav class="workflow-stepper" aria-label="Workflow steps">
+                <button type="button" class="step-link is-active" data-scroll-target="stepUpload">
+                    <span class="step-number">1</span>
+                    <span>Upload SDS/TDS</span>
+                </button>
+                <button type="button" class="step-link" data-scroll-target="stepSetup">
+                    <span class="step-number">2</span>
+                    <span>Label setup</span>
+                </button>
+                <button type="button" class="step-link" data-scroll-target="stepCompliance">
+                    <span class="step-number">3</span>
+                    <span>Compliance review</span>
+                </button>
+                <button type="button" class="step-link" data-scroll-target="stepExport">
+                    <span class="step-number">4</span>
+                    <span>Preview and export</span>
+                </button>
+            </nav>
 
-            <div class="upload-area" id="uploadArea">
-                <div class="upload-icon">📄</div>
-                <h3>Drop PDF files here or click to browse</h3>
-                <p style="color: #666; margin-top: 10px;">Supports SDS and TDS documents</p>
-                <input type="file" id="fileInput" class="file-input" accept=".pdf" multiple>
-            </div>
+            <section class="workflow-card" id="stepUpload" aria-labelledby="uploadHeading">
+                <div class="section-heading">
+                    <p class="step-kicker">Step 1</p>
+                    <h2 id="uploadHeading">Upload source documents</h2>
+                    <p>Start with SDS and TDS PDFs. The app extracts label data, then the review step shows what needs operator attention.</p>
+                </div>
 
-            <div class="file-list" id="fileList"></div>
+                <div class="upload-area" id="uploadArea" role="button" tabindex="0" aria-label="Upload SDS or TDS PDF files">
+                    <div class="upload-icon" aria-hidden="true">PDF</div>
+                    <h3>Drop PDF files here or click to browse</h3>
+                    <p>Supports SDS and TDS PDF documents. Upload up to four PDFs.</p>
+                    <input type="file" id="fileInput" class="file-input" accept=".pdf" multiple>
+                </div>
 
-            <div style="margin-top: 20px;">
-                <label style="font-weight: 600; margin-bottom: 10px; display: block;">Product Name (Your Branding):</label>
-                <input type="text" id="productName" placeholder="Enter your product name (e.g., Clear Edge Pro Filter)"
-                       style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; max-width: 500px; font-size: 1em;">
-                <p style="color: #666; font-size: 0.9em; margin-top: 5px;">
-                    The SDS may have a different name - enter YOUR product name here
-                </p>
-            </div>
+                <div class="file-list" id="fileList" aria-live="polite"></div>
+            </section>
 
-            <div style="margin-top: 20px; padding: 16px; border: 1px solid #D8D3E6; border-radius: 6px; background: #FBFAFE;">
-                <label style="font-weight: 700; margin-bottom: 10px; display: block;">Label Brand:</label>
-                <select id="labelBrand" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; max-width: 360px; font-size: 1em;">
-                    <option value="clearedge">ClearEdge label - use official ClearEdge logo/address/phone</option>
-                    <option value="custom">Customer/company label - use uploaded logo and supplier info</option>
-                </select>
-                <p id="clearedgeBrandNote" style="color: #555; font-size: 0.9em; margin-top: 8px;">
-                    ClearEdge labels always print ClearEdge Solutions, 14301 CR Koon Highway, Newberry, SC 29108, and 704-799-5769.
-                </p>
-                <div id="customBrandFields" style="display: none; margin-top: 14px;">
-                    <div style="display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 12px; align-items: end; margin-bottom: 14px;">
+            <section class="workflow-card" id="stepSetup" aria-labelledby="setupHeading">
+                <div class="section-heading">
+                    <p class="step-kicker">Step 2</p>
+                    <h2 id="setupHeading">Label setup</h2>
+                    <p>Enter the product identity and shipment details that should print prominently on the label.</p>
+                </div>
+
+                <div class="form-grid two-col">
+                    <div class="form-field wide">
+                        <label for="productName">Product Name</label>
+                        <input type="text" id="productName" placeholder="e.g., CE SurfActant 336 PSA" autocomplete="off">
+                        <p class="field-help">This is the label product name. The SDS source product name stays preserved internally.</p>
+                    </div>
+                    <div class="form-field">
+                        <label for="labelBrand">Label Brand</label>
+                        <select id="labelBrand">
+                            <option value="clearedge">ClearEdge label - official logo/address/phone</option>
+                            <option value="custom">Customer/company label - custom logo and supplier info</option>
+                        </select>
+                        <p class="field-help" id="clearedgeBrandNote">ClearEdge labels print ClearEdge Solutions, Newberry SC, and 704-799-5769.</p>
+                    </div>
+                </div>
+
+                <div class="brand-panel" id="customBrandFields" hidden>
+                    <div class="panel-title-row">
                         <div>
-                            <label style="font-weight: 600; margin-bottom: 10px; display: block;">Saved Company Logo:</label>
-                            <select id="savedLogoSelect" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                            <h3>Customer branding</h3>
+                            <p>Use a saved logo, upload a new logo, or accept a suggested logo detected from SDS/TDS.</p>
+                        </div>
+                        <button type="button" id="refreshLogosBtn" class="btn btn-secondary">Refresh Logos</button>
+                    </div>
+
+                    <div class="form-grid two-col">
+                        <div class="form-field">
+                            <label for="savedLogoSelect">Saved Company Logo</label>
+                            <select id="savedLogoSelect">
                                 <option value="">No saved logo selected</option>
                             </select>
                         </div>
-                        <button type="button" id="refreshLogosBtn" style="padding: 10px 16px; border-radius: 5px; border: 1px solid #bbb; background: #fff; cursor: pointer;">Refresh Logos</button>
+                        <div class="form-field">
+                            <label for="brandLogo">Upload Customer Logo</label>
+                            <input type="file" id="brandLogo" accept=".png,.jpg,.jpeg,.svg,.webp,image/png,image/jpeg,image/svg+xml,image/webp">
+                        </div>
                     </div>
-                    <div id="savedLogoPreview" style="display: none; margin-bottom: 14px; padding: 12px; border: 1px solid #C8BEDD; border-radius: 6px; background: #fff;">
-                        <div style="font-weight: 700; color: #110251; margin-bottom: 8px;">Selected Saved Logo</div>
-                        <img id="savedLogoImage" alt="Selected saved logo"
-                             style="display: block; max-width: 260px; max-height: 80px; object-fit: contain; margin-bottom: 8px; background: white;">
-                        <div id="savedLogoMeta" style="color: #555; font-size: 0.9em;"></div>
+
+                    <div class="logo-preview" id="savedLogoPreview" hidden>
+                        <div>
+                            <strong>Selected Saved Logo</strong>
+                            <p id="savedLogoMeta"></p>
+                        </div>
+                        <img id="savedLogoImage" alt="Selected saved logo">
                     </div>
-                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Customer Logo:</label>
-                    <input type="file" id="brandLogo" accept=".png,.jpg,.jpeg,.svg,.webp,image/png,image/jpeg,image/svg+xml,image/webp"
-                           style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; max-width: 460px; font-size: 1em; background: #fff;">
-                    <div style="margin-top: 10px; display: grid; grid-template-columns: auto minmax(220px, 360px); gap: 10px; align-items: center;">
-                        <label style="display: inline-flex; align-items: center; gap: 8px; font-weight: 600;">
+
+                    <div class="logo-options">
+                        <label class="check-row">
                             <input type="checkbox" id="saveBrandLogo">
-                            Save uploaded logo
+                            <span>Save uploaded logo</span>
                         </label>
-                        <input type="text" id="brandLogoName" placeholder="Logo name for library"
-                               style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
-                    </div>
-                    <label style="display: inline-flex; align-items: center; gap: 8px; font-weight: 600; margin-top: 12px;">
-                        <input type="checkbox" id="showClearedgeMark" checked>
-                        Show ClearEdge logo mark
-                    </label>
-                    <div style="color: #555; font-size: 0.9em; margin-top: 5px;">
-                        Adds the ClearEdge logo in the footer without replacing the customer logo.
-                    </div>
-                    <div id="suggestedLogoPanel" style="display: none; margin-top: 14px; padding: 12px; border: 1px solid #C8BEDD; border-radius: 6px; background: #fff;">
-                        <div style="font-weight: 700; color: #110251; margin-bottom: 8px;">Suggested Logo From SDS/TDS</div>
-                        <img id="suggestedLogoImage" alt="Suggested logo from SDS/TDS"
-                             style="display: block; max-width: 260px; max-height: 80px; object-fit: contain; margin-bottom: 8px; background: white;">
-                        <div id="suggestedLogoMeta" style="color: #555; font-size: 0.9em;"></div>
-                        <div style="color: #555; font-size: 0.9em; margin-top: 6px;">
-                            Leave the upload box empty to use this suggestion. Uploading a logo overrides it.
+                        <div class="form-field">
+                            <label for="brandLogoName">Logo library name</label>
+                            <input type="text" id="brandLogoName" placeholder="Logo name for library">
                         </div>
+                        <label class="check-row">
+                            <input type="checkbox" id="showClearedgeMark" checked>
+                            <span>Show ClearEdge logo mark</span>
+                        </label>
                     </div>
-                    <div style="margin-top: 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;">
+
+                    <div class="logo-preview" id="suggestedLogoPanel" hidden>
                         <div>
-                            <label style="font-weight: 600; margin-bottom: 10px; display: block;">Supplier Name:</label>
-                            <input type="text" id="supplierName" placeholder="From SDS or enter manually"
-                                   style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                            <strong>Suggested Logo From SDS/TDS</strong>
+                            <p id="suggestedLogoMeta"></p>
+                            <p>Leave the upload box empty to use this suggestion. Uploading a logo overrides it.</p>
                         </div>
-                        <div>
-                            <label style="font-weight: 600; margin-bottom: 10px; display: block;">Supplier Address:</label>
-                            <input type="text" id="supplierAddress" placeholder="From SDS or enter manually"
-                                   style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                        <img id="suggestedLogoImage" alt="Suggested logo from SDS/TDS">
+                    </div>
+
+                    <div class="form-grid three-col">
+                        <div class="form-field">
+                            <label for="supplierName">Supplier Name</label>
+                            <input type="text" id="supplierName" placeholder="From SDS or enter manually">
                         </div>
-                        <div>
-                            <label style="font-weight: 600; margin-bottom: 10px; display: block;">Supplier Phone:</label>
-                            <input type="text" id="supplierPhone" placeholder="From SDS or enter manually"
-                                   style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                        <div class="form-field">
+                            <label for="supplierAddress">Supplier Address</label>
+                            <input type="text" id="supplierAddress" placeholder="From SDS or enter manually">
+                        </div>
+                        <div class="form-field">
+                            <label for="supplierPhone">Supplier Phone</label>
+                            <input type="text" id="supplierPhone" placeholder="From SDS or enter manually">
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <div style="margin-top: 20px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; max-width: 920px;">
-                <div>
-                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Lot Number:</label>
-                    <input type="text" id="lotNumber" placeholder="Optional"
-                           style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                <div class="form-grid four-col">
+                    <div class="form-field">
+                        <label for="lotNumber">Lot Number</label>
+                        <input type="text" id="lotNumber" placeholder="Optional">
+                    </div>
+                    <div class="form-field">
+                        <label for="expirationDate">Expiration Date</label>
+                        <input type="text" id="expirationDate" placeholder="Optional">
+                    </div>
+                    <div class="form-field">
+                        <label for="manufactureDate">Manufacture Date</label>
+                        <input type="text" id="manufactureDate" placeholder="Optional">
+                    </div>
+                    <div class="form-field">
+                        <label for="fillAmount">Net Weight / Fill Amount</label>
+                        <input type="text" id="fillAmount" placeholder="e.g., 441 lb or 200 kg">
+                        <p class="field-help" id="containerTypeHint"></p>
+                    </div>
                 </div>
-                <div>
-                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Expiration Date:</label>
-                    <input type="text" id="expirationDate" placeholder="Optional"
-                           style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
-                </div>
-                <div>
-                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Manufacture Date:</label>
-                    <input type="text" id="manufactureDate" placeholder="Optional"
-                           style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
-                </div>
-                <div>
-                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Fill Amount:</label>
-                    <input type="text" id="fillAmount" placeholder="e.g., 441 lb or 200 kg"
-                           style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
-                    <div id="containerTypeHint" style="margin-top: 6px; color: #555; font-size: 0.9em;"></div>
-                </div>
-            </div>
 
-            <div style="margin-top: 20px; max-width: 760px;">
-                <label style="font-weight: 600; margin-bottom: 10px; display: block;">GHS Pictograms:</label>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-                    <select id="ghsPictogramSelect" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; min-width: 280px; font-size: 1em;">
-                        <option value="">Auto from SDS</option>
-                        <option value="GHS07">Exclamation Point</option>
-                        <option value="GHS08">Health Hazard</option>
-                        <option value="GHS06">Skull and Crossbones</option>
-                        <option value="GHS05">Corrosive</option>
-                        <option value="GHS02">Flame</option>
-                        <option value="GHS04">Gas Cylinder</option>
-                        <option value="GHS03">Flame Over Circle</option>
-                        <option value="GHS01">Exploding Bomb</option>
-                        <option value="GHS09">Environment</option>
-                    </select>
-                    <button type="button" id="addGhsPictogram" class="btn" style="padding: 10px 16px;">Add</button>
-                    <button type="button" id="clearGhsPictograms" style="padding: 10px 16px; border-radius: 5px; border: 1px solid #bbb; background: #fff; cursor: pointer;">Use SDS auto-pick</button>
-                </div>
-                <div id="selectedGhsPictograms" style="margin-top: 10px; color: #555; font-size: 0.95em;">Auto from SDS</div>
-            </div>
-
-            <div style="margin-top: 20px; padding: 16px; border: 1px solid #D8D3E6; border-radius: 6px; background: #fff;">
-                <h3 style="margin-bottom: 12px;">DOT Highway Shipping Information</h3>
-                <p style="color: #666; margin-bottom: 14px;">
-                    Use SDS auto-pick when Section 14 is complete. Fill these boxes when the shipping data is known but missing or unclear.
-                </p>
-                <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px;">
-                    <div>
-                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Transport Status:</label>
-                        <select id="transportStatus" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
-                            <option value="auto">Auto from SDS</option>
-                            <option value="regulated">DOT regulated</option>
-                            <option value="not_regulated">Not regulated for DOT transport</option>
+                <div class="form-grid three-col">
+                    <div class="form-field">
+                        <label for="labelSize">Label Size</label>
+                        <select id="labelSize">
+                            <option value="pail">Pail (8.5&quot; x 11&quot;)</option>
+                            <option value="drum">Drum (8.5&quot; x 11&quot;)</option>
+                            <option value="tote">Tote (8.5&quot; x 11&quot;)</option>
                         </select>
                     </div>
-                    <div>
-                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">UN/NA Number:</label>
-                        <input type="text" id="unNumber" placeholder="e.g., UN1993"
-                               style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
-                    </div>
-                    <div>
-                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Proper Shipping Name:</label>
-                        <input type="text" id="properShippingName" placeholder="Exact DOT name"
-                               style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
-                    </div>
-                    <div>
-                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Hazard Class:</label>
-                        <input type="text" id="hazardClass" placeholder="e.g., 3, 8, 9"
-                               style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
-                    </div>
-                    <div>
-                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Subsidiary Hazard Classes:</label>
-                        <input type="text" id="subsidiaryHazardClasses" placeholder="e.g., 8, 6.1"
-                               style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
-                    </div>
-                    <div>
-                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Packing Group:</label>
-                        <select id="packingGroup" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
-                            <option value="">Auto / not listed</option>
-                            <option value="I">I</option>
-                            <option value="II">II</option>
-                            <option value="III">III</option>
+                    <div class="form-field">
+                        <label for="labelOrientation">Orientation</label>
+                        <select id="labelOrientation">
+                            <option value="vertical">Vertical</option>
+                            <option value="horizontal">Horizontal</option>
                         </select>
                     </div>
-                    <div>
-                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Marine Pollutant:</label>
-                        <select id="marinePollutant" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
-                            <option value="">Auto / not listed</option>
-                            <option value="yes">Yes</option>
-                            <option value="no">No</option>
+                    <div class="form-field">
+                        <label for="labelMode">Label Mode</label>
+                        <select id="labelMode">
+                            <option value="shipped_dot">Shipped/DOT (Transport)</option>
+                            <option value="workplace">Workplace Container</option>
                         </select>
                     </div>
-                    <div>
-                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Hazardous Substance / RQ:</label>
-                        <select id="hazardousSubstance" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
-                            <option value="">Auto / not listed</option>
-                            <option value="yes">Yes</option>
-                            <option value="no">No</option>
-                        </select>
+                </div>
+            </section>
+
+            <section class="workflow-card" id="stepCompliance" aria-labelledby="complianceHeading">
+                <div class="section-heading">
+                    <p class="step-kicker">Step 3</p>
+                    <h2 id="complianceHeading">Compliance review inputs</h2>
+                    <p>Use SDS auto-pick first. Fill these fields only when Section 14, GHS, NFPA, or emergency contact data needs operator confirmation.</p>
+                </div>
+
+                <div class="compliance-block">
+                    <h3>GHS pictograms</h3>
+                    <div class="inline-controls">
+                        <div class="form-field">
+                            <label for="ghsPictogramSelect">Approved pictogram selector</label>
+                            <select id="ghsPictogramSelect">
+                                <option value="">Auto from SDS</option>
+                                <option value="GHS07">Exclamation Point</option>
+                                <option value="GHS08">Health Hazard</option>
+                                <option value="GHS06">Skull and Crossbones</option>
+                                <option value="GHS05">Corrosive</option>
+                                <option value="GHS02">Flame</option>
+                                <option value="GHS04">Gas Cylinder</option>
+                                <option value="GHS03">Flame Over Circle</option>
+                                <option value="GHS01">Exploding Bomb</option>
+                                <option value="GHS09">Environment</option>
+                            </select>
+                        </div>
+                        <button type="button" id="addGhsPictogram" class="btn btn-secondary">Add</button>
+                        <button type="button" id="clearGhsPictograms" class="btn btn-ghost">Use SDS auto-pick</button>
                     </div>
-                    <div>
-                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Hazardous Waste:</label>
-                        <select id="hazardousWaste" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
-                            <option value="">Auto / not listed</option>
-                            <option value="yes">Yes</option>
-                            <option value="no">No</option>
-                        </select>
+                    <div id="selectedGhsPictograms" class="selected-pictograms" aria-live="polite">Auto from SDS</div>
+                </div>
+
+                <div class="compliance-block">
+                    <h3>DOT highway shipping information</h3>
+                    <div class="form-grid four-col">
+                        <div class="form-field">
+                            <label for="transportStatus">Transport Status</label>
+                            <select id="transportStatus">
+                                <option value="auto">Auto from SDS</option>
+                                <option value="regulated">DOT regulated</option>
+                                <option value="not_regulated">Not regulated for DOT transport</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label for="unNumber">UN/NA Number</label>
+                            <input type="text" id="unNumber" placeholder="e.g., UN1993">
+                        </div>
+                        <div class="form-field">
+                            <label for="properShippingName">Proper Shipping Name</label>
+                            <input type="text" id="properShippingName" placeholder="Exact DOT name">
+                        </div>
+                        <div class="form-field">
+                            <label for="hazardClass">Hazard Class</label>
+                            <input type="text" id="hazardClass" placeholder="e.g., 3, 8, 9">
+                        </div>
+                        <div class="form-field">
+                            <label for="subsidiaryHazardClasses">Subsidiary Hazard Classes</label>
+                            <input type="text" id="subsidiaryHazardClasses" placeholder="e.g., 8, 6.1">
+                        </div>
+                        <div class="form-field">
+                            <label for="packingGroup">Packing Group</label>
+                            <select id="packingGroup">
+                                <option value="">Auto / not listed</option>
+                                <option value="I">I</option>
+                                <option value="II">II</option>
+                                <option value="III">III</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label for="marinePollutant">Marine Pollutant</label>
+                            <select id="marinePollutant">
+                                <option value="">Auto / not listed</option>
+                                <option value="yes">Yes</option>
+                                <option value="no">No</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label for="hazardousSubstance">Hazardous Substance / RQ</label>
+                            <select id="hazardousSubstance">
+                                <option value="">Auto / not listed</option>
+                                <option value="yes">Yes</option>
+                                <option value="no">No</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label for="hazardousWaste">Hazardous Waste</label>
+                            <select id="hazardousWaste">
+                                <option value="">Auto / not listed</option>
+                                <option value="yes">Yes</option>
+                                <option value="no">No</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label for="limitedQuantity">Limited Quantity</label>
+                            <input type="text" id="limitedQuantity" placeholder="Yes, No, or threshold">
+                        </div>
+                        <div class="form-field">
+                            <label for="emergencyPhone">Emergency Phone</label>
+                            <input type="text" id="emergencyPhone" placeholder="24-hour emergency number">
+                        </div>
                     </div>
+                </div>
+            </section>
+
+            <section class="workflow-card" id="stepExport" aria-labelledby="exportHeading">
+                <div class="section-heading">
+                    <p class="step-kicker">Step 4</p>
+                    <h2 id="exportHeading">Preview and export</h2>
+                    <p>Generate the label, review the extracted information, correct any fields, then download the full PDF and Canva handoff files.</p>
+                </div>
+
+                <div class="generate-row">
+                    <button id="generateBtn" class="btn btn-primary" disabled>Generate Label</button>
+                    <p id="generateHelp" class="field-help">Upload at least one PDF and enter a product name to generate a label.</p>
+                </div>
+
+                <div class="loading" id="loading" role="status" aria-live="polite" hidden>
+                    <div class="spinner" aria-hidden="true"></div>
                     <div>
-                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Limited Quantity:</label>
-                        <input type="text" id="limitedQuantity" placeholder="Yes, No, or threshold"
-                               style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
+                        <strong>Processing label data</strong>
+                        <ol class="progress-stage-list" id="progressStageList">
+                            <li class="is-active">Uploading documents</li>
+                            <li>Extracting SDS/TDS text</li>
+                            <li>Analyzing GHS and DOT fields</li>
+                            <li>Rendering preview and PDFs</li>
+                        </ol>
                     </div>
-                    <div>
-                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Emergency Phone:</label>
-                        <input type="text" id="emergencyPhone" placeholder="24-hour emergency number"
-                               style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; font-size: 1em;">
-                    </div>
+                </div>
+
+                <div class="result" id="result" aria-live="polite"></div>
+            </section>
+        </section>
+
+        <aside class="preview-rail" id="previewRail" aria-label="Label preview and export status">
+            <div class="preview-rail-inner" id="previewRailContent">
+                <div class="empty-preview">
+                    <p class="step-kicker">Preview</p>
+                    <h2>Preview will appear after SDS/TDS analysis.</h2>
+                    <p>When the label is generated, this panel shows the product label page, the DOT sticker sheet when required, and export actions.</p>
                 </div>
             </div>
-
-            <div style="margin-top: 20px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; max-width: 760px;">
-                <div>
-                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Label Size:</label>
-                    <select id="labelSize" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%;">
-                        <option value="pail">Pail (8.5" x 11")</option>
-                        <option value="drum">Drum (8.5" x 11")</option>
-                        <option value="tote">Tote (8.5" x 11")</option>
-                    </select>
-                </div>
-                <div>
-                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Orientation:</label>
-                    <select id="labelOrientation" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%;">
-                        <option value="vertical">Vertical</option>
-                        <option value="horizontal">Horizontal</option>
-                    </select>
-                </div>
-                <div>
-                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Label Mode:</label>
-                    <select id="labelMode" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%;">
-                        <option value="shipped_dot">Shipped/DOT (Transport)</option>
-                        <option value="workplace">Workplace Container</option>
-                    </select>
-                </div>
-            </div>
-
-            <button id="generateBtn" class="btn" style="margin-top: 20px;" disabled>Generate Label</button>
-
-            <div class="loading" id="loading">
-                <div class="spinner"></div>
-                <p><strong>Processing PDFs with AI...</strong></p>
-                <p style="color: #666;">This may take 30-60 seconds</p>
-            </div>
-
-            <div class="result" id="result"></div>
-        </div>
-    </div>
+        </aside>
+    </main>
 
     <script src="config.js"></script>
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
 </body>
 </html>
