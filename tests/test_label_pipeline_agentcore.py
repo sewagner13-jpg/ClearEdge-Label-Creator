@@ -53,6 +53,59 @@ class IncompleteNovAddOpenAIClient:
         )
 
 
+class IncompleteCEFlexOpenAIClient:
+    def extract_from_documents(self, sds_text, tds_text, product_name: str):
+        return ExtractedData(
+            product=ProductInfo(name=product_name),
+            ghs=GHSClassification(signal_word="Warning"),
+            transport=TransportClassification(un_number="UN3082"),
+        )
+
+
+class CEFlexPDFExtractor:
+    SDS_TEXT = """
+    Safety Data Sheet
+    CE Flex-Mod
+    Section 1: Identification
+    Product Name: CE Flex-Mod Part A
+    Company Name: ClearEdge Solutions, 1705 Gregory Road, Statesville, NC 28677.
+    Emergency Telephone: CHEMTREC: 800-424-9300
+    Recommended Use: High-elongation epoxy resin binder for industrial/professional use only.
+
+    Section 2: Hazard(s) Identification
+    Classification:
+    Skin Irritation: Category 2
+    Eye Irritation: Category 2A
+    Skin Sensitization: Category 1
+    Reproductive Toxicity: Category 2
+    Aspiration Hazard: Category 1
+    Chronic Aquatic Toxicity: Category 2
+    GHS Label Elements, including precautionary statements:
+    Signal Word: DANGER
+    Hazard Statement(s):
+    H304: May be fatal if swallowed and enters airways.
+    H315: Causes skin irritation.
+    H317: May cause an allergic skin reaction.
+    H319: Causes serious eye irritation.
+    H361: Suspected of damaging fertility or the unborn child.
+    H411: Toxic to aquatic life with long-lasting effects.
+    Precautionary Statement(s):
+    Prevention: Avoid breathing dust/fume/gas/mist/vapors/spray.
+
+    Section 14: Transport Information
+    IMDG/IATA (Ocean/Air): UN 3082, Environmentally hazardous substance,
+    liquid, n.o.s. (Epoxy Resin),
+    Class 9, PG III.
+    """
+
+    def extract_text(self, content: bytes, doc_type: str):
+        return ExtractedText(
+            doc=doc_type,
+            method_used="text",
+            pages=[ExtractedTextPage(page=1, text=self.SDS_TEXT)],
+        )
+
+
 class NovAddPDFExtractor:
     SDS_TEXT = """
     1. Identification
@@ -341,6 +394,40 @@ async def test_pipeline_reconciles_incomplete_openai_with_novadd_source_facts(tm
     assert "id=\"pictogram-GHS07\"" in result["preview"]["inline_svg"]
     assert "id=\"pictogram-GHS08\"" in result["preview"]["inline_svg"]
     assert "Harmful if swallowed." in result["preview"]["inline_svg"]
+
+
+@pytest.mark.asyncio
+async def test_pipeline_reconciles_ce_flex_pictograms_from_source_h_codes(tmp_path, monkeypatch):
+    monkeypatch.setattr(label_pipeline.settings, "agentcore_enabled", False)
+    store = {}
+
+    pipeline = LabelPipeline(
+        pdf_extractor=CEFlexPDFExtractor(),
+        openai_client=IncompleteCEFlexOpenAIClient(),
+        validator=ComplianceValidator(),
+        label_generator=LabelGenerator(),
+        labels_dir=tmp_path,
+        metadata_store=store,
+        save_metadata_store=lambda: None,
+    )
+
+    result = await pipeline.generate_label_from_uploads(
+        files=[_upload("ce-flex-mod-sds.pdf")],
+        product_name="CE Flex Mod",
+        mode="shipped_dot",
+        size="drum",
+        label_brand="clearedge",
+    )
+
+    extracted = result["extracted"]
+    assert extracted["ghs"]["signal_word"] == "Danger"
+    assert extracted["ghs"]["pictograms"] == ["GHS07", "GHS08", "GHS09"]
+    assert extracted["transport"]["hazard_class"] == "9"
+    assert extracted["transport"]["packing_group"] == "III"
+    assert "H411" in {statement["code"] for statement in extracted["ghs"]["hazard_statements"]}
+    assert 'id="pictogram-GHS07"' in result["preview"]["inline_svg"]
+    assert 'id="pictogram-GHS08"' in result["preview"]["inline_svg"]
+    assert 'id="pictogram-GHS09"' in result["preview"]["inline_svg"]
 
 
 @pytest.mark.asyncio

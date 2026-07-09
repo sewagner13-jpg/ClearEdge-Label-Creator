@@ -21,6 +21,72 @@ from .schema import (
 class RuleBasedExtractor:
     """Extract only explicitly present fields from SDS/TDS text."""
 
+    GHS_PICTOGRAM_ORDER = (
+        "GHS01",
+        "GHS02",
+        "GHS03",
+        "GHS04",
+        "GHS05",
+        "GHS06",
+        "GHS07",
+        "GHS08",
+        "GHS09",
+    )
+
+    H_CODE_PICTOGRAMS = {
+        "H200": ("GHS01",),
+        "H201": ("GHS01",),
+        "H202": ("GHS01",),
+        "H203": ("GHS01",),
+        "H204": ("GHS01",),
+        "H205": ("GHS01",),
+        "H220": ("GHS02",),
+        "H221": ("GHS02",),
+        "H222": ("GHS02",),
+        "H223": ("GHS02",),
+        "H224": ("GHS02",),
+        "H225": ("GHS02",),
+        "H226": ("GHS02",),
+        "H240": ("GHS01", "GHS02"),
+        "H241": ("GHS01", "GHS02"),
+        "H242": ("GHS02",),
+        "H270": ("GHS03",),
+        "H280": ("GHS04",),
+        "H281": ("GHS04",),
+        "H290": ("GHS05",),
+        "H300": ("GHS06",),
+        "H301": ("GHS06",),
+        "H302": ("GHS07",),
+        "H304": ("GHS08",),
+        "H310": ("GHS06",),
+        "H311": ("GHS06",),
+        "H312": ("GHS07",),
+        "H314": ("GHS05",),
+        "H315": ("GHS07",),
+        "H317": ("GHS07",),
+        "H318": ("GHS05",),
+        "H319": ("GHS07",),
+        "H330": ("GHS06",),
+        "H331": ("GHS06",),
+        "H332": ("GHS07",),
+        "H334": ("GHS08",),
+        "H335": ("GHS07",),
+        "H336": ("GHS07",),
+        "H340": ("GHS08",),
+        "H341": ("GHS08",),
+        "H350": ("GHS08",),
+        "H351": ("GHS08",),
+        "H360": ("GHS08",),
+        "H361": ("GHS08",),
+        "H370": ("GHS08",),
+        "H371": ("GHS08",),
+        "H372": ("GHS08",),
+        "H373": ("GHS08",),
+        "H400": ("GHS09",),
+        "H410": ("GHS09",),
+        "H411": ("GHS09",),
+    }
+
     NOT_REGULATED_MARKERS = (
         "not regulated for dot transport",
         "not regulated as a dangerous good",
@@ -126,24 +192,7 @@ class RuleBasedExtractor:
         if pictogram_match:
             for raw_code in pictogram_match["match"].split():
                 code = normalize_ghs_pictogram(raw_code)
-                if code not in pictograms:
-                    pictograms.append(code)
-            data.ghs.pictograms = pictograms
-            cls._add_evidence(data, "ghs.pictograms", ", ".join(pictograms), pictogram_match)
-
-        for derived_code in cls._derive_pictograms_from_classifications(sources):
-            if derived_code not in pictograms:
-                pictograms.append(derived_code)
-        if pictograms:
-            data.ghs.pictograms = pictograms
-            if not pictogram_match:
-                match = cls._find_regex(
-                    r"(Hazard\s+Classification[\s\S]{0,900}?Label\s+Elements)",
-                    sources,
-                    flags=re.IGNORECASE,
-                ) or cls._find_regex(r"(Hazard\s+Classification[\s\S]{0,900})", sources, flags=re.IGNORECASE)
-                if match:
-                    cls._add_evidence(data, "ghs.pictograms", ", ".join(pictograms), match)
+                cls._append_unique(pictograms, code)
 
         hazard_statements = [
             HazardStatement(code=code, text=text)
@@ -163,6 +212,26 @@ class RuleBasedExtractor:
             if key not in {item.text.lower() for item in hazard_statements}:
                 hazard_statements.append(HazardStatement(code=None, text=statement))
         data.ghs.hazard_statements = hazard_statements
+
+        for derived_code in cls._derive_pictograms_from_classifications(sources):
+            cls._append_unique(pictograms, derived_code)
+        for derived_code in cls._derive_pictograms_from_hazard_statements(hazard_statements):
+            cls._append_unique(pictograms, derived_code)
+        if pictograms:
+            data.ghs.pictograms = cls._sort_pictograms(pictograms)
+            if pictogram_match:
+                cls._add_evidence(data, "ghs.pictograms", ", ".join(data.ghs.pictograms), pictogram_match)
+            else:
+                match = (
+                    cls._find_regex(
+                        r"((?:Hazard\s+Classification|Classification\s*:)[\s\S]{0,1400}?(?:Label\s+Elements|Signal\s+Word|Hazard\s+Statement))",
+                        sources,
+                        flags=re.IGNORECASE,
+                    )
+                    or cls._find_regex(r"((?:Hazard\s+Statement|Hazard\s+Statement\(s\))[\s\S]{0,1200})", sources, flags=re.IGNORECASE)
+                )
+                if match:
+                    cls._add_evidence(data, "ghs.pictograms", ", ".join(data.ghs.pictograms), match)
 
         precautionary_statements = [
             PrecautionaryStatement(code=code, text=text)
@@ -200,6 +269,8 @@ class RuleBasedExtractor:
 
         cls._set_regex(data, "transport.un_number", r"\b(UN\s*[0-9]{4})\b", sources, transform=lambda value: value.replace(" ", "").upper())
         cls._set_regex(data, "transport.hazard_class", r"Hazard\s*Class\s*:?\s*([0-9](?:\.[0-9])?)", sources)
+        if not data.transport.hazard_class:
+            cls._set_regex(data, "transport.hazard_class", r"\bClass\s*([0-9](?:\.[0-9])?)\b", sources)
         subsidiary = cls._find_regex(
             r"Subsidiary\s*(?:Hazards?|Risks?|Class(?:es)?)\s*:?\s*([0-9.,;\s]+)",
             sources,
@@ -216,6 +287,8 @@ class RuleBasedExtractor:
                     subsidiary,
                 )
         cls._set_regex(data, "transport.packing_group", r"Packing\s*Group\s*:?\s*(I{1,3})\b", sources)
+        if not data.transport.packing_group:
+            cls._set_regex(data, "transport.packing_group", r"\bPG\s*(I{1,3})\b", sources)
 
         shipping_name = cls._shipping_name_from_text(compact)
         if shipping_name:
@@ -372,16 +445,29 @@ class RuleBasedExtractor:
             return []
 
         pictograms = []
-        if "serious eye damage" in block or "skin corrosion" in block:
+        if "serious eye damage" in block or "skin corrosion" in block or "corrosive to metals" in block:
             cls._append_unique(pictograms, "GHS05")
-        if "skin sensitizer" in block or ("acute toxicity" in block and "category 4" in block):
+        if (
+            "skin sensitizer" in block
+            or "skin sensitization" in block
+            or "skin irritation" in block
+            or "eye irritation" in block
+            or ("acute toxicity" in block and "category 4" in block)
+        ):
             cls._append_unique(pictograms, "GHS07")
         if (
             "specific target organ toxicity repeated exposure" in block
             or "stot repeated exposure" in block
             or ("specific target organ toxicity" in block and "repeated exposure" in block)
+            or "reproductive toxicity" in block
+            or "germ cell mutagenicity" in block
+            or "carcinogenicity" in block
+            or "aspiration hazard" in block
+            or "respiratory sensitization" in block
         ):
             cls._append_unique(pictograms, "GHS08")
+        if cls._block_has_aquatic_category_requiring_environment(block):
+            cls._append_unique(pictograms, "GHS09")
         return pictograms
 
     @classmethod
@@ -394,7 +480,79 @@ class RuleBasedExtractor:
             )
             if match:
                 return match.group("block")
+            match = re.search(
+                r"\bClassification\s*:?(?P<block>[\s\S]{0,1400}?)(?:GHS\s+Label\s+Elements|Label\s+Elements|Signal\s+Word|Hazard\s+Statement)",
+                text,
+                flags=re.IGNORECASE,
+            )
+            if match:
+                return match.group("block")
         return ""
+
+    @classmethod
+    def _derive_pictograms_from_hazard_statements(cls, hazard_statements: list[HazardStatement]) -> list[str]:
+        pictograms = []
+        for statement in hazard_statements:
+            for code in cls._h_codes_from_statement(statement):
+                for pictogram in cls.H_CODE_PICTOGRAMS.get(code, ()):
+                    cls._append_unique(pictograms, pictogram)
+            text = statement.text.lower()
+            if "serious eye damage" in text or "severe skin burns" in text:
+                cls._append_unique(pictograms, "GHS05")
+            if (
+                "skin irritation" in text
+                or "eye irritation" in text
+                or "allergic skin reaction" in text
+                or "harmful if swallowed" in text
+                or "harmful if inhaled" in text
+                or "drowsiness or dizziness" in text
+            ):
+                cls._append_unique(pictograms, "GHS07")
+            if (
+                "may be fatal if swallowed and enters airways" in text
+                or "damaging fertility" in text
+                or "damage to organs" in text
+                or "may cause cancer" in text
+            ):
+                cls._append_unique(pictograms, "GHS08")
+            if "toxic to aquatic life with long" in text or "very toxic to aquatic life" in text:
+                cls._append_unique(pictograms, "GHS09")
+        return pictograms
+
+    @staticmethod
+    def _block_has_aquatic_category_requiring_environment(block: str) -> bool:
+        lines = [" ".join(line.split()) for line in block.splitlines() if line.strip()]
+        candidates = []
+        for index, line in enumerate(lines):
+            candidates.append(line)
+            if index + 1 < len(lines):
+                candidates.append(f"{line} {lines[index + 1]}")
+
+        for candidate in candidates:
+            if re.search(
+                r"\b(?:aquatic|environmental)\b.{0,90}\bcategory\s*(?:1|2|i|ii)\b",
+                candidate,
+                flags=re.IGNORECASE,
+            ):
+                return True
+        return False
+
+    @staticmethod
+    def _h_codes_from_statement(statement: HazardStatement) -> list[str]:
+        codes = []
+        if statement.code:
+            codes.extend(re.findall(r"H[0-9]{3}[A-Z]?", statement.code.upper()))
+        codes.extend(re.findall(r"H[0-9]{3}[A-Z]?", statement.text.upper()))
+        deduped = []
+        for code in codes:
+            if code not in deduped:
+                deduped.append(code)
+        return deduped
+
+    @classmethod
+    def _sort_pictograms(cls, pictograms: list[str]) -> list[str]:
+        order = {code: index for index, code in enumerate(cls.GHS_PICTOGRAM_ORDER)}
+        return sorted(pictograms, key=lambda code: order.get(code, len(order)))
 
     @classmethod
     def _plain_section_statements(

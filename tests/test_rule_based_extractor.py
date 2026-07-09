@@ -107,6 +107,81 @@ def test_rule_based_extractor_captures_subsidiary_hazard_classes_from_section_14
     assert any(item.field_path == "transport.subsidiary_hazard_classes" for item in extracted.evidence)
 
 
+def test_rule_based_extractor_derives_ce_flex_pictograms_from_source_hazards():
+    extracted = RuleBasedExtractor.extract(
+        sds_text=_text(
+            """
+            Section 2: Hazard(s) Identification
+            Classification:
+            Skin Irritation: Category 2
+            Eye Irritation: Category 2A
+            Skin Sensitization: Category 1
+            Reproductive Toxicity: Category 2
+            Aspiration Hazard: Category 1
+            Chronic Aquatic Toxicity: Category 2
+            GHS Label Elements, including precautionary statements:
+            Signal Word: DANGER
+            Hazard Statement(s):
+            H304: May be fatal if swallowed and enters airways.
+            H315: Causes skin irritation.
+            H317: May cause an allergic skin reaction.
+            H319: Causes serious eye irritation.
+            H361: Suspected of damaging fertility or the unborn child.
+            H411: Toxic to aquatic life with long-lasting effects.
+            Precautionary Statement(s):
+            Avoid breathing dust/fume/gas/mist/vapors/spray.
+            """
+        ),
+        tds_text=None,
+        product_name="CE Flex Mod",
+    )
+
+    assert extracted.ghs.signal_word == "Danger"
+    assert extracted.ghs.pictograms == ["GHS07", "GHS08", "GHS09"]
+
+
+def test_rule_based_extractor_does_not_invent_environment_for_category_3_aquatic():
+    extracted = RuleBasedExtractor.extract(
+        sds_text=_text(
+            """
+            Hazard Classification
+            Skin Irritation Category 2
+            Chronic hazards to the aquatic Category 3 environment
+            Label Elements
+            Signal Word: Warning
+            Hazard Statement:
+            H315: Causes skin irritation.
+            H412: Harmful to aquatic life with long lasting effects.
+            Precautionary
+            """
+        ),
+        tds_text=None,
+        product_name="Aquatic Category 3 Product",
+    )
+
+    assert extracted.ghs.pictograms == ["GHS07"]
+
+
+def test_rule_based_extractor_captures_transport_class_and_pg_from_section_14_shorthand():
+    extracted = RuleBasedExtractor.extract(
+        sds_text=_text(
+            """
+            Section 14: Transport Information
+            DOT (Domestic Ground): Not regulated in non-bulk containers (<= 119 gallons).
+            IMDG/IATA (Ocean/Air): UN 3082, Environmentally hazardous substance,
+            liquid, n.o.s. (Epoxy Resin),
+            Class 9, PG III.
+            """
+        ),
+        tds_text=None,
+        product_name="CE Flex Mod",
+    )
+
+    assert extracted.transport.un_number == "UN3082"
+    assert extracted.transport.hazard_class == "9"
+    assert extracted.transport.packing_group == "III"
+
+
 def test_rule_based_extractor_captures_novadd_plain_hazard_sections_and_tds_uses():
     sds = """
     1. Identification
