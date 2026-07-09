@@ -112,6 +112,25 @@ def test_sample_4x6_label_renders_compact_sales_contact_and_thermal_page_size():
     assert "PRECAUTIONARY STATEMENTS" not in svg
 
 
+def test_sample_4x6_product_name_fits_right_header_space():
+    heading = LabelGenerator._format_sample_product_heading("NovAdd D-5104E")
+
+    assert heading["lines"] == ["NovAdd D-5104E"]
+    assert heading["font_size"] <= 31
+    assert heading["font_size"] >= 20
+
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="NovAdd D-5104E"),
+        ghs=GHSClassification(signal_word="Danger", pictograms=["GHS05", "GHS07", "GHS08"]),
+        transport=TransportClassification(),
+    )
+    svg = generator.generate_svg(data, mode="workplace", size="sample_4x6")
+
+    assert "NovAdd D-5104E" in svg
+    assert f'font-size="{heading["font_size"]}"' in svg
+
+
 def test_header_shipment_fields_do_not_overlap_long_product_name():
     generator = LabelGenerator()
     data = ExtractedData(

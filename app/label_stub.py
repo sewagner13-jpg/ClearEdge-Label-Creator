@@ -540,7 +540,42 @@ class LabelGenerator:
             return clean
         return clean[: max_chars - 3].rstrip() + "..."
 
+    @staticmethod
+    def _estimated_text_width_units(text: str) -> float:
+        """Estimate Arial bold text width in font-size units for SVG fitting."""
+        total = 0.0
+        for char in text:
+            if char in "MW@#%&":
+                total += 0.95
+            elif char.isupper():
+                total += 0.72
+            elif char.isdigit():
+                total += 0.58
+            elif char in "ilI1":
+                total += 0.32
+            elif char in " .,;:'|":
+                total += 0.30
+            elif char in "-_/":
+                total += 0.36
+            else:
+                total += 0.56
+        return max(total, 1.0)
 
+    @classmethod
+    def _fit_font_size_for_width(
+        cls,
+        lines: list[str],
+        *,
+        max_width: float,
+        preferred_size: int,
+        minimum_size: int,
+    ) -> int:
+        """Return the largest shared font size that keeps all lines inside max_width."""
+        fitted_size = preferred_size
+        for line in lines:
+            required_units = cls._estimated_text_width_units(line)
+            fitted_size = min(fitted_size, int(max_width / required_units))
+        return max(minimum_size, fitted_size)
 
     @staticmethod
     def _wrap_lines(text: Optional[str], line_width: int = 40, max_lines: int = 2) -> list[str]:
@@ -611,6 +646,25 @@ class LabelGenerator:
             "font_size": font_size,
             "y": 43,
             "line_gap": min(font_size + 1, 30),
+        }
+
+    @classmethod
+    def _format_sample_product_heading(cls, product_name: Optional[str]) -> dict:
+        """Fit a sample-label product heading inside the right-side header area."""
+        lines = cls._wrap_lines(product_name, line_width=22, max_lines=2) or ["UNNAMED PRODUCT"]
+        longest = max(len(line) for line in lines)
+        preferred_size = 34 if len(lines) == 1 and longest <= 18 else (29 if longest <= 23 else 25)
+        font_size = cls._fit_font_size_for_width(
+            lines,
+            max_width=258,
+            preferred_size=preferred_size,
+            minimum_size=20,
+        )
+        return {
+            "lines": lines,
+            "font_size": font_size,
+            "y": 43 if len(lines) == 1 else 34,
+            "line_gap": font_size + 2,
         }
 
     @classmethod
@@ -956,10 +1010,10 @@ class LabelGenerator:
         resolved_branding = self._resolve_branding(data, branding)
         logo_data_uri = resolved_branding.get("logo_data_uri")
         salesperson = (branding or {}).get("salesperson") or {}
-        product_lines = self._wrap_lines(data.product.name, line_width=22, max_lines=2) or ["UNNAMED PRODUCT"]
-        longest = max(len(line) for line in product_lines)
-        product_font_size = 34 if len(product_lines) == 1 and longest <= 18 else (29 if longest <= 23 else 25)
-        product_start_y = 43 if len(product_lines) == 1 else 34
+        heading = self._format_sample_product_heading(data.product.name)
+        product_lines = heading["lines"]
+        product_font_size = heading["font_size"]
+        product_start_y = heading["y"]
         use_line = ""
         if data.product.product_uses:
             use_line = self._fit_text(data.product.product_uses[0], 62, "")
@@ -974,7 +1028,7 @@ class LabelGenerator:
         contact_line = " | ".join(part for part in contact_parts if part)
 
         product_text = "\n".join(
-            f'<text x="154" y="{product_start_y + index * (product_font_size + 2)}" '
+            f'<text x="154" y="{product_start_y + index * heading["line_gap"]}" '
             f'font-size="{product_font_size}" font-weight="bold" fill="{self.brand_palette["primary"]}">'
             f'{self._svg_text(line)}</text>'
             for index, line in enumerate(product_lines)
