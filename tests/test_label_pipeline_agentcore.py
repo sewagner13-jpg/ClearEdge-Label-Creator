@@ -8,6 +8,7 @@ from app import label_pipeline
 from app.dot_sticker_sheet import US_LETTER_HEIGHT_PT, US_LETTER_WIDTH_PT
 from app.label_stub import LabelGenerator
 from app.label_pipeline import LabelPipeline
+from app.validator import ComplianceValidator
 from app.schema import (
     ExtractedData,
     ExtractedText,
@@ -41,6 +42,115 @@ class FakeOpenAIClient:
 class FailingOpenAIClient:
     def extract_from_documents(self, sds_text, tds_text, product_name: str):
         raise RuntimeError("quota exceeded")
+
+
+class IncompleteNovAddOpenAIClient:
+    def extract_from_documents(self, sds_text, tds_text, product_name: str):
+        return ExtractedData(
+            product=ProductInfo(name=product_name),
+            ghs=GHSClassification(signal_word="Warning"),
+            transport=TransportClassification(),
+        )
+
+
+class NovAddPDFExtractor:
+    SDS_TEXT = """
+    1. Identification
+    Product name: Novadd D-5104E
+    Manufacturer/Importer/Distributor Information
+    Company Name
+
+    : SynthEdge Advanced Materials Co.,Ltd.
+    4F., No.8, Qinghua
+    2nd St., Xinwu Dist.,
+    Taoyuan City 327,
+    Taiwan (R.O.C.)
+
+    Telephone
+
+    : +886-3-4971028
+
+    Emergency telephone number:
+
+    +886-3-4971028
+
+    2. Hazard(s) identification
+    Hazard Classification
+    Health Hazards
+    Acute toxicity (Oral)
+    Serious Eye Damage/Eye Irritation
+    Skin sensitizer
+    Specific Target Organ Toxicity Repeated Exposure
+
+    Category 4
+    Category 1
+    Category 1
+    Category 2
+
+    Label Elements
+    Signal Word:
+
+    Danger
+
+    Hazard Statement:
+    Harmful if swallowed.
+    Causes serious eye damage.
+    May cause an allergic skin reaction.
+    May cause damage to organs through prolonged or repeated exposure.
+    Harmful to aquatic life with long lasting effects.
+    Precautionary
+    Statements
+    Prevention:
+
+    Do not breathe dust/fume/gas/mist/vapors/spray. Wash face, hands and any
+    exposed skin thoroughly after handling. Wear protective gloves/protective clothing/eye protection/face protection.
+
+    Response:
+
+    IF SWALLOWED: Call a POISON CENTER/doctor if you feel unwell. Rinse mouth.
+
+    14. Transport information
+    Domestic regulation
+    49 CFR
+    Not regulated as a dangerous good
+
+    16.Other information, including date of preparation
+    HMIS Hazard ID
+    Health
+
+    *
+
+    2
+
+    Flammability
+
+    1
+
+    Physical Hazards
+
+    0
+    """
+    TDS_TEXT = """
+    Technical Data Sheet
+    MULTIFUNCTIONAL ADDITIVE NovAdd D-5104E
+    NovAdd D-5104E is a multifunctional additive offering wetting, defoaming,
+    and dispersing performance. It is a symmetric nonionic surfactant.
+
+    APPLICATION AREAS
+    Car OEM coatings
+    ●
+    General industrial coatings
+    ●
+    Printing Inks
+    """
+
+    def extract_text(self, content: bytes, doc_type: str):
+        text = self.TDS_TEXT if doc_type == "TDS" else self.SDS_TEXT
+        return ExtractedText(
+            doc=doc_type,
+            method_used="text",
+            pages=[ExtractedTextPage(page=1, text=text)],
+        )
 
 
 class FakeValidator:
@@ -197,6 +307,60 @@ async def test_openai_failure_uses_deterministic_fallback(tmp_path, monkeypatch)
     assert result["status"] == "blocked"
     assert result["success"] is True
     assert any("AI_EXTRACTION_FAILED" in warning for warning in result["extracted"]["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_pipeline_reconciles_incomplete_openai_with_novadd_source_facts(tmp_path, monkeypatch):
+    monkeypatch.setattr(label_pipeline.settings, "agentcore_enabled", False)
+    store = {}
+
+    pipeline = LabelPipeline(
+        pdf_extractor=NovAddPDFExtractor(),
+        openai_client=IncompleteNovAddOpenAIClient(),
+        validator=ComplianceValidator(),
+        label_generator=LabelGenerator(),
+        labels_dir=tmp_path,
+        metadata_store=store,
+        save_metadata_store=lambda: None,
+    )
+
+    result = await pipeline.generate_label_from_uploads(
+        files=[_upload("novadd-sds.pdf"), _upload("novadd-tds.pdf")],
+        product_name="NovAdd D-5104E",
+        mode="shipped_dot",
+        size="drum",
+        label_brand="custom",
+    )
+
+    assert result["status"] == "ready"
+    assert result["preview"]["page_count"] == 1
+    assert result["download"]["page_count"] == 1
+    assert result["dot_stickers"]["available"] is False
+    assert result["dot_shipping_review"]["status"] == "not_regulated"
+    extracted = result["extracted"]
+    assert extracted["ghs"]["signal_word"] == "Danger"
+    assert extracted["ghs"]["pictograms"] == ["GHS05", "GHS07", "GHS08"]
+    assert "Harmful if swallowed." in {
+        statement["text"] for statement in extracted["ghs"]["hazard_statements"]
+    }
+    assert any(
+        "Do not breathe dust/fume/gas/mist/vapors/spray" in statement["text"]
+        for statement in extracted["ghs"]["precautionary_statements"]
+    )
+    assert extracted["product"]["supplier_name"] == "SynthEdge Advanced Materials Co.,Ltd."
+    assert extracted["product"]["emergency_phone"] == "+886-3-4971028"
+    assert extracted["product"]["product_uses"][:2] == [
+        "Wetting, defoaming, and dispersing additive",
+        "Car OEM coatings",
+    ]
+    assert extracted["nfpa"]["health"] == 2
+    assert extracted["nfpa"]["flammability"] == 1
+    assert extracted["nfpa"]["instability"] == 0
+    assert any("conflicted with source SDS signal word" in warning for warning in extracted["warnings"])
+    assert "id=\"pictogram-GHS05\"" in result["preview"]["inline_svg"]
+    assert "id=\"pictogram-GHS07\"" in result["preview"]["inline_svg"]
+    assert "id=\"pictogram-GHS08\"" in result["preview"]["inline_svg"]
+    assert "Harmful if swallowed." in result["preview"]["inline_svg"]
 
 
 @pytest.mark.asyncio

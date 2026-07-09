@@ -213,9 +213,11 @@ class LabelPipeline:
 
         sds_text, tds_text, suggested_logo = await self._extract_uploaded_documents(files)
 
+        used_rule_based_fallback = False
         try:
             extracted_data = self.openai_client.extract_from_documents(sds_text, tds_text, cleaned_product_name)
         except ValueError as exc:
+            used_rule_based_fallback = True
             extracted_data = RuleBasedExtractor.extract(
                 sds_text=sds_text,
                 tds_text=tds_text,
@@ -224,6 +226,7 @@ class LabelPipeline:
             )
         except Exception as exc:
             logger.error("AI extraction failed: %s", exc, exc_info=True)
+            used_rule_based_fallback = True
             extracted_data = RuleBasedExtractor.extract(
                 sds_text=sds_text,
                 tds_text=tds_text,
@@ -231,6 +234,13 @@ class LabelPipeline:
                 warning=f"AI_EXTRACTION_FAILED: {exc.__class__.__name__}: {self._safe_exception_detail(exc)}",
             )
         extracted_data.product.name = cleaned_product_name
+        if not used_rule_based_fallback:
+            self._reconcile_source_backed_extraction(
+                extracted_data,
+                sds_text=sds_text,
+                tds_text=tds_text,
+                product_name=cleaned_product_name,
+            )
         branding = self._apply_suggested_logo_to_branding(branding, suggested_logo)
         self._apply_operator_fields(
             extracted_data,
@@ -828,6 +838,221 @@ class LabelPipeline:
             return unavailable_agentcore_review(
                 f"AgentCore review failed or timed out: {exc}. OpenAI extraction and local validation were used."
             )
+
+    def _reconcile_source_backed_extraction(
+        self,
+        extracted_data: ExtractedData,
+        *,
+        sds_text,
+        tds_text,
+        product_name: str,
+    ) -> None:
+        source_data = RuleBasedExtractor.extract(
+            sds_text=sds_text,
+            tds_text=tds_text,
+            product_name=product_name,
+        )
+
+        for warning in source_data.warnings:
+            self._append_warning(extracted_data, warning)
+
+        self._promote_source_scalar(extracted_data, source_data, "product.supplier_name")
+        self._promote_source_scalar(extracted_data, source_data, "product.supplier_address")
+        self._promote_source_scalar(extracted_data, source_data, "product.supplier_phone")
+        self._promote_source_scalar(extracted_data, source_data, "product.emergency_phone")
+        self._promote_source_scalar(extracted_data, source_data, "product.revision_date")
+        self._merge_source_list(extracted_data, source_data, "product.product_uses")
+
+        self._promote_source_signal_word(extracted_data, source_data)
+        self._merge_source_list(extracted_data, source_data, "ghs.pictograms")
+        self._merge_source_statement_list(extracted_data.ghs.hazard_statements, source_data.ghs.hazard_statements)
+        self._copy_source_evidence(extracted_data, source_data, "ghs.hazard_statements")
+        self._merge_source_statement_list(
+            extracted_data.ghs.precautionary_statements,
+            source_data.ghs.precautionary_statements,
+        )
+        self._copy_source_evidence(extracted_data, source_data, "ghs.precautionary_statements")
+
+        if source_data.transport.not_regulated is True:
+            self._apply_source_not_regulated_transport(extracted_data, source_data)
+        else:
+            for field_path in (
+                "transport.un_number",
+                "transport.proper_shipping_name",
+                "transport.hazard_class",
+                "transport.packing_group",
+                "transport.marine_pollutant",
+                "transport.hazardous_substance",
+                "transport.hazardous_waste",
+                "transport.limited_quantity",
+            ):
+                self._promote_source_scalar(extracted_data, source_data, field_path)
+            self._merge_source_list(extracted_data, source_data, "transport.subsidiary_hazard_classes")
+
+        for field_path in ("nfpa.health", "nfpa.flammability", "nfpa.instability", "nfpa.special"):
+            self._promote_source_nfpa_field(extracted_data, source_data, field_path)
+
+    def _promote_source_signal_word(self, extracted_data: ExtractedData, source_data: ExtractedData) -> None:
+        source_value = source_data.ghs.signal_word
+        if self._is_missing(source_value):
+            return
+        current_value = extracted_data.ghs.signal_word
+        if self._is_missing(current_value):
+            extracted_data.ghs.signal_word = source_value
+            self._copy_source_evidence(extracted_data, source_data, "ghs.signal_word")
+            return
+        if self._normalized_value(current_value) != self._normalized_value(source_value):
+            extracted_data.ghs.signal_word = source_value
+            self._append_warning(
+                extracted_data,
+                (
+                    f"OpenAI signal word '{current_value}' conflicted with source SDS signal word "
+                    f"'{source_value}'; source SDS value was used."
+                ),
+            )
+            self._copy_source_evidence(extracted_data, source_data, "ghs.signal_word")
+
+    def _promote_source_scalar(
+        self,
+        extracted_data: ExtractedData,
+        source_data: ExtractedData,
+        field_path: str,
+    ) -> None:
+        source_value = self._get_field_value(source_data, field_path)
+        if self._is_missing(source_value):
+            return
+        current_value = self._get_field_value(extracted_data, field_path)
+        if self._is_missing(current_value):
+            self._set_field_value(extracted_data, field_path, source_value)
+            self._copy_source_evidence(extracted_data, source_data, field_path)
+            return
+        if self._normalized_value(current_value) != self._normalized_value(source_value):
+            self._append_warning(
+                extracted_data,
+                f"Source value for {field_path} conflicted with extracted value; extracted value was left unchanged.",
+            )
+
+    def _promote_source_nfpa_field(
+        self,
+        extracted_data: ExtractedData,
+        source_data: ExtractedData,
+        field_path: str,
+    ) -> None:
+        if not self._has_evidence_for(source_data, field_path):
+            return
+        source_value = self._get_field_value(source_data, field_path)
+        current_value = self._get_field_value(extracted_data, field_path)
+        if not self._has_evidence_for(extracted_data, field_path) or self._is_missing(current_value):
+            self._set_field_value(extracted_data, field_path, source_value)
+            self._copy_source_evidence(extracted_data, source_data, field_path)
+            return
+        if self._normalized_value(current_value) != self._normalized_value(source_value):
+            self._append_warning(
+                extracted_data,
+                f"Source value for {field_path} conflicted with extracted value; extracted value was left unchanged.",
+            )
+
+    def _merge_source_list(
+        self,
+        extracted_data: ExtractedData,
+        source_data: ExtractedData,
+        field_path: str,
+    ) -> None:
+        source_values = self._get_field_value(source_data, field_path)
+        if not source_values:
+            return
+        current_values = list(self._get_field_value(extracted_data, field_path) or [])
+        seen = {self._normalized_value(item) for item in current_values}
+        changed = False
+        for source_value in source_values:
+            key = self._normalized_value(source_value)
+            if key in seen:
+                continue
+            current_values.append(source_value)
+            seen.add(key)
+            changed = True
+        if changed:
+            self._set_field_value(extracted_data, field_path, current_values)
+            self._copy_source_evidence(extracted_data, source_data, field_path)
+
+    @staticmethod
+    def _merge_source_statement_list(current_statements, source_statements) -> None:
+        seen = {
+            (statement.code or "", " ".join(statement.text.split()).lower())
+            for statement in current_statements
+        }
+        for source_statement in source_statements:
+            key = (source_statement.code or "", " ".join(source_statement.text.split()).lower())
+            if key in seen:
+                continue
+            current_statements.append(source_statement)
+            seen.add(key)
+
+    def _apply_source_not_regulated_transport(self, extracted_data: ExtractedData, source_data: ExtractedData) -> None:
+        regulated_fields = (
+            "transport.un_number",
+            "transport.proper_shipping_name",
+            "transport.hazard_class",
+            "transport.packing_group",
+            "transport.subsidiary_hazard_classes",
+        )
+        conflicting = [
+            field_path
+            for field_path in regulated_fields
+            if not self._is_missing(self._get_field_value(extracted_data, field_path))
+        ]
+        extracted_data.transport.not_regulated = True
+        extracted_data.transport.un_number = None
+        extracted_data.transport.proper_shipping_name = None
+        extracted_data.transport.hazard_class = None
+        extracted_data.transport.packing_group = None
+        extracted_data.transport.subsidiary_hazard_classes = []
+        self._copy_source_evidence(extracted_data, source_data, "transport.not_regulated")
+        if conflicting:
+            self._append_warning(
+                extracted_data,
+                (
+                    "Source SDS Section 14 states the product is not regulated for transport; "
+                    f"conflicting DOT fields were cleared: {', '.join(conflicting)}."
+                ),
+            )
+
+    @staticmethod
+    def _append_warning(extracted_data: ExtractedData, warning: str) -> None:
+        clean = " ".join(str(warning or "").split())
+        if clean and clean not in extracted_data.warnings:
+            extracted_data.warnings.append(clean)
+
+    @staticmethod
+    def _has_evidence_for(extracted_data: ExtractedData, field_path: str) -> bool:
+        return any(item.field_path == field_path for item in extracted_data.evidence)
+
+    def _copy_source_evidence(self, extracted_data: ExtractedData, source_data: ExtractedData, field_path: str) -> None:
+        existing_evidence = {
+            (item.field_path, item.doc, item.page, item.quote)
+            for item in extracted_data.evidence
+        }
+        for item in source_data.evidence:
+            if item.field_path != field_path:
+                continue
+            key = (item.field_path, item.doc, item.page, item.quote)
+            if key in existing_evidence:
+                continue
+            extracted_data.evidence.append(item)
+            existing_evidence.add(key)
+
+        existing_confidence = {
+            (item.field_path, item.confidence)
+            for item in extracted_data.confidence
+        }
+        for item in source_data.confidence:
+            if item.field_path != field_path:
+                continue
+            key = (item.field_path, item.confidence)
+            if key in existing_confidence:
+                continue
+            extracted_data.confidence.append(item)
+            existing_confidence.add(key)
 
     def _reconcile_agentcore_review(self, extracted_data: ExtractedData, review: dict) -> bool:
         needs_review = False

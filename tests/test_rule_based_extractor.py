@@ -105,3 +105,151 @@ def test_rule_based_extractor_captures_subsidiary_hazard_classes_from_section_14
     assert extracted.transport.hazard_class == "3"
     assert extracted.transport.subsidiary_hazard_classes == ["8"]
     assert any(item.field_path == "transport.subsidiary_hazard_classes" for item in extracted.evidence)
+
+
+def test_rule_based_extractor_captures_novadd_plain_hazard_sections_and_tds_uses():
+    sds = """
+    1. Identification
+    Product name: Novadd D-5104E
+    Manufacturer/Importer/Distributor Information
+    Company Name
+
+    : SynthEdge Advanced Materials Co.,Ltd.
+    4F., No.8, Qinghua
+    2nd St., Xinwu Dist.,
+    Taoyuan City 327,
+    Taiwan (R.O.C.)
+
+    Telephone
+
+    : +886-3-4971028
+
+    Emergency telephone number:
+
+    +886-3-4971028
+
+    2. Hazard(s) identification
+    Hazard Classification
+    Health Hazards
+    Acute toxicity (Oral)
+    Serious Eye Damage/Eye Irritation
+    Skin sensitizer
+    Specific Target Organ Toxicity Repeated Exposure
+    Environmental Hazards
+    Acute hazards to the aquatic
+    environment
+    Chronic hazards to the aquatic
+    environment
+
+    Category 4
+    Category 1
+    Category 1
+    Category 2
+    Category 3
+    Category 3
+
+    Label Elements
+    Hazard Symbol:
+
+    Signal Word:
+
+    Danger
+
+    Hazard Statement:
+    Harmful if swallowed.
+    Causes serious eye damage.
+    May cause an allergic skin reaction.
+    May cause damage to organs through prolonged or repeated exposure.
+    Harmful to aquatic life with long lasting effects.
+    Precautionary
+    Statements
+    Prevention:
+
+    Do not breathe dust/fume/gas/mist/vapors/spray. Wash face, hands and any
+    exposed skin thoroughly after handling. Do not eat, drink or smoke when
+    using this product. Wear protective gloves/protective clothing/eye protection/face protection.
+
+    Response:
+
+    IF SWALLOWED: Call a POISON CENTER/doctor if you feel unwell. Rinse mouth.
+
+    14. Transport information
+    Domestic regulation
+    49 CFR
+    Not regulated as a dangerous good
+    Remarks
+    : Not dangerous according to transport regulations., FOR USA ONLY.
+
+    16.Other information, including date of preparation
+    HMIS Hazard ID
+    Health
+
+    *
+
+    2
+
+    Flammability
+
+    1
+
+    Physical Hazards
+
+    0
+    """
+    tds = """
+    Technical Data Sheet
+    MULTIFUNCTIONAL ADDITIVE NovAdd D-5104E
+    CHEMICAL DESCRIPTION: tetramethyldecynediol, gemini surfactant
+    NovAdd D-5104E is a multifunctional additive offering wetting, defoaming,
+    and dispersing performance. It is a symmetric nonionic surfactant.
+
+    APPLICATION AREAS
+    Car OEM coatings
+    ●
+    General industrial coatings
+    ●
+    Printing Inks
+    ●
+    Architectural paints
+
+    The additive is recommended for producing stable universal pigment concentrates.
+    """
+
+    extracted = RuleBasedExtractor.extract(
+        sds_text=_text(sds),
+        tds_text=_text(tds, doc="TDS"),
+        product_name="NovAdd D-5104E",
+        warning=None,
+    )
+
+    assert extracted.product.supplier_name == "SynthEdge Advanced Materials Co.,Ltd."
+    assert "Taoyuan City 327" in extracted.product.supplier_address
+    assert extracted.product.supplier_phone == "+886-3-4971028"
+    assert extracted.product.emergency_phone == "+886-3-4971028"
+    assert extracted.product.product_uses == [
+        "Wetting, defoaming, and dispersing additive",
+        "Car OEM coatings",
+        "General industrial coatings",
+    ]
+    assert extracted.ghs.signal_word == "Danger"
+    assert extracted.ghs.pictograms == ["GHS05", "GHS07", "GHS08"]
+    assert [statement.text for statement in extracted.ghs.hazard_statements] == [
+        "Harmful if swallowed.",
+        "Causes serious eye damage.",
+        "May cause an allergic skin reaction.",
+        "May cause damage to organs through prolonged or repeated exposure.",
+        "Harmful to aquatic life with long lasting effects.",
+    ]
+    assert any(
+        "Do not breathe dust/fume/gas/mist/vapors/spray" in statement.text
+        for statement in extracted.ghs.precautionary_statements
+    )
+    assert any(
+        "IF SWALLOWED" in statement.text
+        for statement in extracted.ghs.precautionary_statements
+    )
+    assert extracted.transport.not_regulated is True
+    assert extracted.nfpa.health == 2
+    assert extracted.nfpa.flammability == 1
+    assert extracted.nfpa.instability == 0
+    assert any("HMIS" in warning for warning in extracted.warnings)
