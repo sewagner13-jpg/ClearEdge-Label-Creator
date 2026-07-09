@@ -119,7 +119,7 @@ def test_sample_4x6_product_name_fits_right_header_space():
     assert heading["font_size"] <= 29
     assert heading["font_size"] >= 20
     for line in heading["lines"]:
-        assert LabelGenerator._estimated_text_width_units(line) * heading["font_size"] <= 240
+        assert LabelGenerator._estimated_text_width_units(line) * heading["font_size"] <= 205
 
     generator = LabelGenerator()
     data = ExtractedData(
@@ -140,7 +140,7 @@ def test_sample_4x6_long_product_name_wraps_within_header_frame():
     assert len(heading["lines"]) == 2
     assert " ".join(heading["lines"]).replace("...", "").strip().startswith("Rucosan B-WB Sample")
     for line in heading["lines"]:
-        assert LabelGenerator._estimated_text_width_units(line) * heading["font_size"] <= 240
+        assert LabelGenerator._estimated_text_width_units(line) * heading["font_size"] <= 205
 
 
 def test_sample_4x6_single_line_fields_are_fitted_to_frame():

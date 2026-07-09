@@ -691,12 +691,12 @@ class LabelGenerator:
             preferred_size = 34 if len(candidate_lines) == 1 and longest <= 18 else (29 if longest <= 23 else 25)
             candidate_font_size = cls._fit_font_size_for_width(
                 candidate_lines,
-                max_width=240,
+                max_width=205,
                 preferred_size=preferred_size,
                 minimum_size=20,
             )
             fits = all(
-                cls._estimated_text_width_units(line) * candidate_font_size <= 240
+                cls._estimated_text_width_units(line) * candidate_font_size <= 205
                 for line in candidate_lines
             )
             lines = candidate_lines
@@ -705,7 +705,7 @@ class LabelGenerator:
                 break
         else:
             lines = [
-                cls._fit_text_for_width(line, max_width=240, font_size=font_size, fallback="")
+                cls._fit_text_for_width(line, max_width=205, font_size=font_size, fallback="")
                 for line in lines
             ]
         return {
