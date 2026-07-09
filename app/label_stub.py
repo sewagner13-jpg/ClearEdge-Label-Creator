@@ -683,15 +683,31 @@ class LabelGenerator:
     @classmethod
     def _format_sample_product_heading(cls, product_name: Optional[str]) -> dict:
         """Fit a sample-label product heading inside the right-side header area."""
-        lines = cls._wrap_lines(product_name, line_width=22, max_lines=2) or ["UNNAMED PRODUCT"]
-        longest = max(len(line) for line in lines)
-        preferred_size = 34 if len(lines) == 1 and longest <= 18 else (29 if longest <= 23 else 25)
-        font_size = cls._fit_font_size_for_width(
-            lines,
-            max_width=240,
-            preferred_size=preferred_size,
-            minimum_size=20,
-        )
+        lines = ["UNNAMED PRODUCT"]
+        font_size = 20
+        for line_width in range(22, 7, -1):
+            candidate_lines = cls._wrap_lines(product_name, line_width=line_width, max_lines=2) or ["UNNAMED PRODUCT"]
+            longest = max(len(line) for line in candidate_lines)
+            preferred_size = 34 if len(candidate_lines) == 1 and longest <= 18 else (29 if longest <= 23 else 25)
+            candidate_font_size = cls._fit_font_size_for_width(
+                candidate_lines,
+                max_width=240,
+                preferred_size=preferred_size,
+                minimum_size=20,
+            )
+            fits = all(
+                cls._estimated_text_width_units(line) * candidate_font_size <= 240
+                for line in candidate_lines
+            )
+            lines = candidate_lines
+            font_size = candidate_font_size
+            if fits:
+                break
+        else:
+            lines = [
+                cls._fit_text_for_width(line, max_width=240, font_size=font_size, fallback="")
+                for line in lines
+            ]
         return {
             "lines": lines,
             "font_size": font_size,

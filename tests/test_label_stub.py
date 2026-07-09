@@ -118,6 +118,8 @@ def test_sample_4x6_product_name_fits_right_header_space():
     assert heading["lines"] == ["NovAdd D-5104E"]
     assert heading["font_size"] <= 29
     assert heading["font_size"] >= 20
+    for line in heading["lines"]:
+        assert LabelGenerator._estimated_text_width_units(line) * heading["font_size"] <= 240
 
     generator = LabelGenerator()
     data = ExtractedData(
@@ -129,6 +131,16 @@ def test_sample_4x6_product_name_fits_right_header_space():
 
     assert "NovAdd D-5104E" in svg
     assert f'font-size="{heading["font_size"]}"' in svg
+
+
+def test_sample_4x6_long_product_name_wraps_within_header_frame():
+    heading = LabelGenerator._format_sample_product_heading("Rucosan B-WB Sample No Biocide")
+
+    assert heading["font_size"] >= 20
+    assert len(heading["lines"]) == 2
+    assert " ".join(heading["lines"]).replace("...", "").strip().startswith("Rucosan B-WB Sample")
+    for line in heading["lines"]:
+        assert LabelGenerator._estimated_text_width_units(line) * heading["font_size"] <= 240
 
 
 def test_sample_4x6_single_line_fields_are_fitted_to_frame():
