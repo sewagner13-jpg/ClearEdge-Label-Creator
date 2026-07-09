@@ -270,6 +270,29 @@ a:focus-visible,
     font-size: 0.88rem;
 }
 
+.upload-action-panel {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: center;
+    margin-top: 16px;
+    padding: 16px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    background: var(--ce-lavender-soft);
+}
+
+.upload-action-panel strong {
+    display: block;
+    color: var(--ce-purple);
+    font-size: 1rem;
+}
+
+.upload-action-panel p {
+    margin: 4px 0 0;
+    color: var(--muted);
+}
+
 .form-grid {
     display: grid;
     gap: 16px;
@@ -769,6 +792,11 @@ a:focus-visible,
     .workflow-card,
     .preview-rail-inner {
         padding: 14px;
+    }
+
+    .upload-action-panel {
+        align-items: stretch;
+        flex-direction: column;
     }
 
     .label-preview-frame,

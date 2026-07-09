@@ -49,7 +49,8 @@ export function createLabelCreatorApp() {
 
     function bindElements() {
         [
-            'uploadArea', 'fileInput', 'fileList', 'generateBtn', 'generateHelp', 'loading',
+            'uploadArea', 'fileInput', 'fileList', 'analyzeSdsBtn', 'analyzeHelp',
+            'generateBtn', 'generateHelp', 'loading',
             'progressStageList', 'result', 'previewRailContent', 'labelMode', 'labelSize',
             'labelOrientation', 'productName', 'clearedgeBrandNote', 'lotNumber', 'expirationDate', 'manufactureDate',
             'fillAmount', 'containerTypeHint', 'labelBrand', 'brandLogo', 'savedLogoSelect',
@@ -113,7 +114,8 @@ export function createLabelCreatorApp() {
             renderSelectedGhsPictograms();
         });
 
-        elements.generateBtn.addEventListener('click', generateLabel);
+        elements.analyzeSdsBtn.addEventListener('click', requestGenerationStart);
+        elements.generateBtn.addEventListener('click', requestGenerationStart);
         elements.result.addEventListener('submit', handleCorrectionSubmit);
     }
 
@@ -175,7 +177,15 @@ export function createLabelCreatorApp() {
     function updateGenerateState() {
         const hasFiles = state.selectedFiles.length > 0;
         const hasProduct = normalizedText(elements.productName.value).length >= 2;
+        elements.analyzeSdsBtn.disabled = !hasFiles;
         elements.generateBtn.disabled = !(hasFiles && hasProduct);
+        if (!hasFiles) {
+            elements.analyzeHelp.textContent = 'Upload SDS/TDS PDFs to unlock analysis.';
+        } else if (!hasProduct) {
+            elements.analyzeHelp.textContent = 'PDFs are ready. Enter the label product name, then analyze the SDS/TDS source data.';
+        } else {
+            elements.analyzeHelp.textContent = 'Ready to parse SDS/TDS data and build the label preview.';
+        }
         elements.generateHelp.textContent = hasFiles && hasProduct
             ? 'Ready to analyze the documents and render a label preview.'
             : 'Upload at least one PDF and enter a product name to generate a label.';
@@ -338,8 +348,25 @@ export function createLabelCreatorApp() {
         return formData;
     }
 
+    function requestGenerationStart() {
+        if (!state.selectedFiles.length) {
+            elements.analyzeHelp.textContent = 'Upload at least one SDS or TDS PDF before starting analysis.';
+            scrollToStep('stepUpload');
+            return;
+        }
+
+        if (normalizedText(elements.productName.value).length < 2) {
+            elements.analyzeHelp.textContent = 'Enter the label product name in Step 2, then click Analyze SDS/TDS.';
+            elements.generateHelp.textContent = 'Product name is required before SDS/TDS analysis can start.';
+            scrollToStep('stepSetup');
+            elements.productName.focus({ preventScroll: true });
+            return;
+        }
+
+        generateLabel();
+    }
+
     async function generateLabel() {
-        if (elements.generateBtn.disabled) return;
         setProcessing(true);
 
         try {
@@ -377,6 +404,7 @@ export function createLabelCreatorApp() {
         clearInterval(state.progressTimer);
         state.progressTimer = null;
         state.progressIndex = 0;
+        elements.analyzeSdsBtn.disabled = isProcessing || !state.selectedFiles.length;
         elements.generateBtn.disabled = isProcessing || !(state.selectedFiles.length && normalizedText(elements.productName.value).length >= 2);
         elements.loading.hidden = !isProcessing;
         if (!isProcessing) {

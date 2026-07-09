@@ -41,6 +41,19 @@ def test_frontend_shell_uses_guided_workflow_and_preview_rail():
     assert 'style="' not in index_html
 
 
+def test_frontend_upload_step_exposes_direct_sds_analysis_action():
+    index_html = (REPO_ROOT / "netlify-frontend" / "index.html").read_text()
+    controller_js = (REPO_ROOT / "netlify-frontend" / "js" / "labelCreatorApp.js").read_text()
+
+    assert 'id="analyzeSdsBtn"' in index_html
+    assert "Analyze SDS/TDS" in index_html
+    assert 'id="analyzeHelp"' in index_html
+    assert "analyzeSdsBtn" in controller_js
+    assert "analyzeHelp" in controller_js
+    assert "requestGenerationStart" in controller_js
+    assert "elements.analyzeSdsBtn.addEventListener('click', requestGenerationStart)" in controller_js
+
+
 def test_frontend_entrypoint_is_modular_static_javascript():
     app_js = (REPO_ROOT / "netlify-frontend" / "app.js").read_text()
     js_dir = REPO_ROOT / "netlify-frontend" / "js"
