@@ -120,6 +120,8 @@ def test_frontend_exposes_sample_size_sales_contact_and_required_weight_contract
     assert 'id="salespersonPhone"' in index_html
     assert "loadSalespeople" in controller_js
     assert "salesperson_id" in controller_js
+    assert "salesperson_name" in controller_js
+    assert "applySelectedSalesperson" in controller_js
     assert "MISSING_FILL_AMOUNT" in controller_js
     assert "Sample 4x6 labels can be generated without weight" in controller_js
 

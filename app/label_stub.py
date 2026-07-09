@@ -577,6 +577,38 @@ class LabelGenerator:
             fitted_size = min(fitted_size, int(max_width / required_units))
         return max(minimum_size, fitted_size)
 
+    @classmethod
+    def _fit_text_for_width(
+        cls,
+        text: Optional[str],
+        *,
+        max_width: float,
+        font_size: float,
+        fallback: str = "",
+    ) -> str:
+        """Fit a single SVG text run inside a known width using deterministic ellipsis."""
+        if not text:
+            return fallback
+        clean = " ".join(str(text).split())
+        if not clean:
+            return fallback
+
+        def rendered_width(value: str) -> float:
+            return cls._estimated_text_width_units(value) * font_size
+
+        if rendered_width(clean) <= max_width:
+            return clean
+
+        suffix = "..."
+        available = max_width - rendered_width(suffix)
+        if available <= 0:
+            return suffix
+
+        fitted = clean
+        while fitted and rendered_width(fitted) > available:
+            fitted = fitted[:-1].rstrip()
+        return f"{fitted}{suffix}" if fitted else suffix
+
     @staticmethod
     def _wrap_lines(text: Optional[str], line_width: int = 40, max_lines: int = 2) -> list[str]:
         """Deterministic word wrapping with max lines and ellipsis."""
@@ -1016,7 +1048,12 @@ class LabelGenerator:
         product_start_y = heading["y"]
         use_line = ""
         if data.product.product_uses:
-            use_line = self._fit_text(data.product.product_uses[0], 62, "")
+            use_line = self._fit_text_for_width(
+                data.product.product_uses[0],
+                max_width=286,
+                font_size=10,
+                fallback="",
+            )
         fill_amount = self._format_fill_amount(data.shipment.fill_amount, max_chars=18) if data.shipment.fill_amount else ""
         pictograms = self._format_pictograms(data.ghs.pictograms)
         signal_word = (data.ghs.signal_word or "").upper()
@@ -1025,7 +1062,12 @@ class LabelGenerator:
             salesperson.get("email"),
             salesperson.get("phone"),
         ]
-        contact_line = " | ".join(part for part in contact_parts if part)
+        contact_line = self._fit_text_for_width(
+            " | ".join(part for part in contact_parts if part),
+            max_width=390,
+            font_size=10.5,
+            fallback="",
+        )
 
         product_text = "\n".join(
             f'<text x="154" y="{product_start_y + index * heading["line_gap"]}" '

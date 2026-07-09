@@ -309,6 +309,9 @@ async def generate_label_v1(
     limited_quantity: Optional[str] = Form(None),
     subsidiary_hazard_classes: Optional[str] = Form(None),
     salesperson_id: Optional[str] = Form(None),
+    salesperson_name: Optional[str] = Form(None),
+    salesperson_email: Optional[str] = Form(None),
+    salesperson_phone: Optional[str] = Form(None),
 ):
     """Phase 1 label generation endpoint with unified response payload."""
     try:
@@ -356,6 +359,9 @@ async def generate_label_v1(
             limited_quantity=limited_quantity,
             subsidiary_hazard_classes=subsidiary_hazard_classes,
             salesperson_id=salesperson_id,
+            salesperson_name=salesperson_name,
+            salesperson_email=salesperson_email,
+            salesperson_phone=salesperson_phone,
         )
     except HTTPException:
         raise

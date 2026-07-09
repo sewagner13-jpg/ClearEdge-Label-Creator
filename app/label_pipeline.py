@@ -198,6 +198,9 @@ class LabelPipeline:
         limited_quantity: Optional[str] = None,
         subsidiary_hazard_classes: Optional[str] = None,
         salesperson_id: Optional[str] = None,
+        salesperson_name: Optional[str] = None,
+        salesperson_email: Optional[str] = None,
+        salesperson_phone: Optional[str] = None,
     ) -> dict:
         """Run the label generation workflow."""
         cleaned_product_name = self._validate_product_name(product_name)
@@ -205,7 +208,12 @@ class LabelPipeline:
         orientation = self._normalize_orientation(orientation)
         if size == "sample_4x6":
             orientation = "horizontal"
-        salesperson = self._resolve_salesperson(salesperson_id)
+        salesperson = self._resolve_salesperson(
+            salesperson_id=salesperson_id,
+            salesperson_name=salesperson_name,
+            salesperson_email=salesperson_email,
+            salesperson_phone=salesperson_phone,
+        )
         if self.openai_client is None:
             raise LabelPipelineError(503, "OPENAI_API_KEY is not configured")
 
@@ -411,7 +419,26 @@ class LabelPipeline:
                 "MISSING_FILL_AMOUNT: Net weight/fill amount is required for pail, drum, and tote labels",
             )
 
-    def _resolve_salesperson(self, salesperson_id: Optional[str]) -> Optional[dict]:
+    def _resolve_salesperson(
+        self,
+        *,
+        salesperson_id: Optional[str],
+        salesperson_name: Optional[str] = None,
+        salesperson_email: Optional[str] = None,
+        salesperson_phone: Optional[str] = None,
+    ) -> Optional[dict]:
+        manual_contact = {
+            "name": clean_operator_field(salesperson_name) or "",
+            "email": clean_operator_field(salesperson_email) or "",
+            "phone": clean_operator_field(salesperson_phone) or "",
+        }
+        if manual_contact["name"]:
+            return {
+                "salesperson_id": None,
+                **manual_contact,
+                "source": "manual",
+            }
+
         cleaned_id = clean_operator_field(salesperson_id)
         if not cleaned_id:
             return None

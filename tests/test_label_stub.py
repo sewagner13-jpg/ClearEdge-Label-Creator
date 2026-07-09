@@ -131,6 +131,39 @@ def test_sample_4x6_product_name_fits_right_header_space():
     assert f'font-size="{heading["font_size"]}"' in svg
 
 
+def test_sample_4x6_single_line_fields_are_fitted_to_frame():
+    generator = LabelGenerator()
+    long_use = "Water repellent for manufacturing aqueous impregnations or exterior industrial coatings"
+    long_contact = "B-WB Returned Product Test With Wide Words | very-long-salesperson-email@clear-edge.net | 704-799-5769"
+    data = ExtractedData(
+        product=ProductInfo(
+            name="Rucosan B-WB Sample No Biocide",
+            product_uses=[long_use],
+        ),
+        ghs=GHSClassification(),
+        transport=TransportClassification(),
+    )
+
+    svg = generator.generate_svg(
+        data,
+        mode="workplace",
+        size="sample_4x6",
+        branding={
+            "mode": "clearedge",
+            "salesperson": {
+                "name": "B-WB Returned Product Test With Wide Words",
+                "email": "very-long-salesperson-email@clear-edge.net",
+                "phone": "704-799-5769",
+            },
+        },
+    )
+
+    assert long_use not in svg
+    assert long_contact not in svg
+    assert "Water repellent for manufacturing" in svg
+    assert "..." in svg
+
+
 def test_header_shipment_fields_do_not_overlap_long_product_name():
     generator = LabelGenerator()
     data = ExtractedData(

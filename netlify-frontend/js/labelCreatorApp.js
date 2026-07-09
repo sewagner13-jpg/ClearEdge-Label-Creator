@@ -92,6 +92,7 @@ export function createLabelCreatorApp() {
             updateGenerateState();
         });
         elements.refreshSalespeopleBtn.addEventListener('click', loadSalespeople);
+        elements.salespersonSelect.addEventListener('change', applySelectedSalesperson);
         elements.saveSalespersonBtn.addEventListener('click', saveSalesperson);
 
         elements.uploadArea.addEventListener('click', () => elements.fileInput.click());
@@ -331,13 +332,32 @@ export function createLabelCreatorApp() {
             const created = await response.json();
             await loadSalespeople();
             elements.salespersonSelect.value = created.salesperson_id;
-            elements.salespersonName.value = '';
-            elements.salespersonEmail.value = '';
-            elements.salespersonPhone.value = '';
+            applySelectedSalesperson();
             elements.salespersonMessage.textContent = 'Sales contact saved and selected.';
         } catch (error) {
             elements.salespersonMessage.textContent = formatFetchError(error);
         }
+    }
+
+    function selectedSalesperson() {
+        return state.savedSalespeople.find(person => person.salesperson_id === elements.salespersonSelect.value) || null;
+    }
+
+    function manualSalespersonPayload() {
+        return {
+            name: normalizedText(elements.salespersonName.value),
+            email: normalizedText(elements.salespersonEmail.value),
+            phone: normalizedText(elements.salespersonPhone.value)
+        };
+    }
+
+    function applySelectedSalesperson() {
+        const selected = selectedSalesperson();
+        if (!selected) return;
+        elements.salespersonName.value = selected.name || '';
+        elements.salespersonEmail.value = selected.email || '';
+        elements.salespersonPhone.value = selected.phone || '';
+        elements.salespersonMessage.textContent = 'Saved sales contact loaded. Edit the fields to override for this label.';
     }
 
     function renderSavedLogoPreview() {
@@ -408,8 +428,25 @@ export function createLabelCreatorApp() {
         formData.append('manufacture_date', normalizedText(elements.manufactureDate.value));
         formData.append('fill_amount', normalizedText(elements.fillAmount.value));
         formData.append('label_brand', elements.labelBrand.value);
-        if (isSampleLabel() && elements.salespersonSelect.value) {
-            formData.append('salesperson_id', elements.salespersonSelect.value);
+        if (isSampleLabel()) {
+            const selected = selectedSalesperson();
+            const manual = manualSalespersonPayload();
+            const manualDiffersFromSelected = !selected
+                || manual.name !== (selected.name || '')
+                || manual.email !== (selected.email || '')
+                || manual.phone !== (selected.phone || '');
+
+            if (manual.name && manualDiffersFromSelected) {
+                formData.append('salesperson_name', manual.name);
+                formData.append('salesperson_email', manual.email);
+                formData.append('salesperson_phone', manual.phone);
+            } else if (elements.salespersonSelect.value) {
+                formData.append('salesperson_id', elements.salespersonSelect.value);
+            } else if (manual.name) {
+                formData.append('salesperson_name', manual.name);
+                formData.append('salesperson_email', manual.email);
+                formData.append('salesperson_phone', manual.phone);
+            }
         }
 
         if (elements.labelBrand.value === 'custom') {

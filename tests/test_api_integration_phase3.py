@@ -315,6 +315,46 @@ def test_salespeople_api_create_list_delete_and_generate_sample_label(tmp_path):
         assert deleted.json() == {"deleted": True}
 
 
+def test_generate_sample_label_uses_manual_sales_contact_over_saved_selection(tmp_path):
+    setup_fakes(tmp_path, passed=True)
+    main.label_generator = LabelGenerator()
+
+    with TestClient(main.app) as client:
+        created = client.post(
+            "/api/v1/salespeople",
+            json={
+                "name": "ClearEdge Sales",
+                "phone": "704-799-5769",
+            },
+        )
+        assert created.status_code == 200
+        salesperson = created.json()
+
+        files = {"files": ("sample_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
+        generated = client.post(
+            "/api/v1/labels/generate",
+            files=files,
+            data={
+                "product_name": "Sample Label Product",
+                "mode": "workplace",
+                "size": "sample_4x6",
+                "salesperson_id": salesperson["salesperson_id"],
+                "salesperson_name": "B-WB Returned Product Test",
+                "salesperson_email": "",
+                "salesperson_phone": "",
+            },
+        )
+
+        assert generated.status_code == 200
+        payload = generated.json()
+        assert payload["label"]["salesperson"]["name"] == "B-WB Returned Product Test"
+        assert payload["label"]["salesperson"]["phone"] == ""
+        preview = client.get(payload["preview"]["pages"][0]["url"])
+        assert preview.status_code == 200
+        assert "B-WB Returned Product Test" in preview.text
+        assert "ClearEdge Sales" not in preview.text
+
+
 def test_corrections_endpoint_reruns_validation_and_enables_download(tmp_path):
     setup_fakes(tmp_path, passed=False)
     main.validator = FakeCorrectionValidator()
