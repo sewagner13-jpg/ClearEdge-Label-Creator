@@ -861,7 +861,7 @@ class LabelPipeline:
         self._promote_source_scalar(extracted_data, source_data, "product.supplier_phone")
         self._promote_source_scalar(extracted_data, source_data, "product.emergency_phone")
         self._promote_source_scalar(extracted_data, source_data, "product.revision_date")
-        self._merge_source_list(extracted_data, source_data, "product.product_uses")
+        self._merge_product_uses(extracted_data, source_data)
 
         self._promote_source_signal_word(extracted_data, source_data)
         self._merge_source_list(extracted_data, source_data, "ghs.pictograms")
@@ -945,6 +945,8 @@ class LabelPipeline:
         if not self._has_evidence_for(extracted_data, field_path) or self._is_missing(current_value):
             self._set_field_value(extracted_data, field_path, source_value)
             self._copy_source_evidence(extracted_data, source_data, field_path)
+            if field_path in {"nfpa.health", "nfpa.flammability", "nfpa.instability"}:
+                self._remove_warning_containing(extracted_data, "NFPA 704 values were defaulted")
             return
         if self._normalized_value(current_value) != self._normalized_value(source_value):
             self._append_warning(
@@ -974,6 +976,25 @@ class LabelPipeline:
         if changed:
             self._set_field_value(extracted_data, field_path, current_values)
             self._copy_source_evidence(extracted_data, source_data, field_path)
+
+    def _merge_product_uses(self, extracted_data: ExtractedData, source_data: ExtractedData) -> None:
+        source_uses = list(source_data.product.product_uses or [])
+        if not source_uses:
+            return
+        current_uses = list(extracted_data.product.product_uses or [])
+        merged = []
+        seen = set()
+        for product_use in [*source_uses, *current_uses]:
+            key = self._normalized_value(product_use)
+            if not key or key in seen:
+                continue
+            merged.append(product_use)
+            seen.add(key)
+            if len(merged) >= 3:
+                break
+        if merged != current_uses:
+            extracted_data.product.product_uses = merged
+            self._copy_source_evidence(extracted_data, source_data, "product.product_uses")
 
     @staticmethod
     def _merge_source_statement_list(current_statements, source_statements) -> None:
@@ -1022,6 +1043,12 @@ class LabelPipeline:
         clean = " ".join(str(warning or "").split())
         if clean and clean not in extracted_data.warnings:
             extracted_data.warnings.append(clean)
+
+    @staticmethod
+    def _remove_warning_containing(extracted_data: ExtractedData, needle: str) -> None:
+        extracted_data.warnings = [
+            warning for warning in extracted_data.warnings if needle not in warning
+        ]
 
     @staticmethod
     def _has_evidence_for(extracted_data: ExtractedData, field_path: str) -> bool:
