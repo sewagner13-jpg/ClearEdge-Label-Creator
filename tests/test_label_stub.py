@@ -69,6 +69,49 @@ def test_generated_pdf_uses_full_requested_label_page_size():
     assert float(drum_page.mediabox.height) == 648
 
 
+def test_sample_4x6_label_renders_compact_sales_contact_and_thermal_page_size():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(
+            name="Rucolac B-542",
+            product_uses=["Wetting and foam control for waterborne coatings"],
+        ),
+        ghs=GHSClassification(signal_word="Warning", pictograms=["GHS07"]),
+        transport=TransportClassification(),
+    )
+
+    svg = generator.generate_svg(
+        data,
+        mode="workplace",
+        size="sample_4x6",
+        orientation="vertical",
+        branding={
+            "mode": "clearedge",
+            "salesperson": {
+                "name": "Sean Wagner",
+                "email": "sean@clear-edge.net",
+                "phone": "704-799-5769",
+            },
+        },
+    )
+    pdf = generator.generate_pdf(svg)
+    page = PdfReader(BytesIO(pdf)).pages[0]
+
+    assert '<svg width="432pt" height="288pt"' in svg
+    assert float(page.mediabox.width) == 432
+    assert float(page.mediabox.height) == 288
+    assert "Rucolac B-542" in svg
+    assert "PRODUCT USE:" in svg
+    assert "Wetting and foam control" in svg
+    assert "SALES CONTACT" in svg
+    assert "Sean Wagner" in svg
+    assert "sean@clear-edge.net" in svg
+    assert "704-799-5769" in svg
+    assert 'id="pictogram-GHS07"' in svg
+    assert "HAZARD STATEMENTS" not in svg
+    assert "PRECAUTIONARY STATEMENTS" not in svg
+
+
 def test_header_shipment_fields_do_not_overlap_long_product_name():
     generator = LabelGenerator()
     data = ExtractedData(

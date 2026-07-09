@@ -89,7 +89,12 @@ def test_operator_journey_needs_review_to_override_to_download(tmp_path):
 
         # 2) Generate label with validation review notes
         files = {"files": ("test_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
-        data = {"product_name": "Journey Product", "mode": "shipped_dot", "size": "pail"}
+        data = {
+            "product_name": "Journey Product",
+            "mode": "shipped_dot",
+            "size": "pail",
+            "fill_amount": "441 lb",
+        }
         generate = client.post("/api/v1/labels/generate", files=files, data=data)
         assert generate.status_code == 200
         payload = generate.json()

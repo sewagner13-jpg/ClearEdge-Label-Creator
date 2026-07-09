@@ -15,7 +15,7 @@ CANVA_TEMPLATE_FIELDS = {
     "product_uses": "Short TDS/SDS product uses printed in the compact uses strip.",
     "product_uses_display": "Alias for the compact Canva product uses text block.",
     "label_mode": "shipped_dot or workplace.",
-    "label_size": "pail, drum, or tote selection retained for source data.",
+    "label_size": "pail, drum, tote, or sample_4x6 selection retained for source data.",
     "label_orientation": "vertical or horizontal print orientation.",
     "container_type": "Container inferred from weight: pail, drum, or tote.",
     "lot_number": "Shipment lot or batch number.",
@@ -29,6 +29,10 @@ CANVA_TEMPLATE_FIELDS = {
     "supplier_address": "Supplier or manufacturer address.",
     "supplier_phone": "Supplier phone.",
     "emergency_phone": "Emergency phone from SDS, when available.",
+    "sales_contact_name": "Selected sales contact name for sample labels.",
+    "sales_contact_email": "Selected sales contact email for sample labels.",
+    "sales_contact_phone": "Selected sales contact phone for sample labels.",
+    "sales_contact_display": "Compact selected sales contact line for sample labels.",
     "sds_revision_date": "SDS revision date, when available.",
     "signal_word": "Exact GHS signal word.",
     "signal_word_display": "Signal word formatted for the label.",
@@ -165,6 +169,12 @@ def build_canva_export(extracted: dict, metadata: dict) -> dict:
     proper_shipping_name = transport.get("proper_shipping_name") or ""
     hazard_class = transport.get("hazard_class") or ""
     packing_group = transport.get("packing_group") or ""
+    salesperson = metadata.get("salesperson") or {}
+    sales_contact_parts = [
+        salesperson.get("name"),
+        salesperson.get("email"),
+        salesperson.get("phone"),
+    ]
     return {
         "label_id": metadata.get("label_id") or "",
         "product_name": metadata.get("product_name") or product.get("name") or "",
@@ -186,6 +196,10 @@ def build_canva_export(extracted: dict, metadata: dict) -> dict:
         "supplier_address": product.get("supplier_address") or "",
         "supplier_phone": product.get("supplier_phone") or "",
         "emergency_phone": product.get("emergency_phone") or "",
+        "sales_contact_name": salesperson.get("name") or "",
+        "sales_contact_email": salesperson.get("email") or "",
+        "sales_contact_phone": salesperson.get("phone") or "",
+        "sales_contact_display": " | ".join(part for part in sales_contact_parts if part),
         "sds_revision_date": product.get("revision_date") or "",
         "signal_word": ghs.get("signal_word") or "",
         "signal_word_display": (ghs.get("signal_word") or "").upper(),

@@ -7,7 +7,7 @@ from pypdf import PdfReader, PdfWriter
 from app import label_pipeline
 from app.dot_sticker_sheet import US_LETTER_HEIGHT_PT, US_LETTER_WIDTH_PT
 from app.label_stub import LabelGenerator
-from app.label_pipeline import LabelPipeline
+from app.label_pipeline import LabelPipeline, LabelPipelineError
 from app.validator import ComplianceValidator
 from app.schema import (
     ExtractedData,
@@ -288,11 +288,71 @@ async def test_agentcore_disabled_review_degrades_to_openai_only(tmp_path, monke
         product_name="AgentCore Disabled",
         mode="shipped_dot",
         size="pail",
+        fill_amount="441 lb",
     )
 
     assert result["status"] == "ready"
     assert result["agentcore_review"]["status"] == "disabled"
     assert result["download"]["available"] is True
+
+
+@pytest.mark.asyncio
+async def test_pipeline_requires_fill_amount_for_non_sample_labels(tmp_path, monkeypatch):
+    monkeypatch.setattr(label_pipeline.settings, "agentcore_enabled", False)
+    pipeline, _store = make_pipeline(tmp_path, base_extracted(un_number="UN1263"))
+
+    with pytest.raises(LabelPipelineError) as exc_info:
+        await pipeline.generate_label_from_uploads(
+            files=[_upload("test_sds.pdf")],
+            product_name="Missing Weight Product",
+            mode="workplace",
+            size="drum",
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "MISSING_FILL_AMOUNT" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_pipeline_allows_sample_4x6_without_fill_amount_and_stores_salesperson(tmp_path, monkeypatch):
+    monkeypatch.setattr(label_pipeline.settings, "agentcore_enabled", False)
+    extracted = ExtractedData(
+        product=ProductInfo(name="Sample Product"),
+        ghs=GHSClassification(signal_word="Warning", pictograms=["GHS07"]),
+        transport=TransportClassification(),
+    )
+    pipeline, store = make_pipeline(tmp_path, extracted)
+    pipeline.label_generator = LabelGenerator()
+    pipeline.salesperson_library = type(
+        "SalespersonLookup",
+        (),
+        {
+            "get_salesperson": lambda self, salesperson_id: {
+                "salesperson_id": salesperson_id,
+                "name": "Sean Wagner",
+                "email": "sean@clear-edge.net",
+                "phone": "704-799-5769",
+            }
+        },
+    )()
+
+    result = await pipeline.generate_label_from_uploads(
+        files=[_upload("sample_sds.pdf")],
+        product_name="Sample Product",
+        mode="workplace",
+        size="sample_4x6",
+        salesperson_id="sales_sean",
+    )
+    label_id = result["label_id"]
+    pdf_bytes = base64.b64decode(result["download"]["data_url"].split(",", 1)[1])
+    page = PdfReader(BytesIO(pdf_bytes)).pages[0]
+
+    assert result["label"]["size"] == "sample_4x6"
+    assert result["label"]["orientation"] == "horizontal"
+    assert result["label"]["salesperson"]["name"] == "Sean Wagner"
+    assert store[label_id]["salesperson"]["email"] == "sean@clear-edge.net"
+    assert float(page.mediabox.width) == 432
+    assert float(page.mediabox.height) == 288
 
 
 @pytest.mark.asyncio
@@ -335,6 +395,7 @@ async def test_openai_failure_uses_deterministic_fallback(tmp_path, monkeypatch)
         product_name="Fallback Product",
         mode="shipped_dot",
         size="pail",
+        fill_amount="441 lb",
     )
 
     assert result["status"] == "blocked"
@@ -363,6 +424,7 @@ async def test_pipeline_reconciles_incomplete_openai_with_novadd_source_facts(tm
         mode="shipped_dot",
         size="drum",
         label_brand="custom",
+        fill_amount="441 lb",
     )
 
     assert result["status"] == "ready"
@@ -417,6 +479,7 @@ async def test_pipeline_reconciles_ce_flex_pictograms_from_source_h_codes(tmp_pa
         mode="shipped_dot",
         size="drum",
         label_brand="clearedge",
+        fill_amount="441 lb",
     )
 
     extracted = result["extracted"]
@@ -457,6 +520,7 @@ async def test_agentcore_promotes_missing_source_backed_value(tmp_path, monkeypa
         product_name="Recovered Product",
         mode="shipped_dot",
         size="pail",
+        fill_amount="441 lb",
     )
 
     assert result["status"] == "ready"
@@ -492,6 +556,7 @@ async def test_agentcore_conflict_forces_needs_review(tmp_path, monkeypatch):
         product_name="Conflict Product",
         mode="shipped_dot",
         size="pail",
+        fill_amount="441 lb",
     )
 
     assert result["status"] == "needs_review"
@@ -522,6 +587,7 @@ async def test_agentcore_blocking_issue_marks_needs_review_without_blocking_down
         product_name="Blocked Product",
         mode="shipped_dot",
         size="pail",
+        fill_amount="441 lb",
     )
 
     assert result["status"] == "needs_review"
@@ -543,6 +609,7 @@ async def test_agentcore_failure_continues_with_warning(tmp_path, monkeypatch):
         product_name="Timeout Product",
         mode="shipped_dot",
         size="pail",
+        fill_amount="441 lb",
     )
 
     assert result["status"] == "ready"

@@ -182,6 +182,60 @@ def test_rule_based_extractor_captures_transport_class_and_pg_from_section_14_sh
     assert extracted.transport.packing_group == "III"
 
 
+def test_rule_based_extractor_parses_supplier_and_dot_table_variants():
+    extracted = RuleBasedExtractor.extract(
+        sds_text=_text(
+            """
+            SECTION 1: Identification
+            Supplier:
+            RUDOLF GmbH
+            Altvaterstrasse 58-64
+            D-82538 Geretsried
+            Phone: +49-(0)8171-53-0
+            Emergency phone: +49-8171-53-222
+
+            14. Transport information
+            UN-Number
+            DOT NA1993
+
+            UN proper shipping name
+            DOT COMBUSTIBLE LIQUID, N.O.S (2-methoxy-1-methylethyl acetate)
+
+            Transport hazard class(es)
+            DOT
+            Class 3 Combustible liquids
+            Label 3
+
+            Packing group
+            DOT III
+            """
+        ),
+        tds_text=_text(
+            """
+            Technical Data Sheet
+            Uses / Application:
+            Wetting and foam control for waterborne coatings and printing inks.
+            """,
+            doc="TDS",
+        ),
+        product_name="Rucolac B-542",
+    )
+
+    assert extracted.product.supplier_name == "RUDOLF GmbH"
+    assert "D-82538 Geretsried" in extracted.product.supplier_address
+    assert extracted.product.supplier_phone == "+49-(0)8171-53-0"
+    assert extracted.product.emergency_phone == "+49-8171-53-222"
+    assert extracted.product.product_uses == [
+        "Wetting and foam control for waterborne coatings and printing inks"
+    ]
+    assert extracted.transport.un_number == "NA1993"
+    assert extracted.transport.proper_shipping_name == (
+        "COMBUSTIBLE LIQUID, N.O.S (2-methoxy-1-methylethyl acetate)"
+    )
+    assert extracted.transport.hazard_class == "3"
+    assert extracted.transport.packing_group == "III"
+
+
 def test_rule_based_extractor_captures_novadd_plain_hazard_sections_and_tds_uses():
     sds = """
     1. Identification

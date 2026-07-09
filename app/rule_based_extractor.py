@@ -267,10 +267,18 @@ class RuleBasedExtractor:
                 cls._add_evidence(data, "transport.not_regulated", "true", match)
             return
 
-        cls._set_regex(data, "transport.un_number", r"\b(UN\s*[0-9]{4})\b", sources, transform=lambda value: value.replace(" ", "").upper())
+        cls._set_regex(
+            data,
+            "transport.un_number",
+            r"\b((?:UN|NA)\s*[0-9]{4})\b",
+            sources,
+            transform=lambda value: value.replace(" ", "").upper(),
+        )
         cls._set_regex(data, "transport.hazard_class", r"Hazard\s*Class\s*:?\s*([0-9](?:\.[0-9])?)", sources)
         if not data.transport.hazard_class:
             cls._set_regex(data, "transport.hazard_class", r"\bClass\s*([0-9](?:\.[0-9])?)\b", sources)
+        if not data.transport.hazard_class:
+            cls._set_regex(data, "transport.hazard_class", r"\bClass\s*DOT\s*([0-9](?:\.[0-9])?)\b", sources, flags=re.IGNORECASE)
         subsidiary = cls._find_regex(
             r"Subsidiary\s*(?:Hazards?|Risks?|Class(?:es)?)\s*:?\s*([0-9.,;\s]+)",
             sources,
@@ -289,11 +297,28 @@ class RuleBasedExtractor:
         cls._set_regex(data, "transport.packing_group", r"Packing\s*Group\s*:?\s*(I{1,3})\b", sources)
         if not data.transport.packing_group:
             cls._set_regex(data, "transport.packing_group", r"\bPG\s*(I{1,3})\b", sources)
+        if not data.transport.packing_group:
+            table_pg = cls._table_value_after_heading(sources, r"^Packing\s+group\b")
+            if table_pg:
+                pg_match = re.search(r"\b(I{1,3})\b", table_pg["value"], flags=re.IGNORECASE)
+                if pg_match:
+                    data.transport.packing_group = pg_match.group(1).upper()
+                    cls._add_evidence(
+                        data,
+                        "transport.packing_group",
+                        data.transport.packing_group,
+                        table_pg["evidence"],
+                    )
 
-        shipping_name = cls._shipping_name_from_text(compact)
+        shipping_name = cls._proper_shipping_name_from_table(sources)
+        if not shipping_name:
+            shipping_name = cls._shipping_name_from_text(compact)
         if shipping_name:
             data.transport.proper_shipping_name = shipping_name
-            match = cls._find_regex(r"(Flammable\s*liquids?[^\n]+)", sources, flags=re.IGNORECASE)
+            match = (
+                cls._find_regex(r"((?:Flammable|Combustible)\s*liquids?[^\n]+)", sources, flags=re.IGNORECASE)
+                or cls._find_regex(r"(COMBUSTIBLE\s+LIQUID[^\n]+)", sources, flags=re.IGNORECASE)
+            )
             if match:
                 cls._add_evidence(data, "transport.proper_shipping_name", shipping_name, match)
 
@@ -341,12 +366,58 @@ class RuleBasedExtractor:
 
     @staticmethod
     def _shipping_name_from_text(compact: str) -> Optional[str]:
+        combustible = re.search(r"combustibleliquid,n\.o\.s\.?\(([^)]+)\)", compact)
+        if combustible:
+            return f"COMBUSTIBLE LIQUID, N.O.S ({combustible.group(1)})"
+        if "combustibleliquid,n.o.s." in compact:
+            return "COMBUSTIBLE LIQUID, N.O.S"
         if "flammableliquids,n.o.s.(contains" in compact:
             contents = re.search(r"flammableliquids,n\.o\.s\.\(contains([a-z0-9,.-]+)\)", compact)
             suffix = f" (contains {contents.group(1)})" if contents else ""
             return f"Flammable liquids, n.o.s.{suffix}"
         if "flammableliquids,n.o.s." in compact:
             return "Flammable liquids, n.o.s."
+        return None
+
+    @classmethod
+    def _proper_shipping_name_from_table(cls, sources) -> Optional[str]:
+        value = cls._table_value_after_heading(
+            sources,
+            r"^(?:UN\s+proper\s+shipping\s+name|Proper\s+Shipping\s+Name)\b",
+        )
+        if not value:
+            return None
+        clean = re.sub(r"^(?:DOT|49\s*CFR)\s+", "", value["value"], flags=re.IGNORECASE).strip(" :")
+        return " ".join(clean.split()) or None
+
+    @classmethod
+    def _table_value_after_heading(cls, sources, heading_pattern: str) -> Optional[dict]:
+        heading_re = re.compile(heading_pattern, flags=re.IGNORECASE)
+        stop_re = re.compile(
+            r"^(?:UN[-\s]?Number|Transport\s+hazard|Class\b|Label\b|Packing\s+group|Environmental\s+hazards|"
+            r"Special\s+precautions|Transport/Additional|Section\s+\d+|\d+\.)",
+            flags=re.IGNORECASE,
+        )
+        for doc, page, text in sources:
+            lines = cls._meaningful_lines(text)
+            for index, line in enumerate(lines):
+                if not heading_re.match(line):
+                    continue
+                inline = cls._inline_label_value(line, heading_pattern)
+                candidates = [inline] if inline else []
+                candidates.extend(lines[index + 1:index + 5])
+                for candidate in candidates:
+                    clean = cls._clean_label_value(candidate)
+                    if not clean or heading_re.match(clean):
+                        continue
+                    if clean.upper() in {"DOT", "ADR, IMDG, IATA", "49 CFR"}:
+                        continue
+                    if stop_re.match(clean):
+                        break
+                    return {
+                        "value": clean,
+                        "evidence": {"doc": doc, "page": page, "quote": clean},
+                    }
         return None
 
     @staticmethod
@@ -364,7 +435,7 @@ class RuleBasedExtractor:
     def _extract_product_uses(cls, sources) -> list[str]:
         """Extract a few explicit product uses from TDS/application sections."""
         heading_pattern = re.compile(
-            r"^\s*(?:recommended\s+uses?|uses?|applications?|application\s+areas?|typical\s+applications?|product\s+description)\s*:?\s*$",
+            r"^\s*(?:recommended\s+uses?|uses?(?:\s*/\s*applications?)?|applications?|application\s+areas?|typical\s+applications?|product\s+description)\s*:?\s*$",
             flags=re.IGNORECASE,
         )
         uses = []
@@ -407,9 +478,10 @@ class RuleBasedExtractor:
             if doc != "SDS":
                 continue
             lines = cls._meaningful_lines(text)
-            company_index = cls._find_line_index(lines, r"^Company\s+Name\b")
+            supplier_label_pattern = r"^(?:Company\s+Name|Supplier|Manufacturer/Supplier|Manufacturer\s*:)\b"
+            company_index = cls._find_line_index(lines, supplier_label_pattern)
             if company_index is not None:
-                inline_name = cls._inline_label_value(lines[company_index], r"^Company\s+Name\b")
+                inline_name = cls._inline_label_value(lines[company_index], supplier_label_pattern)
                 name_index = company_index if inline_name else cls._next_value_line_index(lines, company_index + 1)
                 if name_index is not None and not data.product.supplier_name:
                     name = inline_name or cls._clean_label_value(lines[name_index])
@@ -428,7 +500,7 @@ class RuleBasedExtractor:
                         data.product.supplier_address = address
                         cls._add_evidence(data, "product.supplier_address", address, {"doc": doc, "page": page, "quote": address})
 
-            phone = cls._value_after_label(lines, r"^Telephone\b")
+            phone = cls._value_after_label(lines, r"^(?:Telephone|Phone)\b")
             if phone and not data.product.supplier_phone:
                 data.product.supplier_phone = phone
                 cls._add_evidence(data, "product.supplier_phone", phone, {"doc": doc, "page": page, "quote": phone})
@@ -706,8 +778,8 @@ class RuleBasedExtractor:
                 return
 
     @classmethod
-    def _set_regex(cls, data: ExtractedData, field_path: str, pattern: str, sources, transform=None) -> None:
-        match = cls._find_regex(pattern, sources)
+    def _set_regex(cls, data: ExtractedData, field_path: str, pattern: str, sources, transform=None, flags=0) -> None:
+        match = cls._find_regex(pattern, sources, flags=flags)
         if not match:
             return
         value = match["match"].strip()

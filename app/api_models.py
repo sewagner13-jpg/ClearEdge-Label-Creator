@@ -19,6 +19,7 @@ class LabelSize(str, Enum):
     PAIL = "pail"
     DRUM = "drum"
     TOTE = "tote"
+    SAMPLE_4X6 = "sample_4x6"
 
 
 class LabelOrientation(str, Enum):
@@ -49,6 +50,7 @@ class LabelPayload(BaseModel):
     dot_sticker_pdf_url: Optional[str] = None
     canva_csv_url: Optional[str] = None
     canva_json_url: Optional[str] = None
+    salesperson: Optional[dict] = None
 
 
 class PreviewPayload(BaseModel):
@@ -94,6 +96,14 @@ class CorrectionRequest(BaseModel):
     fields: Dict[str, object] = Field(..., min_length=1)
 
 
+class SalespersonCreateRequest(BaseModel):
+    """Reusable sales contact create request."""
+
+    name: str = Field(..., min_length=1, max_length=120)
+    email: Optional[str] = Field(None, max_length=120)
+    phone: Optional[str] = Field(None, max_length=60)
+
+
 class GenerateLabelResponse(BaseModel):
     """Unified label generation response."""
 
@@ -108,6 +118,7 @@ class GenerateLabelResponse(BaseModel):
     dot_stickers: Optional[dict] = None
     agentcore_review: Optional[dict] = None
     branding: Optional[dict] = None
+    salesperson: Optional[dict] = None
     warnings: List[dict]
     errors: List[dict]
     audit: AuditPayload

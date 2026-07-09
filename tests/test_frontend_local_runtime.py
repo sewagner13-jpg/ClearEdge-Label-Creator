@@ -107,6 +107,23 @@ def test_frontend_handles_dot_sticker_pdf_download_contract():
     assert "No DOT sticker page required" in renderers_js
 
 
+def test_frontend_exposes_sample_size_sales_contact_and_required_weight_contract():
+    index_html = (REPO_ROOT / "netlify-frontend" / "index.html").read_text()
+    controller_js = (REPO_ROOT / "netlify-frontend" / "js" / "labelCreatorApp.js").read_text()
+
+    assert 'value="sample_4x6"' in index_html
+    assert "Sample 4x6 thermal" in index_html
+    assert 'id="salespersonPanel"' in index_html
+    assert 'id="salespersonSelect"' in index_html
+    assert 'id="salespersonName"' in index_html
+    assert 'id="salespersonEmail"' in index_html
+    assert 'id="salespersonPhone"' in index_html
+    assert "loadSalespeople" in controller_js
+    assert "salesperson_id" in controller_js
+    assert "MISSING_FILL_AMOUNT" in controller_js
+    assert "Sample 4x6 labels can be generated without weight" in controller_js
+
+
 def test_frontend_shows_review_notes_without_blocked_download_copy():
     renderers_js = (REPO_ROOT / "netlify-frontend" / "js" / "renderers.js").read_text()
 

@@ -6,6 +6,7 @@ Generates DOT/OSHA-compliant labels from extracted data.
 import io
 import logging
 import base64
+from html import escape as html_escape
 from pathlib import Path
 from typing import Optional
 import svgwrite
@@ -393,6 +394,21 @@ class LabelGenerator:
                 "safe_margin": 12,
                 "header_height": 100,
                 "max_product_name_chars": 34,
+                "brand": {
+                    "header_color": self.brand_palette["primary"],
+                    "accent_color": self.brand_palette["accent"],
+                    "body_font": "Arial, sans-serif",
+                    "text_color": self.brand_palette["text"]
+                }
+            },
+            "clearedge_sample_4x6_v1": {
+                "size": "sample_4x6",
+                "width": 432,
+                "height": 288,
+                "name": "Sample 4x6 Thermal Label",
+                "safe_margin": 10,
+                "header_height": 76,
+                "max_product_name_chars": 38,
                 "brand": {
                     "header_color": self.brand_palette["primary"],
                     "accent_color": self.brand_palette["accent"],
@@ -922,6 +938,98 @@ class LabelGenerator:
             "is_clearedge": False,
         }
 
+    @staticmethod
+    def _svg_text(value: Optional[str]) -> str:
+        """Escape dynamic text for SVG text nodes."""
+        return html_escape(str(value or ""), quote=False)
+
+    def _generate_sample_4x6_svg(
+        self,
+        data: ExtractedData,
+        *,
+        mode: str,
+        branding: Optional[dict],
+    ) -> str:
+        """Render a compact 6x4 thermal sample label."""
+        width = 432
+        height = 288
+        resolved_branding = self._resolve_branding(data, branding)
+        logo_data_uri = resolved_branding.get("logo_data_uri")
+        salesperson = (branding or {}).get("salesperson") or {}
+        product_lines = self._wrap_lines(data.product.name, line_width=22, max_lines=2) or ["UNNAMED PRODUCT"]
+        longest = max(len(line) for line in product_lines)
+        product_font_size = 34 if len(product_lines) == 1 and longest <= 18 else (29 if longest <= 23 else 25)
+        product_start_y = 43 if len(product_lines) == 1 else 34
+        use_line = ""
+        if data.product.product_uses:
+            use_line = self._fit_text(data.product.product_uses[0], 62, "")
+        fill_amount = self._format_fill_amount(data.shipment.fill_amount, max_chars=18) if data.shipment.fill_amount else ""
+        pictograms = self._format_pictograms(data.ghs.pictograms)
+        signal_word = (data.ghs.signal_word or "").upper()
+        contact_parts = [
+            salesperson.get("name"),
+            salesperson.get("email"),
+            salesperson.get("phone"),
+        ]
+        contact_line = " | ".join(part for part in contact_parts if part)
+
+        product_text = "\n".join(
+            f'<text x="154" y="{product_start_y + index * (product_font_size + 2)}" '
+            f'font-size="{product_font_size}" font-weight="bold" fill="{self.brand_palette["primary"]}">'
+            f'{self._svg_text(line)}</text>'
+            for index, line in enumerate(product_lines)
+        )
+        pictogram_images = "\n".join(
+            f'<image id="pictogram-{self._svg_text(icon["code"])}" x="{204 + index * 48}" y="116" '
+            f'width="42" height="42" href="{icon["data_uri"]}" xlink:href="{icon["data_uri"]}" '
+            f'preserveAspectRatio="xMidYMid meet"/>'
+            for index, icon in enumerate(pictograms[:4])
+        )
+        weight_text = (
+            f'<text x="392" y="87" font-size="10" font-weight="bold" fill="{self.brand_palette["text"]}" '
+            f'text-anchor="end">Net Wt.: {self._svg_text(fill_amount)}</text>'
+            if fill_amount else ""
+        )
+        signal_text = (
+            f'<text x="24" y="145" font-size="22" font-weight="bold" fill="{self.brand_palette["primary"]}">'
+            f'{self._svg_text(signal_word)}</text>'
+            if signal_word else ""
+        )
+        contact_text = (
+            f'<text x="20" y="255" font-size="10.5" font-weight="bold" fill="{self.brand_palette["text"]}">'
+            f'{self._svg_text(contact_line)}</text>'
+            if contact_line else ""
+        )
+        logo_image = (
+            f'<image id="brand-logo" x="18" y="28" width="118" height="38" href="{logo_data_uri}" '
+            f'xlink:href="{logo_data_uri}" preserveAspectRatio="xMinYMid meet"/>'
+            if logo_data_uri else
+            f'<text x="18" y="50" font-size="17" font-weight="bold" fill="{self.brand_palette["primary"]}">'
+            f'{self._svg_text(resolved_branding.get("supplier_name") or "Sample Label")}</text>'
+        )
+
+        return f"""<?xml version="1.0" encoding="UTF-8"?>
+<svg width="{width}pt" height="{height}pt" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" font-family="Arial, sans-serif">
+  <rect width="{width}" height="{height}" fill="white"/>
+  <rect x="5" y="5" width="{width - 10}" height="{height - 10}" fill="none" stroke="black" stroke-width="1.5"/>
+  <rect x="10" y="10" width="{width - 20}" height="7" fill="{self.brand_palette["primary"]}"/>
+  {logo_image}
+  {product_text}
+  <line x1="18" y1="76" x2="{width - 18}" y2="76" stroke="{self.brand_palette["primary"]}" stroke-width="2"/>
+  <text x="20" y="97" font-size="10" font-weight="bold" fill="{self.brand_palette["primary"]}">PRODUCT USE:</text>
+  <text x="104" y="97" font-size="10" fill="{self.brand_palette["text"]}">{self._svg_text(use_line)}</text>
+  {weight_text}
+  <rect x="18" y="108" width="{width - 36}" height="62" fill="#FBFAFE" stroke="#D8D3E6" stroke-width="1.2" rx="3"/>
+  <text x="24" y="126" font-size="9" font-weight="bold" fill="{self.brand_palette["primary"]}">COMPACT GHS</text>
+  {signal_text}
+  {pictogram_images}
+  <rect x="18" y="184" width="{width - 36}" height="76" fill="white" stroke="#D8D3E6" stroke-width="1.2" rx="3"/>
+  <text x="24" y="205" font-size="11" font-weight="bold" fill="{self.brand_palette["primary"]}">SALES CONTACT</text>
+  {contact_text}
+  <text x="20" y="274" font-size="8.5" fill="{self.brand_palette["muted"]}">Sample label - verify SDS/TDS before production shipment.</text>
+</svg>
+"""
+
     def generate_svg(
         self,
         data: ExtractedData,
@@ -945,6 +1053,11 @@ class LabelGenerator:
             SVG content as string
         """
         logger.info(f"Generating SVG label for '{data.product.name}' in {mode} mode, {size} size")
+
+        if size == "sample_4x6":
+            svg_content = self._generate_sample_4x6_svg(data, mode=mode, branding=branding)
+            logger.info("Generated SVG (%s bytes) for sample_4x6 label", len(svg_content))
+            return svg_content
 
         template_key = template_id if template_id in self.templates else None
         if not template_key and template_name in self.templates:

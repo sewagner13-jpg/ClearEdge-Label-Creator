@@ -31,6 +31,7 @@ export function createLabelCreatorApp() {
         selectedFiles: [],
         selectedGhsPictograms: [],
         savedLogos: [],
+        savedSalespeople: [],
         currentResult: null,
         progressTimer: null,
         progressIndex: 0
@@ -42,9 +43,11 @@ export function createLabelCreatorApp() {
         renderSelectedGhsPictograms();
         updateBrandFields();
         updateContainerTypeHint();
+        updateSalespersonPanel();
         updateGenerateState();
         elements.previewRailContent.innerHTML = renderInitialPreview();
         loadLogoLibrary();
+        loadSalespeople();
     }
 
     function bindElements() {
@@ -61,7 +64,9 @@ export function createLabelCreatorApp() {
             'properShippingName', 'hazardClass', 'subsidiaryHazardClasses', 'packingGroup',
             'marinePollutant', 'hazardousSubstance', 'hazardousWaste', 'limitedQuantity',
             'emergencyPhone', 'ghsPictogramSelect', 'addGhsPictogram', 'clearGhsPictograms',
-            'selectedGhsPictograms'
+            'selectedGhsPictograms', 'fillAmountLabel', 'salespersonPanel', 'salespersonSelect',
+            'refreshSalespeopleBtn', 'salespersonName', 'salespersonEmail', 'salespersonPhone',
+            'saveSalespersonBtn', 'salespersonMessage'
         ].forEach(id => {
             elements[id] = document.getElementById(id);
         });
@@ -76,8 +81,18 @@ export function createLabelCreatorApp() {
         elements.savedLogoSelect.addEventListener('change', renderSavedLogoPreview);
         elements.refreshLogosBtn.addEventListener('click', loadLogoLibrary);
         elements.brandLogo.addEventListener('change', handleBrandLogoSelection);
-        elements.fillAmount.addEventListener('input', updateContainerTypeHint);
+        elements.fillAmount.addEventListener('input', () => {
+            updateContainerTypeHint();
+            updateGenerateState();
+        });
         elements.productName.addEventListener('input', updateGenerateState);
+        elements.labelSize.addEventListener('change', () => {
+            updateContainerTypeHint();
+            updateSalespersonPanel();
+            updateGenerateState();
+        });
+        elements.refreshSalespeopleBtn.addEventListener('click', loadSalespeople);
+        elements.saveSalespersonBtn.addEventListener('click', saveSalesperson);
 
         elements.uploadArea.addEventListener('click', () => elements.fileInput.click());
         elements.uploadArea.addEventListener('keydown', event => {
@@ -177,25 +192,44 @@ export function createLabelCreatorApp() {
     function updateGenerateState() {
         const hasFiles = state.selectedFiles.length > 0;
         const hasProduct = normalizedText(elements.productName.value).length >= 2;
-        elements.analyzeSdsBtn.disabled = !hasFiles;
-        elements.generateBtn.disabled = !(hasFiles && hasProduct);
+        const hasRequiredWeight = isSampleLabel() || normalizedText(elements.fillAmount.value).length > 0;
+        elements.analyzeSdsBtn.disabled = !(hasFiles && hasProduct && hasRequiredWeight);
+        elements.generateBtn.disabled = !(hasFiles && hasProduct && hasRequiredWeight);
         if (!hasFiles) {
             elements.analyzeHelp.textContent = 'Upload SDS/TDS PDFs to unlock analysis.';
         } else if (!hasProduct) {
             elements.analyzeHelp.textContent = 'PDFs are ready. Enter the label product name, then analyze the SDS/TDS source data.';
+        } else if (!hasRequiredWeight) {
+            elements.analyzeHelp.textContent = 'Enter the net weight before generating pail, drum, or tote labels.';
         } else {
             elements.analyzeHelp.textContent = 'Ready to parse SDS/TDS data and build the label preview.';
         }
-        elements.generateHelp.textContent = hasFiles && hasProduct
+        elements.generateHelp.textContent = hasFiles && hasProduct && hasRequiredWeight
             ? 'Ready to analyze the documents and render a label preview.'
-            : 'Upload at least one PDF and enter a product name to generate a label.';
+            : 'Upload PDFs, enter a product name, and enter weight for non-sample labels.';
     }
 
     function updateContainerTypeHint() {
+        if (isSampleLabel()) {
+            elements.fillAmountLabel.textContent = 'Net Weight / Fill Amount (optional for samples)';
+            elements.fillAmount.required = false;
+            elements.containerTypeHint.textContent = 'Sample 4x6 labels can be generated without weight. Enter net weight only if you want it printed.';
+            return;
+        }
+        elements.fillAmountLabel.textContent = 'Net Weight / Fill Amount (required)';
+        elements.fillAmount.required = true;
         const containerType = inferContainerTypeFromFillAmount(elements.fillAmount.value);
         elements.containerTypeHint.textContent = containerType
             ? `Inferred container: ${containerTypeLabel(containerType)}`
             : 'Pail <= 55 lb, drum > 60 lb, tote > 2000 lb.';
+    }
+
+    function isSampleLabel() {
+        return elements.labelSize.value === 'sample_4x6';
+    }
+
+    function updateSalespersonPanel() {
+        elements.salespersonPanel.hidden = !isSampleLabel();
     }
 
     function addSelectedGhsPictogram() {
@@ -244,6 +278,65 @@ export function createLabelCreatorApp() {
         } catch {
             elements.savedLogoSelect.innerHTML = '<option value="">Logo library unavailable</option>';
             clearSavedLogoPreview();
+        }
+    }
+
+    async function loadSalespeople() {
+        if (!elements.salespersonSelect) return;
+        try {
+            const response = await fetch(`${API_URL}/api/v1/salespeople`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const payload = await response.json();
+            state.savedSalespeople = Array.isArray(payload.salespeople) ? payload.salespeople : [];
+            const current = elements.salespersonSelect.value;
+            elements.salespersonSelect.innerHTML = `
+                <option value="">No sales contact selected</option>
+                ${state.savedSalespeople.map(person => `
+                    <option value="${escapeHtml(person.salesperson_id)}">${escapeHtml(person.name)}</option>
+                `).join('')}
+            `;
+            if (state.savedSalespeople.some(person => person.salesperson_id === current)) {
+                elements.salespersonSelect.value = current;
+            }
+            elements.salespersonMessage.textContent = state.savedSalespeople.length
+                ? 'Choose a saved sales contact for the sample label.'
+                : 'No saved sales contacts yet. Add one below.';
+        } catch {
+            elements.salespersonSelect.innerHTML = '<option value="">Sales contact library unavailable</option>';
+            elements.salespersonMessage.textContent = 'Sales contact library unavailable.';
+        }
+    }
+
+    async function saveSalesperson() {
+        const payload = {
+            name: normalizedText(elements.salespersonName.value),
+            email: normalizedText(elements.salespersonEmail.value),
+            phone: normalizedText(elements.salespersonPhone.value)
+        };
+        if (!payload.name || (!payload.email && !payload.phone)) {
+            elements.salespersonMessage.textContent = 'Enter a name and at least one contact method.';
+            return;
+        }
+        elements.salespersonMessage.textContent = 'Saving sales contact...';
+        try {
+            const response = await fetch(`${API_URL}/api/v1/salespeople`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || `HTTP ${response.status}`);
+            }
+            const created = await response.json();
+            await loadSalespeople();
+            elements.salespersonSelect.value = created.salesperson_id;
+            elements.salespersonName.value = '';
+            elements.salespersonEmail.value = '';
+            elements.salespersonPhone.value = '';
+            elements.salespersonMessage.textContent = 'Sales contact saved and selected.';
+        } catch (error) {
+            elements.salespersonMessage.textContent = formatFetchError(error);
         }
     }
 
@@ -315,6 +408,9 @@ export function createLabelCreatorApp() {
         formData.append('manufacture_date', normalizedText(elements.manufactureDate.value));
         formData.append('fill_amount', normalizedText(elements.fillAmount.value));
         formData.append('label_brand', elements.labelBrand.value);
+        if (isSampleLabel() && elements.salespersonSelect.value) {
+            formData.append('salesperson_id', elements.salespersonSelect.value);
+        }
 
         if (elements.labelBrand.value === 'custom') {
             const logoFile = elements.brandLogo.files?.[0];
@@ -363,6 +459,15 @@ export function createLabelCreatorApp() {
             return;
         }
 
+        if (!isSampleLabel() && !normalizedText(elements.fillAmount.value)) {
+            const message = 'MISSING_FILL_AMOUNT: Enter the net weight before generating pail, drum, or tote labels.';
+            elements.analyzeHelp.textContent = message;
+            elements.generateHelp.textContent = message;
+            scrollToStep('stepSetup');
+            elements.fillAmount.focus({ preventScroll: true });
+            return;
+        }
+
         generateLabel();
     }
 
@@ -405,7 +510,11 @@ export function createLabelCreatorApp() {
         state.progressTimer = null;
         state.progressIndex = 0;
         elements.analyzeSdsBtn.disabled = isProcessing || !state.selectedFiles.length;
-        elements.generateBtn.disabled = isProcessing || !(state.selectedFiles.length && normalizedText(elements.productName.value).length >= 2);
+        elements.generateBtn.disabled = isProcessing || !(
+            state.selectedFiles.length
+            && normalizedText(elements.productName.value).length >= 2
+            && (isSampleLabel() || normalizedText(elements.fillAmount.value))
+        );
         elements.loading.hidden = !isProcessing;
         if (!isProcessing) {
             updateGenerateState();

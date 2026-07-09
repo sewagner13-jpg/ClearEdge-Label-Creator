@@ -31,6 +31,7 @@ from .api_models import (
     LabelMode,
     LabelSize,
     OverrideApprovalRequest,
+    SalespersonCreateRequest,
 )
 from .canva_export import (
     canva_urls,
@@ -38,6 +39,7 @@ from .canva_export import (
 )
 from .label_pipeline import LabelPipeline, LabelPipelineError
 from .logo_library import LogoLibrary, LogoLibraryError
+from .salesperson_library import SalespersonLibrary, SalespersonLibraryError
 from .dot_sticker_sheet import DotStickerSheetRenderer, DotStickerSheetUnavailable
 from .label_storage import (
     load_metadata_store,
@@ -62,14 +64,17 @@ web_retriever: Optional[WebRetriever] = None
 label_generator: Optional[LabelGenerator] = None
 agentcore_client: Optional[AgentCoreClient] = None
 logo_library: Optional[LogoLibrary] = None
+salesperson_library: Optional[SalespersonLibrary] = None
 startup_errors: Dict[str, str] = {}
 
 
 DEFAULT_DATA_ROOT = Path(os.getenv("CLEAREDGE_DATA_DIR", str(Path.cwd() / "runtime_data")))
 LABELS_DIR = DEFAULT_DATA_ROOT / "labels"
 LOGOS_DIR = DEFAULT_DATA_ROOT / "logos"
+SALESPEOPLE_DIR = DEFAULT_DATA_ROOT / "salespeople"
 LABELS_DIR.mkdir(parents=True, exist_ok=True)
 LOGOS_DIR.mkdir(parents=True, exist_ok=True)
+SALESPEOPLE_DIR.mkdir(parents=True, exist_ok=True)
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "netlify-frontend"
 
 # In-memory metadata store for Phase 1 API reads
@@ -99,7 +104,7 @@ def _save_label_metadata_store() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize and cleanup shared resources."""
-    global pdf_extractor, openai_client, validator, web_retriever, label_generator, agentcore_client, logo_library, startup_errors
+    global pdf_extractor, openai_client, validator, web_retriever, label_generator, agentcore_client, logo_library, salesperson_library, startup_errors
 
     logger.info("Initializing CLEAR EDGE Label Pipeline...")
     startup_errors = {}
@@ -115,6 +120,7 @@ async def lifespan(app: FastAPI):
         web_retriever = WebRetriever()
         label_generator = LabelGenerator()
         logo_library = LogoLibrary(LOGOS_DIR)
+        salesperson_library = SalespersonLibrary(SALESPEOPLE_DIR)
         if settings.agentcore_enabled:
             try:
                 agentcore_client = AgentCoreClient()
@@ -230,6 +236,14 @@ def _get_logo_library() -> LogoLibrary:
     return logo_library
 
 
+def _get_salesperson_library() -> SalespersonLibrary:
+    """Return a sales contact library bound to the current runtime directory."""
+    global salesperson_library
+    if salesperson_library is None or getattr(salesperson_library, "root_dir", None) != SALESPEOPLE_DIR:
+        salesperson_library = SalespersonLibrary(SALESPEOPLE_DIR)
+    return salesperson_library
+
+
 def _safe_logo_id(logo_id: str) -> str:
     """Validate a public logo id and convert validation failures to HTTP errors."""
     try:
@@ -294,6 +308,7 @@ async def generate_label_v1(
     hazardous_waste: Optional[str] = Form(None),
     limited_quantity: Optional[str] = Form(None),
     subsidiary_hazard_classes: Optional[str] = Form(None),
+    salesperson_id: Optional[str] = Form(None),
 ):
     """Phase 1 label generation endpoint with unified response payload."""
     try:
@@ -304,6 +319,7 @@ async def generate_label_v1(
             label_generator=label_generator,
             agentcore_client=agentcore_client,
             logo_library=_get_logo_library(),
+            salesperson_library=_get_salesperson_library(),
             labels_dir=LABELS_DIR,
             metadata_store=label_metadata_store,
             save_metadata_store=_save_label_metadata_store,
@@ -339,6 +355,7 @@ async def generate_label_v1(
             hazardous_waste=hazardous_waste,
             limited_quantity=limited_quantity,
             subsidiary_hazard_classes=subsidiary_hazard_classes,
+            salesperson_id=salesperson_id,
         )
     except HTTPException:
         raise
@@ -358,6 +375,35 @@ async def get_label_metadata_v1(label_id: str):
     if not metadata:
         raise HTTPException(status_code=404, detail="Label not found")
     return metadata
+
+
+@app.get("/api/v1/salespeople")
+async def list_salespeople():
+    """List reusable sales contacts."""
+    return {"salespeople": _get_salesperson_library().list_salespeople()}
+
+
+@app.post("/api/v1/salespeople")
+async def create_salesperson(request: SalespersonCreateRequest):
+    """Save a reusable sales contact for sample labels."""
+    try:
+        return _get_salesperson_library().create_salesperson(
+            name=request.name,
+            email=request.email,
+            phone=request.phone,
+        )
+    except SalespersonLibraryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/v1/salespeople/{salesperson_id}")
+async def delete_salesperson(salesperson_id: str):
+    """Delete a reusable sales contact."""
+    try:
+        return {"deleted": _get_salesperson_library().delete_salesperson(salesperson_id)}
+    except SalespersonLibraryError as exc:
+        status_code = 404 if "NOT_FOUND" in str(exc) else 400
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
 
 
 @app.get("/api/v1/logos")

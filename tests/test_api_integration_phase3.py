@@ -136,7 +136,9 @@ def setup_fakes(tmp_path: Path, passed: bool):
     main.app.router.lifespan_context = no_lifespan
     main.LABELS_DIR = tmp_path
     main.LOGOS_DIR = tmp_path / "logos"
+    main.SALESPEOPLE_DIR = tmp_path / "salespeople"
     main.logo_library = None
+    main.salesperson_library = None
     main.label_metadata_store = {}
     main.pdf_extractor = FakePDFExtractor()
     main.openai_client = FakeOpenAIClient()
@@ -150,7 +152,12 @@ def test_generate_blocked_then_override_then_download(tmp_path):
 
     with TestClient(main.app) as client:
         files = {"files": ("test_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
-        data = {"product_name": "Test Product", "mode": "shipped_dot", "size": "pail"}
+        data = {
+            "product_name": "Test Product",
+            "mode": "shipped_dot",
+            "size": "pail",
+            "fill_amount": "441 lb",
+        }
 
         generate_res = client.post("/api/v1/labels/generate", files=files, data=data)
         assert generate_res.status_code == 200
@@ -218,6 +225,7 @@ def test_logo_library_upload_list_and_generate_reuses_saved_logo(tmp_path):
             "size": "pail",
             "label_brand": "custom",
             "brand_logo_id": logo["logo_id"],
+            "fill_amount": "441 lb",
         }
         generated = client.post("/api/v1/labels/generate", files=files, data=data)
 
@@ -234,7 +242,12 @@ def test_generate_approved_allows_download(tmp_path):
 
     with TestClient(main.app) as client:
         files = {"files": ("test_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
-        data = {"product_name": "Approved Product", "mode": "shipped_dot", "size": "pail"}
+        data = {
+            "product_name": "Approved Product",
+            "mode": "shipped_dot",
+            "size": "pail",
+            "fill_amount": "441 lb",
+        }
 
         generate_res = client.post("/api/v1/labels/generate", files=files, data=data)
         assert generate_res.status_code == 200
@@ -246,13 +259,74 @@ def test_generate_approved_allows_download(tmp_path):
         assert download_res.status_code == 200
 
 
+def test_generate_rejects_non_sample_label_without_weight(tmp_path):
+    setup_fakes(tmp_path, passed=True)
+
+    with TestClient(main.app) as client:
+        files = {"files": ("test_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
+        data = {"product_name": "Missing Weight Product", "mode": "workplace", "size": "drum"}
+
+        generate_res = client.post("/api/v1/labels/generate", files=files, data=data)
+
+        assert generate_res.status_code == 400
+        assert "MISSING_FILL_AMOUNT" in generate_res.text
+
+
+def test_salespeople_api_create_list_delete_and_generate_sample_label(tmp_path):
+    setup_fakes(tmp_path, passed=True)
+    main.label_generator = LabelGenerator()
+
+    with TestClient(main.app) as client:
+        created = client.post(
+            "/api/v1/salespeople",
+            json={
+                "name": "Sean Wagner",
+                "email": "sean@clear-edge.net",
+                "phone": "704-799-5769",
+            },
+        )
+        assert created.status_code == 200
+        salesperson = created.json()
+        assert salesperson["salesperson_id"].startswith("sales_")
+
+        listing = client.get("/api/v1/salespeople")
+        assert listing.status_code == 200
+        assert listing.json()["salespeople"] == [salesperson]
+
+        files = {"files": ("sample_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
+        generated = client.post(
+            "/api/v1/labels/generate",
+            files=files,
+            data={
+                "product_name": "Sample Label Product",
+                "mode": "workplace",
+                "size": "sample_4x6",
+                "salesperson_id": salesperson["salesperson_id"],
+            },
+        )
+        assert generated.status_code == 200
+        payload = generated.json()
+        assert payload["label"]["size"] == "sample_4x6"
+        assert payload["label"]["salesperson"]["name"] == "Sean Wagner"
+        assert payload["salesperson"]["email"] == "sean@clear-edge.net"
+
+        deleted = client.delete(f"/api/v1/salespeople/{salesperson['salesperson_id']}")
+        assert deleted.status_code == 200
+        assert deleted.json() == {"deleted": True}
+
+
 def test_corrections_endpoint_reruns_validation_and_enables_download(tmp_path):
     setup_fakes(tmp_path, passed=False)
     main.validator = FakeCorrectionValidator()
 
     with TestClient(main.app) as client:
         files = {"files": ("test_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
-        data = {"product_name": "Corrected Product", "mode": "shipped_dot", "size": "pail"}
+        data = {
+            "product_name": "Corrected Product",
+            "mode": "shipped_dot",
+            "size": "pail",
+            "fill_amount": "441 lb",
+        }
 
         generate_res = client.post("/api/v1/labels/generate", files=files, data=data)
         assert generate_res.status_code == 200
@@ -296,6 +370,7 @@ def test_generate_applies_operator_dot_fields_before_validation(tmp_path):
             "marine_pollutant": "no",
             "limited_quantity": "No",
             "emergency_phone": "800-424-9300",
+            "fill_amount": "441 lb",
         }
 
         generate_res = client.post("/api/v1/labels/generate", files=files, data=data)
@@ -607,6 +682,7 @@ def test_generate_custom_brand_accepts_uploaded_logo_and_supplier_fields(tmp_pat
             "supplier_name": "Customer Chemical Co.",
             "supplier_address": "200 Customer Lane, Charlotte, NC",
             "supplier_phone": "704-555-0199",
+            "fill_amount": "441 lb",
         }
 
         generate_res = client.post("/api/v1/labels/generate", files=files, data=data)
@@ -637,6 +713,7 @@ def test_generate_custom_brand_uses_extracted_supplier_and_suggested_logo(tmp_pa
             "mode": "workplace",
             "size": "pail",
             "label_brand": "custom",
+            "fill_amount": "441 lb",
         }
 
         generate_res = client.post("/api/v1/labels/generate", files=files, data=data)

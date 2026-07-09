@@ -29,6 +29,9 @@ CRITICAL RULES:
 5. Include section name/number and page number when available
 6. Use confidence scores: 1.0 = explicit statement, 0.8 = clear but indirect, 0.5 = inferred, 0.3 = uncertain
 7. NFPA 704 values: extract explicit SDS values when listed. If not listed, return 0 for health, flammability, and instability/reactivity, null for special, and add a warning that NFPA 704 values were defaulted to 0 per ClearEdge policy.
+8. The EXPECTED PRODUCT NAME is the label name supplied by the operator. Use it for product.name, but preserve SDS/TDS source product names only in evidence/warnings.
+9. Prioritize SDS source text for safety fields. If Section 2 says Danger, do not downgrade it to Warning.
+10. Parse table-style SDS layouts where the label is on one line and the value appears on the next line.
 
 SCHEMA TO FOLLOW:
 {
@@ -89,6 +92,9 @@ SCHEMA TO FOLLOW:
 
 TRANSPORT CLASSIFICATION (Section 14):
 - Extract UN number, proper shipping name, hazard class, packing group
+- Accept UN and NA identification numbers, including table values like "DOT NA1993"
+- For table layouts, read the DOT value under headings like UN-Number, UN proper shipping name,
+  Transport hazard class(es), Class, Label, and Packing group
 - Extract subsidiary hazard classes/risks if Section 14 lists "subsidiary hazard",
   "subsidiary risk", or similar
 - Look for DOT, IATA, IMDG classifications
@@ -101,6 +107,8 @@ NFPA 704:
 - Blue/left = health, red/top = flammability, yellow/right = instability/reactivity, white/bottom = special hazard
 - Use the 0-4 numbers exactly as listed in the SDS when present
 - Accept labels like NFPA, NFPA 704, HMIS/NFPA, health/fire/reactivity, or health/flammability/instability
+- If NFPA is absent but HMIS is present, use HMIS Health, Flammability, and Physical Hazard/Reactivity
+  values as the NFPA fields and add a warning that HMIS was used as the source
 - If NFPA 704 values are not listed, use health=0, flammability=0, instability=0, special=null
 
 GHS PICTOGRAMS:
@@ -124,6 +132,22 @@ If the SDS lists pictogram words, map them exactly:
 - Flame Over Circle -> GHS03
 - Exploding Bomb -> GHS01
 - Environment -> GHS09
+
+If the SDS lists hazard classifications but not extractable pictogram words, derive pictogram codes only
+from explicit SDS classifications or H-codes:
+- Serious eye damage, skin corrosion, corrosive to metals, H314, H318, H290 -> GHS05
+- Skin/eye irritation, skin sensitization, acute toxicity category 4, H302, H315, H317, H319, H332, H335, H336 -> GHS07
+- Carcinogenicity, reproductive toxicity, STOT, aspiration hazard, respiratory sensitization, H304, H334, H340, H350, H360, H370, H372, H373 -> GHS08
+- Aquatic category 1 or 2, H400, H410, H411 -> GHS09. Do not add GHS09 for aquatic category 3 unless the SDS explicitly lists the Environment pictogram.
+
+SECTION 1 SUPPLIER DATA:
+- Extract supplier/manufacturer name, address, phone, and emergency phone from Section 1.
+- Accept labels such as Company Name, Supplier, Manufacturer, Telephone, Phone, Emergency telephone number, and Emergency phone.
+- Do not replace non-ClearEdge supplier data with ClearEdge data; the backend applies ClearEdge branding separately when requested.
+
+SECTION 2 SAFETY TEXT:
+- Capture plain-text hazard and precautionary statements even when H/P codes are not printed.
+- Do not return blank strings for missing statements; use empty arrays.
 
 PRODUCT USES:
 - Extract only brief product uses/applications that are explicitly stated in the TDS first, or SDS if no TDS is provided

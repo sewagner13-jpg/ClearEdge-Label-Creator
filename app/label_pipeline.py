@@ -148,6 +148,7 @@ class LabelPipeline:
         label_generator,
         agentcore_client=None,
         logo_library=None,
+        salesperson_library=None,
         labels_dir: Path,
         metadata_store: dict,
         save_metadata_store,
@@ -158,6 +159,7 @@ class LabelPipeline:
         self.label_generator = label_generator
         self.agentcore_client = agentcore_client
         self.logo_library = logo_library
+        self.salesperson_library = salesperson_library
         self.labels_dir = labels_dir
         self.metadata_store = metadata_store
         self.save_metadata_store = save_metadata_store
@@ -195,10 +197,15 @@ class LabelPipeline:
         hazardous_waste: Optional[str] = None,
         limited_quantity: Optional[str] = None,
         subsidiary_hazard_classes: Optional[str] = None,
+        salesperson_id: Optional[str] = None,
     ) -> dict:
         """Run the label generation workflow."""
         cleaned_product_name = self._validate_product_name(product_name)
+        size = self._normalize_size(size)
         orientation = self._normalize_orientation(orientation)
+        if size == "sample_4x6":
+            orientation = "horizontal"
+        salesperson = self._resolve_salesperson(salesperson_id)
         if self.openai_client is None:
             raise LabelPipelineError(503, "OPENAI_API_KEY is not configured")
 
@@ -212,6 +219,7 @@ class LabelPipeline:
         )
 
         sds_text, tds_text, suggested_logo = await self._extract_uploaded_documents(files)
+        self._validate_fill_amount_requirement(size=size, fill_amount=fill_amount)
 
         used_rule_based_fallback = False
         try:
@@ -286,6 +294,7 @@ class LabelPipeline:
             size,
             orientation=orientation,
             branding=branding,
+            salesperson=salesperson,
         )
         status = self._label_status(validation_result, agentcore_needs_review, agentcore_review)
         dot_shipping_review = build_dot_shipping_review(extracted_data, mode)
@@ -303,6 +312,7 @@ class LabelPipeline:
             status=status,
             agentcore_review=agentcore_review,
             branding=branding,
+            salesperson=salesperson,
             dot_shipping_review=dot_shipping_review,
             dot_sticker_path=dot_sticker_path,
         )
@@ -338,6 +348,7 @@ class LabelPipeline:
             metadata["size"],
             orientation=metadata.get("orientation") or "vertical",
             branding=metadata.get("branding"),
+            salesperson=metadata.get("salesperson"),
         )
         dot_shipping_review = build_dot_shipping_review(extracted_data, metadata["mode"])
         dot_sticker_path = self._render_dot_sticker_pdf(label_id, dot_shipping_review)
@@ -355,6 +366,7 @@ class LabelPipeline:
                 status=status,
                 agentcore_review=metadata.get("agentcore_review") or disabled_agentcore_review(),
                 branding=metadata.get("branding"),
+                salesperson=metadata.get("salesperson"),
                 dot_shipping_review=dot_shipping_review,
                 dot_sticker_path=dot_sticker_path,
             )
@@ -379,6 +391,36 @@ class LabelPipeline:
         if len(cleaned) > 100:
             raise LabelPipelineError(400, "Product name too long (max 100 chars)")
         return cleaned
+
+    @staticmethod
+    def _normalize_size(size: str) -> str:
+        cleaned = str(size or "pail").strip().lower().replace("-", "_")
+        if cleaned in {"pail", "drum", "tote", "sample_4x6"}:
+            return cleaned
+        if cleaned in {"sample", "4x6", "sample4x6", "sample_label"}:
+            return "sample_4x6"
+        raise LabelPipelineError(400, "INVALID_LABEL_SIZE: Use pail, drum, tote, or sample_4x6")
+
+    @staticmethod
+    def _validate_fill_amount_requirement(*, size: str, fill_amount: Optional[str]) -> None:
+        if size == "sample_4x6":
+            return
+        if not clean_operator_field(fill_amount):
+            raise LabelPipelineError(
+                400,
+                "MISSING_FILL_AMOUNT: Net weight/fill amount is required for pail, drum, and tote labels",
+            )
+
+    def _resolve_salesperson(self, salesperson_id: Optional[str]) -> Optional[dict]:
+        cleaned_id = clean_operator_field(salesperson_id)
+        if not cleaned_id:
+            return None
+        if self.salesperson_library is None:
+            raise LabelPipelineError(500, "SALESPERSON_LIBRARY_UNAVAILABLE: Sales contact library is not initialized")
+        try:
+            return self.salesperson_library.get_salesperson(cleaned_id)
+        except ValueError as exc:
+            raise LabelPipelineError(400, str(exc)) from exc
 
     async def _extract_uploaded_documents(self, files: List[UploadFile]):
         if len(files) > MAX_PDFS_PER_REQUEST:
@@ -1159,16 +1201,20 @@ class LabelPipeline:
         *,
         orientation: str = "vertical",
         branding: Optional[dict] = None,
+        salesperson: Optional[dict] = None,
     ) -> Path:
         try:
             template_id = f"clearedge_{size}_v1"
+            render_branding = dict(branding or {})
+            if salesperson:
+                render_branding["salesperson"] = salesperson
             svg_content = self.label_generator.generate_svg(
                 extracted_data,
                 mode=mode,
                 size=size,
                 template_id=template_id,
                 orientation=orientation,
-                branding=branding,
+                branding=render_branding,
             )
             self.labels_dir.mkdir(parents=True, exist_ok=True)
             pdf_content = self.label_generator.generate_pdf(svg_content)
@@ -1239,6 +1285,7 @@ class LabelPipeline:
         status: str,
         agentcore_review: dict,
         branding: Optional[dict] = None,
+        salesperson: Optional[dict] = None,
         dot_shipping_review: Optional[dict] = None,
         dot_sticker_path: Optional[Path] = None,
     ) -> dict:
@@ -1288,6 +1335,7 @@ class LabelPipeline:
             "dot_sticker_artifact_path": str(dot_sticker_path) if dot_sticker_path else None,
             "agentcore_review": agentcore_review,
             "branding": branding or {"mode": "clearedge", "logo_data_uri": None, "logo_filename": None},
+            "salesperson": salesperson,
         }
         metadata["canva_export"] = build_canva_export(extracted_payload, metadata)
         return metadata
@@ -1337,6 +1385,7 @@ class LabelPipeline:
                 "dot_sticker_pdf_url": metadata.get("dot_stickers", {}).get("url"),
                 "canva_csv_url": metadata["canva_csv_url"],
                 "canva_json_url": metadata["canva_json_url"],
+                "salesperson": metadata.get("salesperson"),
             },
             "preview": preview_payload,
             "download": download_payload,
@@ -1344,6 +1393,7 @@ class LabelPipeline:
             "dot_stickers": metadata.get("dot_stickers"),
             "agentcore_review": metadata.get("agentcore_review"),
             "branding": metadata.get("branding"),
+            "salesperson": metadata.get("salesperson"),
             "warnings": metadata["warnings"],
             "errors": metadata["errors"],
             "audit": {

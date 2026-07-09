@@ -173,7 +173,7 @@
                         <input type="text" id="manufactureDate" placeholder="Optional">
                     </div>
                     <div class="form-field">
-                        <label for="fillAmount">Net Weight / Fill Amount</label>
+                        <label for="fillAmount" id="fillAmountLabel">Net Weight / Fill Amount</label>
                         <input type="text" id="fillAmount" placeholder="e.g., 441 lb or 200 kg">
                         <p class="field-help" id="containerTypeHint"></p>
                     </div>
@@ -186,6 +186,7 @@
                             <option value="pail">Pail (8.5&quot; x 11&quot;)</option>
                             <option value="drum">Drum (8.5&quot; x 11&quot;)</option>
                             <option value="tote">Tote (8.5&quot; x 11&quot;)</option>
+                            <option value="sample_4x6">Sample 4x6 thermal</option>
                         </select>
                     </div>
                     <div class="form-field">
@@ -201,6 +202,40 @@
                             <option value="shipped_dot">Shipped/DOT (Transport)</option>
                             <option value="workplace">Workplace Container</option>
                         </select>
+                    </div>
+                </div>
+
+                <div class="brand-panel" id="salespersonPanel" hidden>
+                    <div class="panel-title-row">
+                        <div>
+                            <h3>Sales contact</h3>
+                            <p>Choose the sales contact printed on 4x6 sample labels, or save a new contact.</p>
+                        </div>
+                        <button type="button" id="refreshSalespeopleBtn" class="btn btn-secondary">Refresh Contacts</button>
+                    </div>
+                    <div class="form-grid four-col">
+                        <div class="form-field">
+                            <label for="salespersonSelect">Saved Sales Contact</label>
+                            <select id="salespersonSelect">
+                                <option value="">No sales contact selected</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label for="salespersonName">Salesperson Name</label>
+                            <input type="text" id="salespersonName" placeholder="Name">
+                        </div>
+                        <div class="form-field">
+                            <label for="salespersonEmail">Salesperson Email</label>
+                            <input type="email" id="salespersonEmail" placeholder="name@clear-edge.net">
+                        </div>
+                        <div class="form-field">
+                            <label for="salespersonPhone">Salesperson Phone</label>
+                            <input type="text" id="salespersonPhone" placeholder="Phone">
+                        </div>
+                    </div>
+                    <div class="generate-row compact">
+                        <button type="button" id="saveSalespersonBtn" class="btn btn-secondary">Save Sales Contact</button>
+                        <p id="salespersonMessage" class="field-help" aria-live="polite">Sample labels can include the selected sales contact.</p>
                     </div>
                 </div>
             </section>
