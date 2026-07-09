@@ -112,41 +112,29 @@ def test_rule_based_extractor_captures_novadd_plain_hazard_sections_and_tds_uses
     1. Identification
     Product name: Novadd D-5104E
     Manufacturer/Importer/Distributor Information
-    Company Name
-
-    : SynthEdge Advanced Materials Co.,Ltd.
+    Company Name : SynthEdge Advanced Materials Co.,Ltd.
     4F., No.8, Qinghua
     2nd St., Xinwu Dist.,
     Taoyuan City 327,
     Taiwan (R.O.C.)
 
-    Telephone
+    Telephone : +886-3-4971028
 
-    : +886-3-4971028
-
-    Emergency telephone number:
-
-    +886-3-4971028
+    Emergency telephone number: +886-3-4971028
 
     2. Hazard(s) identification
     Hazard Classification
     Health Hazards
-    Acute toxicity (Oral)
-    Serious Eye Damage/Eye Irritation
-    Skin sensitizer
-    Specific Target Organ Toxicity Repeated Exposure
+    Acute toxicity (Oral) Category 4
+    Serious Eye Damage/Eye Irritation Category 1
+    Skin sensitizer Category 1
+    Specific Target Organ Toxicity - Category 2
+    Repeated Exposure
     Environmental Hazards
-    Acute hazards to the aquatic
+    Acute hazards to the aquatic Category 3
     environment
-    Chronic hazards to the aquatic
+    Chronic hazards to the aquatic Category 3
     environment
-
-    Category 4
-    Category 1
-    Category 1
-    Category 2
-    Category 3
-    Category 3
 
     Label Elements
     Hazard Symbol:
@@ -182,19 +170,9 @@ def test_rule_based_extractor_captures_novadd_plain_hazard_sections_and_tds_uses
 
     16.Other information, including date of preparation
     HMIS Hazard ID
-    Health
-
-    *
-
-    2
-
-    Flammability
-
-    1
-
-    Physical Hazards
-
-    0
+    Health * 2
+    Flammability 1
+    Physical Hazards 0
     """
     tds = """
     Technical Data Sheet

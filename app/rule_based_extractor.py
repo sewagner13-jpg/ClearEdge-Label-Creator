@@ -334,11 +334,12 @@ class RuleBasedExtractor:
             if doc != "SDS":
                 continue
             lines = cls._meaningful_lines(text)
-            company_index = cls._find_line_index(lines, r"^Company\s+Name\s*:?\s*$")
+            company_index = cls._find_line_index(lines, r"^Company\s+Name\b")
             if company_index is not None:
-                name_index = cls._next_value_line_index(lines, company_index + 1)
+                inline_name = cls._inline_label_value(lines[company_index], r"^Company\s+Name\b")
+                name_index = company_index if inline_name else cls._next_value_line_index(lines, company_index + 1)
                 if name_index is not None and not data.product.supplier_name:
-                    name = cls._clean_label_value(lines[name_index])
+                    name = inline_name or cls._clean_label_value(lines[name_index])
                     data.product.supplier_name = name
                     cls._add_evidence(data, "product.supplier_name", name, {"doc": doc, "page": page, "quote": name})
 
@@ -375,7 +376,11 @@ class RuleBasedExtractor:
             cls._append_unique(pictograms, "GHS05")
         if "skin sensitizer" in block or ("acute toxicity" in block and "category 4" in block):
             cls._append_unique(pictograms, "GHS07")
-        if "specific target organ toxicity repeated exposure" in block or "stot repeated exposure" in block:
+        if (
+            "specific target organ toxicity repeated exposure" in block
+            or "stot repeated exposure" in block
+            or ("specific target organ toxicity" in block and "repeated exposure" in block)
+        ):
             cls._append_unique(pictograms, "GHS08")
         return pictograms
 
@@ -448,9 +453,9 @@ class RuleBasedExtractor:
     @classmethod
     def _extract_hmis_as_nfpa_fields(cls, data: ExtractedData, sources) -> None:
         hmis_values = (
-            ("nfpa.health", r"Health\s*(?:\n\s*)+(?:\*\s*(?:\n\s*)+)?([0-4])"),
-            ("nfpa.flammability", r"Flammability\s*(?:\n\s*)+([0-4])"),
-            ("nfpa.instability", r"Physical\s+Hazards?\s*(?:\n\s*)+([0-4])"),
+            ("nfpa.health", r"Health\s+(?:\*\s*)?([0-4])"),
+            ("nfpa.flammability", r"Flammability\s+([0-4])"),
+            ("nfpa.instability", r"Physical\s+Hazards?\s+([0-4])"),
         )
         found_any = False
         for field_path, pattern in hmis_values:
@@ -510,13 +515,17 @@ class RuleBasedExtractor:
         for index, line in enumerate(lines):
             if not label_re.match(line):
                 continue
-            inline = re.sub(label_pattern, "", line, flags=re.IGNORECASE).strip(" :")
+            inline = cls._inline_label_value(line, label_pattern)
             if inline:
                 return inline
             value_index = cls._next_value_line_index(lines, index + 1)
             if value_index is not None:
                 return cls._clean_label_value(lines[value_index])
         return None
+
+    @classmethod
+    def _inline_label_value(cls, line: str, label_pattern: str) -> str:
+        return cls._clean_label_value(re.sub(label_pattern, "", line, flags=re.IGNORECASE))
 
     @staticmethod
     def _clean_label_value(value: str) -> str:

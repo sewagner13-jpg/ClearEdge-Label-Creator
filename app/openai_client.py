@@ -311,6 +311,16 @@ PRODUCT USES:
             transport.get("subsidiary_hazard_classes")
         )
 
+        normalized_evidence = []
+        for item in data.get("evidence") or []:
+            if not isinstance(item, dict):
+                continue
+            quote = str(item.get("quote") or "").strip()
+            if quote:
+                item["quote"] = quote[:240]
+            normalized_evidence.append(item)
+        data["evidence"] = normalized_evidence
+
     @staticmethod
     def _normalize_string_list(value) -> list[str]:
         """Normalize scalar/list extractor output into concise strings."""

@@ -89,6 +89,30 @@ def test_parse_response_normalizes_common_ai_shape_drift():
     assert extracted.transport.special_provisions == "IB2 | T4"
 
 
+def test_parse_response_clips_overlong_evidence_quotes():
+    client = OpenAIClient.__new__(OpenAIClient)
+    response = {
+        "product": {"name": "ClearEdge Evidence Clip"},
+        "ghs": {},
+        "transport": {},
+        "evidence": [
+            {
+                "field_path": "ghs.precautionary_statements",
+                "doc": "SDS",
+                "section": "2",
+                "page": 2,
+                "quote": "Prevention: " + ("Wear protective gloves. " * 30),
+            }
+        ],
+        "confidence": [],
+        "warnings": [],
+    }
+
+    extracted = client._parse_response(json.dumps(response), "ClearEdge Evidence Clip")
+
+    assert len(extracted.evidence[0].quote) == 240
+
+
 def test_canva_export_formats_scalar_special_provisions():
     exported = build_canva_export(
         {
