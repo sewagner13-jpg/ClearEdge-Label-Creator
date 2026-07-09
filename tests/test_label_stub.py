@@ -116,7 +116,7 @@ def test_sample_4x6_product_name_fits_right_header_space():
     heading = LabelGenerator._format_sample_product_heading("NovAdd D-5104E")
 
     assert heading["lines"] == ["NovAdd D-5104E"]
-    assert heading["font_size"] <= 31
+    assert heading["font_size"] <= 29
     assert heading["font_size"] >= 20
 
     generator = LabelGenerator()
