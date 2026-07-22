@@ -413,7 +413,7 @@ class LabelPipeline:
         for upload in files:
             stem = Path(upload.filename or "").stem
             candidate = re.sub(
-                r"(?i)\b(?:safety\s+data\s+sheet|technical\s+data\s+sheet|sds|tds)\b.*$",
+                r"(?i)\b(?:safety\s+data\s+sheet|material\s+safety\s+data\s+sheet|technical\s+data\s+sheet|msds|sds|tds)\b.*$",
                 "",
                 stem,
             )

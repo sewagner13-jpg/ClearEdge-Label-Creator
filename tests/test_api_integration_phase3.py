@@ -276,7 +276,7 @@ def test_analyze_documents_requires_only_pdf_uploads(tmp_path):
     setup_fakes(tmp_path, passed=True)
 
     with TestClient(main.app) as client:
-        files = {"files": ("NovAdd D-5104E SDS.pdf", b"%PDF-1.4 test", "application/pdf")}
+        files = {"files": ("WINPUREA 142 MSDS EN.pdf", b"%PDF-1.4 test", "application/pdf")}
 
         response = client.post("/api/v1/documents/analyze", files=files)
 
@@ -284,7 +284,7 @@ def test_analyze_documents_requires_only_pdf_uploads(tmp_path):
         payload = response.json()
         assert payload["success"] is True
         assert payload["status"] == "analyzed"
-        assert payload["extracted"]["product"]["name"] == "NovAdd D-5104E"
+        assert payload["extracted"]["product"]["name"] == "WINPUREA 142"
         assert payload["extracted"]["ghs"]["signal_word"] == "Warning"
 
 
