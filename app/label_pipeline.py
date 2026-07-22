@@ -164,6 +164,32 @@ class LabelPipeline:
         self.metadata_store = metadata_store
         self.save_metadata_store = save_metadata_store
 
+    async def analyze_documents(
+        self,
+        *,
+        files: List[UploadFile],
+        product_name: Optional[str] = None,
+    ) -> dict:
+        """Extract source-backed SDS/TDS fields without generating label artifacts."""
+        if self.openai_client is None:
+            raise LabelPipelineError(503, "OPENAI_API_KEY is not configured")
+
+        sds_text, tds_text, suggested_logo = await self._extract_uploaded_documents(files)
+        analysis_product_name = self._analysis_product_name(product_name, files)
+        extracted_data = self._extract_structured_data(
+            sds_text=sds_text,
+            tds_text=tds_text,
+            product_name=analysis_product_name,
+        )
+
+        return {
+            "success": True,
+            "status": "analyzed",
+            "extracted": extracted_data.model_dump(mode="json"),
+            "suggested_logo": suggested_logo,
+            "warnings": list(extracted_data.warnings),
+        }
+
     async def generate_label_from_uploads(
         self,
         *,
@@ -229,34 +255,11 @@ class LabelPipeline:
         sds_text, tds_text, suggested_logo = await self._extract_uploaded_documents(files)
         self._validate_fill_amount_requirement(size=size, fill_amount=fill_amount)
 
-        used_rule_based_fallback = False
-        try:
-            extracted_data = self.openai_client.extract_from_documents(sds_text, tds_text, cleaned_product_name)
-        except ValueError as exc:
-            used_rule_based_fallback = True
-            extracted_data = RuleBasedExtractor.extract(
-                sds_text=sds_text,
-                tds_text=tds_text,
-                product_name=cleaned_product_name,
-                warning=f"AI_EXTRACTION_FAILED: {self._safe_exception_detail(exc)}",
-            )
-        except Exception as exc:
-            logger.error("AI extraction failed: %s", exc, exc_info=True)
-            used_rule_based_fallback = True
-            extracted_data = RuleBasedExtractor.extract(
-                sds_text=sds_text,
-                tds_text=tds_text,
-                product_name=cleaned_product_name,
-                warning=f"AI_EXTRACTION_FAILED: {exc.__class__.__name__}: {self._safe_exception_detail(exc)}",
-            )
-        extracted_data.product.name = cleaned_product_name
-        if not used_rule_based_fallback:
-            self._reconcile_source_backed_extraction(
-                extracted_data,
-                sds_text=sds_text,
-                tds_text=tds_text,
-                product_name=cleaned_product_name,
-            )
+        extracted_data = self._extract_structured_data(
+            sds_text=sds_text,
+            tds_text=tds_text,
+            product_name=cleaned_product_name,
+        )
         branding = self._apply_suggested_logo_to_branding(branding, suggested_logo)
         self._apply_operator_fields(
             extracted_data,
@@ -399,6 +402,59 @@ class LabelPipeline:
         if len(cleaned) > 100:
             raise LabelPipelineError(400, "Product name too long (max 100 chars)")
         return cleaned
+
+    @classmethod
+    def _analysis_product_name(cls, product_name: Optional[str], files: List[UploadFile]) -> str:
+        """Use an operator name when supplied, otherwise derive a clean name from the PDF filename."""
+        cleaned = clean_operator_field(product_name)
+        if cleaned:
+            return cls._validate_product_name(cleaned)
+
+        for upload in files:
+            stem = Path(upload.filename or "").stem
+            candidate = re.sub(
+                r"(?i)\b(?:safety\s+data\s+sheet|technical\s+data\s+sheet|sds|tds)\b.*$",
+                "",
+                stem,
+            )
+            candidate = re.sub(r"[\s_\-]+$", "", candidate).strip()
+            if len(candidate) >= 2:
+                return candidate[:100]
+
+        return "Uploaded Product"
+
+    def _extract_structured_data(self, *, sds_text, tds_text, product_name: str) -> ExtractedData:
+        """Run AI extraction with deterministic source reconciliation and fallback."""
+        used_rule_based_fallback = False
+        try:
+            extracted_data = self.openai_client.extract_from_documents(sds_text, tds_text, product_name)
+        except ValueError as exc:
+            used_rule_based_fallback = True
+            extracted_data = RuleBasedExtractor.extract(
+                sds_text=sds_text,
+                tds_text=tds_text,
+                product_name=product_name,
+                warning=f"AI_EXTRACTION_FAILED: {self._safe_exception_detail(exc)}",
+            )
+        except Exception as exc:
+            logger.error("AI extraction failed: %s", exc, exc_info=True)
+            used_rule_based_fallback = True
+            extracted_data = RuleBasedExtractor.extract(
+                sds_text=sds_text,
+                tds_text=tds_text,
+                product_name=product_name,
+                warning=f"AI_EXTRACTION_FAILED: {exc.__class__.__name__}: {self._safe_exception_detail(exc)}",
+            )
+
+        extracted_data.product.name = product_name
+        if not used_rule_based_fallback:
+            self._reconcile_source_backed_extraction(
+                extracted_data,
+                sds_text=sds_text,
+                tds_text=tds_text,
+                product_name=product_name,
+            )
+        return extracted_data
 
     @staticmethod
     def _normalize_size(size: str) -> str:

@@ -272,6 +272,22 @@ def test_generate_rejects_non_sample_label_without_weight(tmp_path):
         assert "MISSING_FILL_AMOUNT" in generate_res.text
 
 
+def test_analyze_documents_requires_only_pdf_uploads(tmp_path):
+    setup_fakes(tmp_path, passed=True)
+
+    with TestClient(main.app) as client:
+        files = {"files": ("NovAdd D-5104E SDS.pdf", b"%PDF-1.4 test", "application/pdf")}
+
+        response = client.post("/api/v1/documents/analyze", files=files)
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["success"] is True
+        assert payload["status"] == "analyzed"
+        assert payload["extracted"]["product"]["name"] == "NovAdd D-5104E"
+        assert payload["extracted"]["ghs"]["signal_word"] == "Warning"
+
+
 def test_salespeople_api_create_list_delete_and_generate_sample_label(tmp_path):
     setup_fakes(tmp_path, passed=True)
     main.label_generator = LabelGenerator()

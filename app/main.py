@@ -25,6 +25,7 @@ from .web_retrieval import WebRetriever
 from .label_stub import LabelGenerator
 from .agentcore_client import AgentCoreClient
 from .api_models import (
+    AnalyzeDocumentsResponse,
     CorrectionRequest,
     GenerateLabelResponse,
     LabelOrientation,
@@ -252,6 +253,22 @@ def _safe_logo_id(logo_id: str) -> str:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+def _build_label_pipeline() -> LabelPipeline:
+    """Build the shared pipeline with the current application dependencies."""
+    return LabelPipeline(
+        pdf_extractor=pdf_extractor,
+        openai_client=openai_client,
+        validator=validator,
+        label_generator=label_generator,
+        agentcore_client=agentcore_client,
+        logo_library=_get_logo_library(),
+        salesperson_library=_get_salesperson_library(),
+        labels_dir=LABELS_DIR,
+        metadata_store=label_metadata_store,
+        save_metadata_store=_save_label_metadata_store,
+    )
+
+
 # Endpoints
 
 @app.get("/", include_in_schema=False)
@@ -273,6 +290,26 @@ async def health_check():
 async def readiness_check():
     """Readiness check endpoint with dependency diagnostics."""
     return _readiness_payload()
+
+
+@app.post("/api/v1/documents/analyze", response_model=AnalyzeDocumentsResponse)
+async def analyze_documents(
+    files: List[UploadFile] = File(...),
+    product_name: Optional[str] = Form(None),
+):
+    """Parse uploaded SDS/TDS files without requiring shipment fields or rendering a label."""
+    try:
+        return await _build_label_pipeline().analyze_documents(
+            files=files,
+            product_name=product_name,
+        )
+    except LabelPipelineError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"INVALID_DATA: {exc}")
+    except Exception as exc:
+        logger.error("Document analysis failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="DOCUMENT_ANALYSIS_FAILED")
 
 
 @app.post("/api/v1/labels/generate", response_model=GenerateLabelResponse)
@@ -315,18 +352,7 @@ async def generate_label_v1(
 ):
     """Phase 1 label generation endpoint with unified response payload."""
     try:
-        pipeline = LabelPipeline(
-            pdf_extractor=pdf_extractor,
-            openai_client=openai_client,
-            validator=validator,
-            label_generator=label_generator,
-            agentcore_client=agentcore_client,
-            logo_library=_get_logo_library(),
-            salesperson_library=_get_salesperson_library(),
-            labels_dir=LABELS_DIR,
-            metadata_store=label_metadata_store,
-            save_metadata_store=_save_label_metadata_store,
-        )
+        pipeline = _build_label_pipeline()
         return await pipeline.generate_label_from_uploads(
             files=files,
             product_name=product_name,
@@ -519,17 +545,7 @@ async def override_label_approval(label_id: str, request: OverrideApprovalReques
 async def correct_label_fields(label_id: str, request: CorrectionRequest):
     """Apply operator corrections, rerender, and rerun validation."""
     try:
-        pipeline = LabelPipeline(
-            pdf_extractor=pdf_extractor,
-            openai_client=openai_client,
-            validator=validator,
-            label_generator=label_generator,
-            agentcore_client=agentcore_client,
-            logo_library=_get_logo_library(),
-            labels_dir=LABELS_DIR,
-            metadata_store=label_metadata_store,
-            save_metadata_store=_save_label_metadata_store,
-        )
+        pipeline = _build_label_pipeline()
         return pipeline.apply_corrections(label_id, request)
     except LabelPipelineError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail)

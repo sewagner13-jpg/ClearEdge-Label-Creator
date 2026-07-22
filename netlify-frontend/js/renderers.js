@@ -57,6 +57,16 @@ export function renderErrorPanel(errorMessage) {
     `;
 }
 
+export function renderAnalysisResult(data) {
+    return `
+        <div class="status-card success">
+            <strong>SDS/TDS analysis complete</strong>
+            <p>Review the extracted fields below, add the required shipment details, then generate the label preview.</p>
+        </div>
+        ${renderExtractedInformation(data)}
+    `;
+}
+
 export function renderPreviewRail(data) {
     const model = createResultViewModel(data);
     return `

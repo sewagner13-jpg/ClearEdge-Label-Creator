@@ -12,6 +12,7 @@ import {
 } from './utils.js';
 import {
     renderErrorPanel,
+    renderAnalysisResult,
     renderInitialPreview,
     renderPreviewRail,
     renderProcessingPreview,
@@ -130,7 +131,7 @@ export function createLabelCreatorApp() {
             renderSelectedGhsPictograms();
         });
 
-        elements.analyzeSdsBtn.addEventListener('click', requestGenerationStart);
+        elements.analyzeSdsBtn.addEventListener('click', analyzeDocuments);
         elements.generateBtn.addEventListener('click', requestGenerationStart);
         elements.result.addEventListener('submit', handleCorrectionSubmit);
     }
@@ -194,16 +195,12 @@ export function createLabelCreatorApp() {
         const hasFiles = state.selectedFiles.length > 0;
         const hasProduct = normalizedText(elements.productName.value).length >= 2;
         const hasRequiredWeight = isSampleLabel() || normalizedText(elements.fillAmount.value).length > 0;
-        elements.analyzeSdsBtn.disabled = !(hasFiles && hasProduct && hasRequiredWeight);
+        elements.analyzeSdsBtn.disabled = !hasFiles;
         elements.generateBtn.disabled = !(hasFiles && hasProduct && hasRequiredWeight);
         if (!hasFiles) {
             elements.analyzeHelp.textContent = 'Upload SDS/TDS PDFs to unlock analysis.';
-        } else if (!hasProduct) {
-            elements.analyzeHelp.textContent = 'PDFs are ready. Enter the label product name, then analyze the SDS/TDS source data.';
-        } else if (!hasRequiredWeight) {
-            elements.analyzeHelp.textContent = 'Enter the net weight before generating pail, drum, or tote labels.';
         } else {
-            elements.analyzeHelp.textContent = 'Ready to parse SDS/TDS data and build the label preview.';
+            elements.analyzeHelp.textContent = 'PDFs are ready. Analyze now; product name and weight can be completed afterward.';
         }
         elements.generateHelp.textContent = hasFiles && hasProduct && hasRequiredWeight
             ? 'Ready to analyze the documents and render a label preview.'
@@ -479,6 +476,86 @@ export function createLabelCreatorApp() {
             formData.append('ghs_pictograms', JSON.stringify(state.selectedGhsPictograms));
         }
         return formData;
+    }
+
+    function buildAnalysisFormData() {
+        const formData = new FormData();
+        state.selectedFiles.forEach(file => formData.append('files', file));
+        const productName = normalizedText(elements.productName.value);
+        if (productName) formData.append('product_name', productName);
+        return formData;
+    }
+
+    function setBooleanSelect(input, value) {
+        if (value === true) input.value = 'yes';
+        if (value === false) input.value = 'no';
+    }
+
+    function applyAnalysisToForm(data) {
+        const extracted = data?.extracted || {};
+        const product = extracted.product || {};
+        const ghs = extracted.ghs || {};
+        const transport = extracted.transport || {};
+
+        setIfBlank(elements.productName, product.name);
+        setIfBlank(elements.supplierName, product.supplier_name);
+        setIfBlank(elements.supplierAddress, product.supplier_address);
+        setIfBlank(elements.supplierPhone, product.supplier_phone);
+        setIfBlank(elements.emergencyPhone, product.emergency_phone);
+        setIfBlank(elements.unNumber, transport.un_number);
+        setIfBlank(elements.properShippingName, transport.proper_shipping_name);
+        setIfBlank(elements.hazardClass, transport.hazard_class);
+        setIfBlank(elements.subsidiaryHazardClasses, (transport.subsidiary_hazard_classes || []).join(', '));
+        if (!elements.packingGroup.value && transport.packing_group) {
+            elements.packingGroup.value = transport.packing_group;
+        }
+        if (transport.not_regulated === true) {
+            elements.transportStatus.value = 'not_regulated';
+        } else if (transport.not_regulated === false) {
+            elements.transportStatus.value = 'regulated';
+        }
+        setBooleanSelect(elements.marinePollutant, transport.marine_pollutant);
+        setBooleanSelect(elements.hazardousSubstance, transport.hazardous_substance);
+        setBooleanSelect(elements.hazardousWaste, transport.hazardous_waste);
+        setIfBlank(elements.limitedQuantity, transport.limited_quantity);
+
+        state.selectedGhsPictograms = Array.from(new Set(ghs.pictograms || []));
+        renderSelectedGhsPictograms();
+        applyCustomBrandSuggestions({
+            extracted,
+            branding: {
+                suggested_logo: data?.suggested_logo,
+                logo_source: data?.suggested_logo ? 'suggested' : 'none'
+            }
+        });
+        updateGenerateState();
+    }
+
+    async function analyzeDocuments() {
+        if (!state.selectedFiles.length) return;
+        setProcessing(true);
+        try {
+            const response = await fetch(`${API_URL}/api/v1/documents/analyze`, {
+                method: 'POST',
+                body: buildAnalysisFormData()
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || `HTTP ${response.status}: ${response.statusText}`);
+            }
+            const data = await response.json();
+            applyAnalysisToForm(data);
+            elements.result.innerHTML = renderAnalysisResult(data);
+            elements.previewRailContent.innerHTML = renderAnalysisResult(data);
+            elements.analyzeHelp.textContent = 'Analysis complete. Review the extracted fields and enter shipment details before generating.';
+            scrollToStep('stepSetup');
+        } catch (error) {
+            const message = formatFetchError(error);
+            elements.result.innerHTML = renderErrorPanel(message);
+            elements.previewRailContent.innerHTML = renderErrorPanel(message);
+        } finally {
+            setProcessing(false);
+        }
     }
 
     function requestGenerationStart() {

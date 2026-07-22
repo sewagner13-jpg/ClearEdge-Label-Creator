@@ -104,6 +104,16 @@ class SalespersonCreateRequest(BaseModel):
     phone: Optional[str] = Field(None, max_length=60)
 
 
+class AnalyzeDocumentsResponse(BaseModel):
+    """Structured SDS/TDS analysis before label generation."""
+
+    success: bool
+    status: str
+    extracted: dict
+    suggested_logo: Optional[dict] = None
+    warnings: List[str] = Field(default_factory=list)
+
+
 class GenerateLabelResponse(BaseModel):
     """Unified label generation response."""
 

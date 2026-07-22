@@ -50,8 +50,10 @@ def test_frontend_upload_step_exposes_direct_sds_analysis_action():
     assert 'id="analyzeHelp"' in index_html
     assert "analyzeSdsBtn" in controller_js
     assert "analyzeHelp" in controller_js
-    assert "requestGenerationStart" in controller_js
-    assert "elements.analyzeSdsBtn.addEventListener('click', requestGenerationStart)" in controller_js
+    assert "analyzeDocuments" in controller_js
+    assert "elements.analyzeSdsBtn.addEventListener('click', analyzeDocuments)" in controller_js
+    assert "elements.analyzeSdsBtn.disabled = !hasFiles" in controller_js
+    assert "/api/v1/documents/analyze" in controller_js
 
 
 def test_frontend_entrypoint_is_modular_static_javascript():
