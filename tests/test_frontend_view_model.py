@@ -101,3 +101,114 @@ def test_result_view_model_explains_missing_dot_sticker_page():
         "hasDotStickerPage": False,
         "dotStickerReason": "DOT sticker sheet not generated - enter hazard class.",
     }
+
+
+def test_generation_requirements_identify_only_missing_weight():
+    script = textwrap.dedent(
+        """
+        import { createGenerationRequirements } from './netlify-frontend/js/view-model.js';
+
+        console.log(JSON.stringify(createGenerationRequirements({
+          fileCount: 2,
+          productName: 'SilaRes CE 618',
+          fillAmount: '',
+          sampleLabel: false
+        })));
+        """
+    )
+
+    assert run_node_module(script) == [{
+        "field": "fillAmount",
+        "label": "Net Weight / Fill Amount",
+    }]
+
+
+def test_dot_analysis_summary_makes_not_regulated_section_14_result_explicit():
+    script = textwrap.dedent(
+        """
+        import { createDotAnalysisSummary } from './netlify-frontend/js/view-model.js';
+
+        console.log(JSON.stringify(createDotAnalysisSummary({
+          extracted: {
+            transport: {
+              not_regulated: true,
+              proper_shipping_name: 'Not applicable'
+            },
+            evidence: [{
+              field_path: 'transport.not_regulated',
+              doc: 'SDS',
+              section: 'Section 14',
+              page: 7,
+              quote: 'Not regulated as a dangerous good for transport.'
+            }]
+          }
+        })));
+        """
+    )
+
+    assert run_node_module(script) == {
+        "status": "not_regulated",
+        "tone": "ready",
+        "title": "Section 14 parsed: Not regulated for DOT transport",
+        "detail": "The uploaded SDS does not require UN/NA number, hazard class, or packing group for this transport state.",
+        "fields": [],
+        "missingFields": [],
+        "evidence": "SDS, Section 14, page 7: Not regulated as a dangerous good for transport.",
+    }
+
+
+def test_dot_analysis_summary_lists_regulated_fields_and_missing_values():
+    script = textwrap.dedent(
+        """
+        import { createDotAnalysisSummary } from './netlify-frontend/js/view-model.js';
+
+        console.log(JSON.stringify(createDotAnalysisSummary({
+          extracted: {
+            transport: {
+              not_regulated: false,
+              un_number: 'UN1993',
+              proper_shipping_name: 'Flammable liquids, n.o.s.',
+              hazard_class: '3',
+              packing_group: null
+            },
+            evidence: []
+          }
+        })));
+        """
+    )
+
+    assert run_node_module(script) == {
+        "status": "regulated",
+        "tone": "review",
+        "title": "Section 14 parsed: DOT regulated",
+        "detail": "Review the parsed highway-shipping fields before generating the label.",
+        "fields": [
+            "UN/NA: UN1993",
+            "Shipping name: Flammable liquids, n.o.s.",
+            "Hazard class: 3",
+        ],
+        "missingFields": ["Packing group"],
+        "evidence": "",
+    }
+
+
+def test_dot_analysis_summary_marks_missing_section_14_conclusion_for_review():
+    script = textwrap.dedent(
+        """
+        import { createDotAnalysisSummary } from './netlify-frontend/js/view-model.js';
+
+        console.log(JSON.stringify(createDotAnalysisSummary({
+          extracted: { transport: {}, evidence: [] }
+        })));
+        """
+    )
+
+    assert run_node_module(script) == {
+        "status": "undetermined",
+        "tone": "blocked",
+        "title": "Section 14 result needs review",
+        "detail": "The SDS/TDS analysis did not find a reliable DOT regulated or not-regulated conclusion. Review Section 14 or enter the transport fields manually.",
+        "fields": [],
+        "missingFields": [],
+        "evidence": "",
+    }

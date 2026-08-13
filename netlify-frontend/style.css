@@ -458,6 +458,14 @@ a:focus-visible,
     align-items: center;
 }
 
+.dot-parse-status {
+    margin: 12px 0 16px;
+}
+
+.dot-parse-status .status-card {
+    margin-top: 0;
+}
+
 .btn {
     min-height: 46px;
     display: inline-flex;

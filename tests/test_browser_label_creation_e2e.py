@@ -16,6 +16,7 @@ from app.schema import (
     ExtractedData,
     ExtractedText,
     ExtractedTextPage,
+    Evidence,
     GHSClassification,
     ProductInfo,
     TransportClassification,
@@ -43,7 +44,17 @@ class BrowserTestOpenAIClient:
                 product_uses=["Resins of Coating & Ink"],
             ),
             ghs=GHSClassification(signal_word="Warning", pictograms=["GHS07"]),
-            transport=TransportClassification(not_regulated=True),
+            transport=TransportClassification(
+                not_regulated=True,
+                proper_shipping_name="Not applicable",
+            ),
+            evidence=[Evidence(
+                field_path="transport.not_regulated",
+                doc="SDS",
+                section="Section 14",
+                page=7,
+                quote="Not regulated as a dangerous good for transport.",
+            )],
         )
 
 
@@ -149,5 +160,41 @@ def test_browser_generates_preview_and_pdf_for_xml_sensitive_label_text(local_la
         page.screenshot(
             path=artifact_dir / "T0001-label-preview.png",
             full_page=True,
+        )
+        browser.close()
+
+
+@pytest.mark.browser
+@pytest.mark.integration
+def test_browser_explains_missing_weight_and_section_14_parse(local_label_server):
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1440, "height": 1000})
+        page.goto(local_label_server, wait_until="networkidle")
+
+        page.locator("#fileInput").set_input_files({
+            "name": "edgemer-e618-sds.pdf",
+            "mimeType": "application/pdf",
+            "buffer": b"%PDF-1.4 browser DOT analysis fixture",
+        })
+        page.locator("#productName").fill("SilaRes CE 618")
+
+        generate_button = page.locator("#generateBtn")
+        expect(generate_button).to_be_enabled()
+        expect(page.locator("#generateHelp")).to_contain_text("Net Weight / Fill Amount")
+        generate_button.click()
+        expect(page.locator("#fillAmount")).to_be_focused()
+        expect(page.locator("#result").get_by_text("Generating label", exact=True)).to_have_count(0)
+
+        page.locator("#analyzeSdsBtn").click()
+        expect(page.locator("#dotParseStatus")).to_contain_text(
+            "Section 14 parsed: Not regulated for DOT transport",
+            timeout=20_000,
+        )
+        expect(page.locator("#dotParseStatus")).to_contain_text(
+            "SDS, Section 14, page 7: Not regulated as a dangerous good for transport."
+        )
+        expect(page.locator("#result")).to_contain_text(
+            "Section 14 parsed: Not regulated for DOT transport"
         )
         browser.close()

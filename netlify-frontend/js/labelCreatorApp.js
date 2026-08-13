@@ -13,11 +13,13 @@ import {
 import {
     renderErrorPanel,
     renderAnalysisResult,
+    renderDotAnalysisStatus,
     renderInitialPreview,
     renderPreviewRail,
     renderProcessingPreview,
     renderResultPanel
 } from './renderers.js';
+import { createGenerationRequirements } from './view-model.js';
 
 const PROCESSING_STAGES = [
     'Uploading documents',
@@ -62,6 +64,7 @@ export function createLabelCreatorApp() {
             'saveBrandLogo', 'brandLogoName', 'showClearedgeMark', 'customBrandFields',
             'suggestedLogoPanel', 'suggestedLogoImage', 'suggestedLogoMeta', 'supplierName',
             'supplierAddress', 'supplierPhone', 'transportStatus', 'unNumber',
+            'dotParseStatus',
             'properShippingName', 'hazardClass', 'subsidiaryHazardClasses', 'packingGroup',
             'marinePollutant', 'hazardousSubstance', 'hazardousWaste', 'limitedQuantity',
             'emergencyPhone', 'ghsPictogramSelect', 'addGhsPictogram', 'clearGhsPictograms',
@@ -193,18 +196,26 @@ export function createLabelCreatorApp() {
 
     function updateGenerateState() {
         const hasFiles = state.selectedFiles.length > 0;
-        const hasProduct = normalizedText(elements.productName.value).length >= 2;
-        const hasRequiredWeight = isSampleLabel() || normalizedText(elements.fillAmount.value).length > 0;
+        const missingRequirements = currentGenerationRequirements();
         elements.analyzeSdsBtn.disabled = !hasFiles;
-        elements.generateBtn.disabled = !(hasFiles && hasProduct && hasRequiredWeight);
+        elements.generateBtn.disabled = false;
         if (!hasFiles) {
             elements.analyzeHelp.textContent = 'Upload SDS/TDS PDFs to unlock analysis.';
         } else {
             elements.analyzeHelp.textContent = 'PDFs are ready. Analyze now; product name and weight can be completed afterward.';
         }
-        elements.generateHelp.textContent = hasFiles && hasProduct && hasRequiredWeight
-            ? 'Ready to analyze the documents and render a label preview.'
-            : 'Upload PDFs, enter a product name, and enter weight for non-sample labels.';
+        elements.generateHelp.textContent = missingRequirements.length
+            ? `Missing before generation: ${missingRequirements.map(item => item.label).join(', ')}. Click Generate Label to go to the first missing item.`
+            : 'Ready to analyze the documents and render a label preview.';
+    }
+
+    function currentGenerationRequirements() {
+        return createGenerationRequirements({
+            fileCount: state.selectedFiles.length,
+            productName: elements.productName.value,
+            fillAmount: elements.fillAmount.value,
+            sampleLabel: isSampleLabel()
+        });
     }
 
     function updateContainerTypeHint() {
@@ -518,6 +529,7 @@ export function createLabelCreatorApp() {
         setBooleanSelect(elements.hazardousSubstance, transport.hazardous_substance);
         setBooleanSelect(elements.hazardousWaste, transport.hazardous_waste);
         setIfBlank(elements.limitedQuantity, transport.limited_quantity);
+        elements.dotParseStatus.innerHTML = renderDotAnalysisStatus(data);
 
         state.selectedGhsPictograms = Array.from(new Set(ghs.pictograms || []));
         renderSelectedGhsPictograms();
@@ -559,30 +571,32 @@ export function createLabelCreatorApp() {
     }
 
     function requestGenerationStart() {
-        if (!state.selectedFiles.length) {
+        const missingRequirements = currentGenerationRequirements();
+        if (!missingRequirements.length) {
+            generateLabel();
+            return;
+        }
+
+        const missingMessage = `Cannot generate yet. Missing: ${missingRequirements.map(item => item.label).join(', ')}.`;
+        elements.generateHelp.textContent = missingMessage;
+        const firstMissing = missingRequirements[0];
+
+        if (firstMissing.field === 'files') {
             elements.analyzeHelp.textContent = 'Upload at least one SDS or TDS PDF before starting analysis.';
             scrollToStep('stepUpload');
             return;
         }
 
-        if (normalizedText(elements.productName.value).length < 2) {
-            elements.analyzeHelp.textContent = 'Enter the label product name in Step 2, then click Analyze SDS/TDS.';
-            elements.generateHelp.textContent = 'Product name is required before SDS/TDS analysis can start.';
+        if (firstMissing.field === 'productName') {
             scrollToStep('stepSetup');
             elements.productName.focus({ preventScroll: true });
             return;
         }
 
-        if (!isSampleLabel() && !normalizedText(elements.fillAmount.value)) {
-            const message = 'MISSING_FILL_AMOUNT: Enter the net weight before generating pail, drum, or tote labels.';
-            elements.analyzeHelp.textContent = message;
-            elements.generateHelp.textContent = message;
+        if (firstMissing.field === 'fillAmount') {
             scrollToStep('stepSetup');
             elements.fillAmount.focus({ preventScroll: true });
-            return;
         }
-
-        generateLabel();
     }
 
     async function generateLabel() {
@@ -624,11 +638,7 @@ export function createLabelCreatorApp() {
         state.progressTimer = null;
         state.progressIndex = 0;
         elements.analyzeSdsBtn.disabled = isProcessing || !state.selectedFiles.length;
-        elements.generateBtn.disabled = isProcessing || !(
-            state.selectedFiles.length
-            && normalizedText(elements.productName.value).length >= 2
-            && (isSampleLabel() || normalizedText(elements.fillAmount.value))
-        );
+        elements.generateBtn.disabled = isProcessing;
         elements.loading.hidden = !isProcessing;
         if (!isProcessing) {
             updateGenerateState();

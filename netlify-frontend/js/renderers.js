@@ -9,7 +9,7 @@ import {
     formatPreviewPageLabel,
     ghsPictogramLabel
 } from './utils.js';
-import { createResultViewModel } from './view-model.js';
+import { createDotAnalysisSummary, createResultViewModel } from './view-model.js';
 
 const CORRECTION_FIELDS = [
     { path: 'product.emergency_phone', label: 'Emergency Phone', source: data => data?.extracted?.product?.emergency_phone },
@@ -63,7 +63,21 @@ export function renderAnalysisResult(data) {
             <strong>SDS/TDS analysis complete</strong>
             <p>Review the extracted fields below, add the required shipment details, then generate the label preview.</p>
         </div>
+        ${renderDotAnalysisStatus(data)}
         ${renderExtractedInformation(data)}
+    `;
+}
+
+export function renderDotAnalysisStatus(data = {}) {
+    const summary = createDotAnalysisSummary(data);
+    return `
+        <div class="status-card ${escapeHtml(summary.tone)}">
+            <strong>${escapeHtml(summary.title)}</strong>
+            <p>${escapeHtml(summary.detail)}</p>
+            ${summary.fields.length ? `<p><strong>Parsed fields:</strong> ${escapeHtml(summary.fields.join(' | '))}</p>` : ''}
+            ${summary.missingFields.length ? `<p><strong>Needs review:</strong> ${escapeHtml(summary.missingFields.join(', '))}</p>` : ''}
+            ${summary.evidence ? `<p class="field-help"><strong>Source:</strong> ${escapeHtml(summary.evidence)}</p>` : ''}
+        </div>
     `;
 }
 
@@ -343,6 +357,7 @@ export function renderExtractedInformation(data = {}) {
     const ghs = extracted.ghs || {};
     const transport = extracted.transport || {};
     const shipment = extracted.shipment || {};
+    const dotSummary = createDotAnalysisSummary(data);
     const uses = product.product_uses || [];
     const hazardStatements = ghs.hazard_statements || [];
 
@@ -354,6 +369,7 @@ export function renderExtractedInformation(data = {}) {
                 ${renderReadOnlyField('Signal Word', ghs.signal_word || '')}
                 ${renderReadOnlyField('GHS Pictograms', (ghs.pictograms || []).map(ghsPictogramLabel).join(', '))}
                 ${renderReadOnlyField('Product Uses', uses.slice(0, 3).join(' | '))}
+                ${renderReadOnlyField('DOT Section 14 Result', dotSummary.title.replace('Section 14 parsed: ', '').replace('Section 14 result ', ''))}
                 ${renderReadOnlyField('UN/NA Number', transport.un_number || '')}
                 ${renderReadOnlyField('Proper Shipping Name', transport.proper_shipping_name || '')}
                 ${renderReadOnlyField('Hazard Class', transport.hazard_class || '')}

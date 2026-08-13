@@ -85,8 +85,12 @@ def test_frontend_custom_branding_exposes_clearedge_process_mark_toggle():
 
 
 def test_frontend_renders_dot_shipping_review_panel():
+    index_html = (REPO_ROOT / "netlify-frontend" / "index.html").read_text()
     renderers_js = (REPO_ROOT / "netlify-frontend" / "js" / "renderers.js").read_text()
 
+    assert 'id="dotParseStatus"' in index_html
+    assert "Section 14 has not been analyzed yet" in index_html
+    assert "function renderDotAnalysisStatus" in renderers_js
     assert "function renderDotShippingReview" in renderers_js
     assert "dot_shipping_review" in renderers_js
 
@@ -131,7 +135,8 @@ def test_frontend_exposes_sample_size_sales_contact_and_required_weight_contract
     assert "salesperson_id" in controller_js
     assert "salesperson_name" in controller_js
     assert "applySelectedSalesperson" in controller_js
-    assert "MISSING_FILL_AMOUNT" in controller_js
+    assert "createGenerationRequirements" in controller_js
+    assert "elements.generateBtn.disabled = false" in controller_js
     assert "Sample 4x6 labels can be generated without weight" in controller_js
 
 
