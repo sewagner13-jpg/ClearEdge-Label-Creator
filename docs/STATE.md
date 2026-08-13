@@ -4,20 +4,21 @@
 - Frontend: https://clearedge-label-creator.netlify.app
 - Backend: https://clearedgelabelcreator-production.up.railway.app
 - Production branch: `claude/product-label-pipeline-Gw3uq`
-- Current release verified from code commit `7725e8f7eff063c2525de221393ad2dbb2d5f9eb`.
+- Current UI release verified from code commit `ead56a2235bdfc3e6f84d967d33decb49e6ae8de`.
 
 ## Active Ticket
-- `T0004` - Generate And DOT Parse Visibility.
-- Detail: `docs/tickets/T0004-generate-and-dot-parse-visibility.md`
+- None. `T0004` is complete.
 
 ## Open Defects
-- `D0004-1` High: Generate Label appears broken because the disabled button cannot explain that required Net Weight is blank.
-- `D0004-2` High: parsed SDS Section 14 status is populated into form controls without a visible parser-result summary or source evidence.
+- None.
 
 ## Current Objective
-- Make Generate prerequisites actionable and make DOT Section 14 parsing unambiguous without changing label or compliance rules.
+- Await the next operator label workflow test.
 
 ## Verification State
+- `scripts/release.sh --deploy` passed for commit `ead56a2235bdfc3e6f84d967d33decb49e6ae8de`: 212 tests, 85% coverage, browser E2E, static checks, local Railway parity, exact-commit production wait, and live Edgemer generation `label_EdgemerE618_a7fd596f`.
+- Live frontend browser proof at `?release=ead56a2`: Generate remained clickable with blank weight, named only `Net Weight / Fill Amount` as missing, focused `fillAmount`, and did not start generation.
+- Live Edgemer analysis showed `Section 14 parsed: Not regulated for DOT transport` with source `SDS, Section 14, page 5: UN Number Not applicable`; the analysis result repeated the conclusion and browser error/warning logs were empty.
 - `T0004` browser/view-model regressions were proven red for the disabled Generate action, missing exact weight requirement, and absent Section 14 status/evidence panel.
 - `PYTHON_BIN=./.venv/bin/python ./scripts/release.sh --verify-only`: 212 passed with 85% coverage on 2026-08-13.
 - `T0004` browser E2E proved that clicking Generate with blank required weight focuses Net Weight without calling generation, and that SDS analysis renders a source-backed not-regulated Section 14 conclusion.
@@ -49,4 +50,4 @@
 - None.
 
 ## Next Action
-- Add failing browser/frontend regressions for `T0004`, implement the UI fix, then run the gated live release.
+- Enter the intended net weight in the live analyzed Edgemer workflow, generate the preview, and review the finished PDF.

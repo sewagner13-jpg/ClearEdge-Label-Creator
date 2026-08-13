@@ -32,4 +32,4 @@ Deployment is in scope under the standing deploy-after-change instruction. Use o
 - Existing label generation, branding, previews, PDFs, and DOT sticker tests remain green.
 
 ## Status
-Implementation and local release verification complete on 2026-08-13; production deployment pending.
+Complete and production-verified on 2026-08-13 at code commit `ead56a2235bdfc3e6f84d967d33decb49e6ae8de`. Live proof used the Edgemer SDS/TDS pair and confirmed actionable missing-weight guidance plus a source-backed Section 14 not-regulated result.
