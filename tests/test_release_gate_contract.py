@@ -26,3 +26,12 @@ def test_release_gate_requires_clean_tree_real_documents_and_artifact_validation
     assert '[[ -f "$TDS_FILE" ]]' in script
     assert 'ET.fromstring(svg_path.read_bytes())' in script
     assert 'startswith(b"%PDF")' in script
+
+
+def test_ci_loads_the_built_docker_image_before_running_it():
+    workflow = (REPO_ROOT / ".github" / "workflows" / "test.yml").read_text()
+
+    build_step = workflow.split("- name: Build Docker image", 1)[1]
+    build_step = build_step.split("- name: Test Docker image", 1)[0]
+
+    assert "load: true" in build_step
