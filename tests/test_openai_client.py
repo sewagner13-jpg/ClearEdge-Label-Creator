@@ -1,7 +1,10 @@
 import json
+from types import SimpleNamespace
 
 from app.openai_client import OpenAIClient
 from app.canva_export import build_canva_export, canva_template_manifest
+from app.schema import ExtractedText, ExtractedTextPage
+from app.source_review import OpenAISourceReview
 
 
 def test_parse_response_defaults_missing_nfpa_values_to_zero():
@@ -111,6 +114,50 @@ def test_parse_response_clips_overlong_evidence_quotes():
     extracted = client._parse_response(json.dumps(response), "ClearEdge Evidence Clip")
 
     assert len(extracted.evidence[0].quote) == 240
+
+
+def test_openai_client_runs_responses_api_second_pass_with_strict_schema():
+    class FakeResponses:
+        def __init__(self):
+            self.kwargs = None
+
+        def parse(self, **kwargs):
+            self.kwargs = kwargs
+            return SimpleNamespace(
+                id="resp_review_123",
+                output_parsed=OpenAISourceReview(),
+            )
+
+    responses = FakeResponses()
+    client = OpenAIClient.__new__(OpenAIClient)
+    client.client = SimpleNamespace(responses=responses)
+    client.review_model_name = "gpt-test-review"
+    sds_text = ExtractedText(
+        doc="SDS",
+        method_used="text",
+        pages=[ExtractedTextPage(page=2, text="Signal word: Warning")],
+    )
+
+    review = client.review_label_data(
+        sds_text=sds_text,
+        tds_text=None,
+        openai_extracted={"ghs": {"signal_word": "Warning"}},
+        deterministic_extracted={"ghs": {"signal_word": "Warning"}},
+        product_name="Reviewed Product",
+        label_mode="workplace",
+        shipment={},
+    )
+
+    assert responses.kwargs["model"] == "gpt-test-review"
+    assert responses.kwargs["text_format"] is OpenAISourceReview
+    assert responses.kwargs["store"] is False
+    request_payload = json.loads(responses.kwargs["input"][1]["content"])
+    assert request_payload["documents"]["sds"] == [
+        {"page": 2, "text": "Signal word: Warning"}
+    ]
+    assert request_payload["primary_openai_extraction"]["ghs"]["signal_word"] == "Warning"
+    assert review["provider"] == "openai"
+    assert review["openai_response_id"] == "resp_review_123"
 
 
 def test_canva_export_formats_scalar_special_provisions():

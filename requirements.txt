@@ -7,11 +7,8 @@ python-multipart==0.0.6
 pydantic==2.5.3
 pydantic-settings==2.1.0
 
-# OpenAI API
-openai==1.51.0
-
-# AWS AgentCore integration
-boto3>=1.40.0
+# OpenAI API and Responses structured outputs
+openai==2.54.0
 
 # PDF Processing
 pdfplumber==0.10.3

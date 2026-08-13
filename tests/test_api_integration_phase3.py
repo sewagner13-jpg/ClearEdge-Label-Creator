@@ -144,7 +144,6 @@ def setup_fakes(tmp_path: Path, passed: bool):
     main.openai_client = FakeOpenAIClient()
     main.validator = FakeValidator(passed=passed)
     main.label_generator = FakeLabelGenerator()
-    main.agentcore_client = None
 
 
 def test_generate_blocked_then_override_then_download(tmp_path):
@@ -286,6 +285,18 @@ def test_analyze_documents_requires_only_pdf_uploads(tmp_path):
         assert payload["status"] == "analyzed"
         assert payload["extracted"]["product"]["name"] == "WINPUREA 142"
         assert payload["extracted"]["ghs"]["signal_word"] == "Warning"
+
+
+def test_analyze_documents_removes_underscored_msds_suffix_and_copy_number(tmp_path):
+    setup_fakes(tmp_path, passed=True)
+
+    with TestClient(main.app) as client:
+        files = {"files": ("Edgemer E618_MSDS (1).pdf", b"%PDF-1.4 test", "application/pdf")}
+
+        response = client.post("/api/v1/documents/analyze", files=files)
+
+        assert response.status_code == 200
+        assert response.json()["extracted"]["product"]["name"] == "Edgemer E618"
 
 
 def test_salespeople_api_create_list_delete_and_generate_sample_label(tmp_path):
@@ -441,10 +452,33 @@ def test_generate_applies_operator_dot_fields_before_validation(tmp_path):
         assert payload["extracted"]["transport"]["packing_group"] == "II"
         assert payload["extracted"]["transport"]["marine_pollutant"] is False
         assert payload["extracted"]["transport"]["limited_quantity"] == "No"
-        assert payload["extracted"]["product"]["emergency_phone"] == "800-424-9300"
+        assert payload["extracted"]["product"]["emergency_phone"] == "704-799-5769"
         assert payload["extracted"]["product"]["supplier_name"] == "ClearEdge Solutions"
         assert payload["extracted"]["product"]["supplier_address"] == "14301 CR Koon Highway, Newberry, SC 29108"
         assert payload["extracted"]["product"]["supplier_phone"] == "704-799-5769"
+
+
+def test_generate_custom_brand_preserves_operator_emergency_phone(tmp_path):
+    setup_fakes(tmp_path, passed=True)
+
+    with TestClient(main.app) as client:
+        files = {"files": ("vendor_sds.pdf", b"%PDF-1.4 test", "application/pdf")}
+        response = client.post(
+            "/api/v1/labels/generate",
+            files=files,
+            data={
+                "product_name": "Vendor Product",
+                "mode": "workplace",
+                "size": "drum",
+                "fill_amount": "441 lb",
+                "label_brand": "custom",
+                "supplier_name": "Vendor Chemical Co.",
+                "emergency_phone": "800-424-9300",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json()["extracted"]["product"]["emergency_phone"] == "800-424-9300"
 
 
 def test_generate_regulated_dot_label_exposes_separate_sticker_pdf_when_download_is_allowed(tmp_path):

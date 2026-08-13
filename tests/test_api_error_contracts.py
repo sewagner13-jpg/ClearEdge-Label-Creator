@@ -50,7 +50,6 @@ def setup_fakes(tmp_path: Path):
     main.openai_client = FakeOpenAIClient()
     main.validator = FakeValidator()
     main.label_generator = FakeLabelGenerator()
-    main.agentcore_client = None
 
 
 def test_generate_rejects_non_pdf_upload(tmp_path):

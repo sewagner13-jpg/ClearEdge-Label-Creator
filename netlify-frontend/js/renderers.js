@@ -82,7 +82,7 @@ export function renderResultPanel(data) {
         ${renderStatusCard(data)}
         ${renderValidationPanel(data.validation)}
         ${renderDotShippingReview(data.dot_shipping_review, data.dot_stickers)}
-        ${renderAgentCoreReview(data.agentcore_review)}
+        ${renderSourceReview(data.source_review || data.agentcore_review)}
         ${renderBrandingSummary(data.branding)}
         ${renderExtractedInformation(data)}
         ${renderCorrectionPanel(data)}
@@ -278,7 +278,7 @@ export function renderDotShippingReview(review = {}, dotStickers = {}) {
     `;
 }
 
-export function renderAgentCoreReview(review = {}) {
+export function renderSourceReview(review = {}) {
     if (!review) return '';
     const fieldReviews = review.field_reviews || [];
     const criticalIssues = review.critical_issues || [];
@@ -288,8 +288,8 @@ export function renderAgentCoreReview(review = {}) {
 
     return `
         <section class="panel-card">
-            <h3>Review what goes on the label</h3>
-            <p class="field-help">AgentCore status: <strong>${escapeHtml(review.status || 'unknown')}</strong></p>
+            <h3>OpenAI source review</h3>
+            <p class="field-help">Review status: <strong>${escapeHtml(review.status || 'unknown')}</strong></p>
             ${renderIssueGroup('Critical review issues', criticalIssues)}
             ${fieldReviews.length ? `
             <div>

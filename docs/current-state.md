@@ -1,10 +1,10 @@
 # ClearEdge Label Creator Current State
 
-Updated: 2026-06-28
+Updated: 2026-08-13
 
 ## Where The App Is
 
-- Local repo: `/Users/seanwagner/Desktop/ClearEdge-Label-Creator`
+- Local repo: `/Users/seanwagner/Documents/Playground/ClearEdge-Label-Creator`
 - Current branch: `claude/product-label-pipeline-Gw3uq`
 - Frontend: `https://clearedge-label-creator.netlify.app`
 - Backend: `https://clearedgelabelcreator-production.up.railway.app`
@@ -27,9 +27,9 @@ Operator workflow:
 5. Enter optional lot number, expiration date, and fill amount.
 6. Optionally choose GHS pictograms from the approved dropdown.
 7. Generate a label.
-8. Review local validation plus optional AgentCore review findings.
-9. Download the PDF if validation passes, correct fields, or approve an override if validation blocks download.
-10. Export Canva Bulk Create data as CSV/JSON after validation pass or override approval.
+8. Review local validation plus OpenAI source-review findings.
+9. Review the preview, correct fields when needed, and download the PDF.
+10. Export Canva Bulk Create data as CSV/JSON.
 
 Current label behavior:
 
@@ -46,7 +46,7 @@ Current label behavior:
 
 ## Current Compliance Guardrails
 
-Validation currently blocks shipped DOT download when a regulated product is missing:
+Validation marks a shipped DOT label `needs_review` when a regulated product is missing:
 
 - UN/NA/ID number.
 - Proper shipping name.
@@ -68,30 +68,27 @@ Supported packaged DOT hazard label assets today:
 - Class 8: Corrosive.
 - Class 9: Miscellaneous.
 
-If another DOT hazard class is extracted, validation blocks download until the required DOT label asset is added and mapped.
+If another DOT hazard class is extracted, the review explains that its DOT sticker sheet cannot be generated until an approved asset is added and mapped.
 
-## AgentCore Review
+## OpenAI Source Review
 
-OpenAI remains the primary SDS/TDS extractor. Amazon Bedrock AgentCore can optionally run as a second-pass parser/reviewer after OpenAI extraction and before local validation.
+OpenAI performs both the primary SDS/TDS extraction and an independent second-pass source review. The second pass uses the Responses API with a strict Pydantic output model after deterministic SDS/TDS reconciliation and before local validation.
 
 If OpenAI extraction is unavailable, for example because the API account is out of quota, the backend falls back to a deterministic source-text parser. That fallback only uses values visibly present in the uploaded PDF text and still lets validation block incomplete DOT/GHS data.
 
-AgentCore is disabled by default. Enable it only after deploying an AgentCore Runtime and configuring:
+The second pass is enabled by default and uses the same `OPENAI_API_KEY`. Configure it with:
 
-- `AGENTCORE_ENABLED=true`
-- `AGENTCORE_RUNTIME_ARN`
-- `AGENTCORE_REGION`
-- `AGENTCORE_QUALIFIER` optional
-- `AGENTCORE_TIMEOUT_SECONDS=60`
+- `OPENAI_REVIEW_ENABLED=true`
+- `OPENAI_REVIEW_MODEL` optional; defaults to `OPENAI_MODEL`
 
-When enabled, AgentCore receives extracted PDF page text, OpenAI structured fields, label mode, shipment fields, approved GHS pictogram options, supported DOT classes, and validation-rule context. Its output is recorded in `agentcore_review`.
+The reviewer receives extracted PDF page text, primary OpenAI fields, deterministic source findings, label mode, shipment fields, approved GHS pictogram options, supported DOT classes, and validation-rule context. Its output is recorded in `source_review`. The API also returns the same object as `agentcore_review` temporarily so older frontend and stored-metadata readers do not break.
 
 Reconciliation behavior:
 
-- Matching OpenAI/AgentCore values proceed normally.
-- Missing critical OpenAI values can be filled only when AgentCore provides source evidence with confidence `>= 0.85`.
-- Conflicting critical fields become `needs_review` and block download until correction or override.
-- AgentCore failure or timeout does not stop label generation; the app falls back to OpenAI plus local validation and records a warning.
+- Matching primary and review values proceed normally.
+- Missing critical values can be filled only when the OpenAI reviewer provides source evidence with confidence `>= 0.85`.
+- Conflicting critical fields become `needs_review`; the issue stays visible beside the preview and download remains available for operator review.
+- Second-pass failure or timeout does not stop label generation; the app falls back to primary OpenAI extraction plus deterministic reconciliation and records a warning.
 - OpenAI failure does not create fabricated values; the app uses source-visible deterministic extraction, records the AI failure in extraction warnings, and keeps normal validation/download gates.
 
 ## Canva Handoff
@@ -107,14 +104,13 @@ These exports are meant for Canva Bulk Create or manual template entry.
 
 ## Important Limitations
 
-- OpenAI extraction is JSON-based but not yet a strict field-by-field evidence model.
-- AgentCore review can expose source-backed evidence for reviewed fields, but it requires separate AWS AgentCore Runtime configuration.
+- Primary OpenAI extraction remains JSON-based; the second-pass reviewer uses strict structured output.
 - Extracted evidence exists in the schema, but the UI does not yet expose every OpenAI evidence quote to the operator.
 - Runtime storage is filesystem-backed. Railway filesystem storage is not ideal for permanent retention.
 - The renderer is still named `label_stub.py` and contains a large inline SVG template. It works, but should eventually be split into a renderer module plus external template files.
 - OCR exists as a fallback path but scanned PDF handling should be tested more heavily before relying on it.
 - The frontend is functional but still a static JavaScript file with inline HTML snippets and inline styles.
-- Google/Gemini files still exist as untracked local leftovers, but the active backend runtime uses OpenAI, not Google.
+- The active backend AI runtime uses OpenAI only; it has no Google or AWS parsing dependency.
 
 ## Code Map
 
@@ -124,10 +120,10 @@ Backend:
 - `app/api_models.py`: API request/response models and enums.
 - `app/canva_export.py`: Canva CSV/JSON field flattening and operator field parsing.
 - `app/label_storage.py`: metadata persistence and label ID validation helpers.
-- `app/label_pipeline.py`: generation, AgentCore review, validation, rendering, correction, and response orchestration.
-- `app/agentcore_client.py`: optional Amazon Bedrock AgentCore Runtime invocation and JSON parsing.
+- `app/label_pipeline.py`: generation, OpenAI source review, validation, rendering, correction, and response orchestration.
+- `app/source_review.py`: strict source-review models and stable review payload helpers.
 - `app/rule_based_extractor.py`: deterministic source-text fallback used only when OpenAI extraction is unavailable.
-- `app/openai_client.py`: OpenAI SDS/TDS extraction prompt and response parsing.
+- `app/openai_client.py`: primary OpenAI extraction plus Responses API source review.
 - `app/pdf_extract.py`: PDF text extraction and OCR fallback path.
 - `app/validator.py`: DOT/workplace validation rules.
 - `app/label_stub.py`: SVG/PDF renderer and packaged asset loading.

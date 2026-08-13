@@ -34,6 +34,19 @@ class FakeOpenAIClient:
             transport=TransportClassification(),
         )
 
+    def review_label_data(self, **kwargs):
+        return {
+            "status": "reviewed",
+            "provider": "openai",
+            "review_type": "source_review",
+            "field_reviews": [],
+            "label_inclusion_decisions": [],
+            "critical_issues": [],
+            "warnings": [],
+            "openai_response_id": "resp_journey",
+            "agentcore_trace_id": "resp_journey",
+        }
+
 
 class FakeValidatorBlocked:
     def validate(self, extracted_data, mode: str):
@@ -75,7 +88,6 @@ def setup_fakes(tmp_path: Path):
     main.validator = FakeValidatorBlocked()
     main.web_retriever = object()
     main.label_generator = FakeLabelGenerator()
-    main.agentcore_client = None
 
 
 def test_operator_journey_needs_review_to_override_to_download(tmp_path):
@@ -158,7 +170,6 @@ def setup_fakes_approved(tmp_path: Path):
     main.validator = FakeValidatorApproved()
     main.web_retriever = object()
     main.label_generator = FakeLabelGenerator()
-    main.agentcore_client = None
 
 
 def test_operator_journey_first_pass_approved(tmp_path):
@@ -191,7 +202,9 @@ def test_operator_journey_first_pass_approved(tmp_path):
         assert meta_payload["override_approved"] is False
         assert meta_payload["download_url"].endswith(f"/{label_id}/download")
         assert payload["status"] == "ready"
-        assert payload["agentcore_review"]["status"] == "disabled"
+        assert payload["source_review"]["status"] == "reviewed"
+        assert payload["source_review"]["provider"] == "openai"
+        assert payload["agentcore_review"] == payload["source_review"]
 
         download = client.get(f"/api/v1/labels/{label_id}/download")
         assert download.status_code == 200

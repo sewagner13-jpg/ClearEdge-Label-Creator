@@ -28,6 +28,13 @@ def test_release_gate_requires_clean_tree_real_documents_and_artifact_validation
     assert 'startswith(b"%PDF")' in script
 
 
+def test_release_gate_requires_live_openai_source_review():
+    script = RELEASE_SCRIPT.read_text()
+
+    assert 'source_review.get("status") != "reviewed"' in script
+    assert 'source_review.get("provider") != "openai"' in script
+
+
 def test_ci_loads_the_built_docker_image_before_running_it():
     workflow = (REPO_ROOT / ".github" / "workflows" / "test.yml").read_text()
 

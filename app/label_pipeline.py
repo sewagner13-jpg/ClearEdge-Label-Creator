@@ -12,7 +12,6 @@ from typing import List, Optional
 from fastapi import UploadFile
 from pypdf import PdfReader, PdfWriter
 
-from .agentcore_client import disabled_agentcore_review, unavailable_agentcore_review
 from .api_models import CorrectionRequest
 from .canva_export import (
     build_canva_export,
@@ -30,6 +29,7 @@ from .dot_sticker_sheet import (
 )
 from .rule_based_extractor import RuleBasedExtractor
 from .schema import Evidence, ExtractedData, FieldConfidence, ValidationError, ValidationResult
+from .source_review import disabled_source_review, unavailable_source_review
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ MAX_PDFS_PER_REQUEST = 4
 MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024
 MAX_TOTAL_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_LOGO_FILE_SIZE_BYTES = 2 * 1024 * 1024
-AGENTCORE_PROMOTION_CONFIDENCE = 0.85
+SOURCE_REVIEW_PROMOTION_CONFIDENCE = 0.85
 KG_TO_LB = 2.2046226218
 
 ALLOWED_PDF_CONTENT_TYPES = {
@@ -61,9 +61,10 @@ OFFICIAL_CLEAREDGE_SUPPLIER = {
     "supplier_name": "ClearEdge Solutions",
     "supplier_address": "14301 CR Koon Highway, Newberry, SC 29108",
     "supplier_phone": "704-799-5769",
+    "emergency_phone": "704-799-5769",
 }
 
-CRITICAL_AGENTCORE_FIELDS = {
+CRITICAL_SOURCE_REVIEW_FIELDS = {
     "product.supplier_name",
     "product.emergency_phone",
     "ghs.signal_word",
@@ -82,7 +83,7 @@ CRITICAL_AGENTCORE_FIELDS = {
     "nfpa.special",
 }
 
-PROMOTABLE_AGENTCORE_FIELDS = {
+PROMOTABLE_SOURCE_REVIEW_FIELDS = {
     "product.supplier_name",
     "product.emergency_phone",
     "ghs.signal_word",
@@ -146,7 +147,6 @@ class LabelPipeline:
         openai_client,
         validator,
         label_generator,
-        agentcore_client=None,
         logo_library=None,
         salesperson_library=None,
         labels_dir: Path,
@@ -157,7 +157,6 @@ class LabelPipeline:
         self.openai_client = openai_client
         self.validator = validator
         self.label_generator = label_generator
-        self.agentcore_client = agentcore_client
         self.logo_library = logo_library
         self.salesperson_library = salesperson_library
         self.labels_dir = labels_dir
@@ -181,6 +180,14 @@ class LabelPipeline:
             tds_text=tds_text,
             product_name=analysis_product_name,
         )
+        source_review = self._run_source_review(
+            sds_text=sds_text,
+            tds_text=tds_text,
+            extracted_data=extracted_data,
+            product_name=analysis_product_name,
+            mode="analysis",
+        )
+        self._reconcile_source_review(extracted_data, source_review)
 
         return {
             "success": True,
@@ -188,6 +195,8 @@ class LabelPipeline:
             "extracted": extracted_data.model_dump(mode="json"),
             "suggested_logo": suggested_logo,
             "warnings": list(extracted_data.warnings),
+            "source_review": source_review,
+            "agentcore_review": source_review,
         }
 
     async def generate_label_from_uploads(
@@ -260,6 +269,14 @@ class LabelPipeline:
             tds_text=tds_text,
             product_name=cleaned_product_name,
         )
+        source_review = self._run_source_review(
+            sds_text=sds_text,
+            tds_text=tds_text,
+            extracted_data=extracted_data,
+            product_name=cleaned_product_name,
+            mode=mode,
+        )
+        source_review_needs_review = self._reconcile_source_review(extracted_data, source_review)
         branding = self._apply_suggested_logo_to_branding(branding, suggested_logo)
         self._apply_operator_fields(
             extracted_data,
@@ -285,17 +302,12 @@ class LabelPipeline:
             subsidiary_hazard_classes=subsidiary_hazard_classes,
         )
 
-        agentcore_review = self._run_agentcore_review(
-            sds_text=sds_text,
-            tds_text=tds_text,
-            extracted_data=extracted_data,
-            product_name=cleaned_product_name,
-            mode=mode,
-        )
-        agentcore_needs_review = self._reconcile_agentcore_review(extracted_data, agentcore_review)
-
         validation_result = self.validator.validate(extracted_data, mode)
-        self._apply_agentcore_issues_to_validation(validation_result, agentcore_review, agentcore_needs_review)
+        self._apply_source_review_issues_to_validation(
+            validation_result,
+            source_review,
+            source_review_needs_review,
+        )
 
         label_id = self._new_label_id(cleaned_product_name)
         label_path = self._render_pdf(
@@ -307,7 +319,7 @@ class LabelPipeline:
             branding=branding,
             salesperson=salesperson,
         )
-        status = self._label_status(validation_result, agentcore_needs_review, agentcore_review)
+        status = self._label_status(validation_result, source_review_needs_review)
         dot_shipping_review = build_dot_shipping_review(extracted_data, mode)
         dot_sticker_path = self._render_dot_sticker_pdf(label_id, dot_shipping_review)
         self._append_dot_sticker_pages_to_label_pdf(label_path, dot_sticker_path)
@@ -321,7 +333,7 @@ class LabelPipeline:
             extracted_data=extracted_data,
             validation_result=validation_result,
             status=status,
-            agentcore_review=agentcore_review,
+            source_review=source_review,
             branding=branding,
             salesperson=salesperson,
             dot_shipping_review=dot_shipping_review,
@@ -375,7 +387,11 @@ class LabelPipeline:
                 extracted_data=extracted_data,
                 validation_result=validation_result,
                 status=status,
-                agentcore_review=metadata.get("agentcore_review") or disabled_agentcore_review(),
+                source_review=(
+                    metadata.get("source_review")
+                    or metadata.get("agentcore_review")
+                    or disabled_source_review()
+                ),
                 branding=metadata.get("branding"),
                 salesperson=metadata.get("salesperson"),
                 dot_shipping_review=dot_shipping_review,
@@ -412,8 +428,9 @@ class LabelPipeline:
 
         for upload in files:
             stem = Path(upload.filename or "").stem
+            stem = re.sub(r"[_]+", " ", stem)
             candidate = re.sub(
-                r"(?i)\b(?:safety\s+data\s+sheet|material\s+safety\s+data\s+sheet|technical\s+data\s+sheet|msds|sds|tds)\b.*$",
+                r"(?i)(?:^|[\s-])(?:safety\s+data\s+sheet|material\s+safety\s+data\s+sheet|technical\s+data\s+sheet|msds|sds|tds)\b.*$",
                 "",
                 stem,
             )
@@ -784,9 +801,18 @@ class LabelPipeline:
             extracted_data.product.supplier_name = OFFICIAL_CLEAREDGE_SUPPLIER["supplier_name"]
             extracted_data.product.supplier_address = OFFICIAL_CLEAREDGE_SUPPLIER["supplier_address"]
             extracted_data.product.supplier_phone = OFFICIAL_CLEAREDGE_SUPPLIER["supplier_phone"]
+            if (
+                extracted_data.product.emergency_phone
+                and extracted_data.product.emergency_phone != OFFICIAL_CLEAREDGE_SUPPLIER["emergency_phone"]
+            ):
+                LabelPipeline._append_warning(
+                    extracted_data,
+                    "Source SDS emergency contact remains in the evidence; the approved ClearEdge emergency number is printed on this label.",
+                )
+            extracted_data.product.emergency_phone = OFFICIAL_CLEAREDGE_SUPPLIER["emergency_phone"]
 
         entered_emergency_phone = clean_operator_field(emergency_phone)
-        if entered_emergency_phone:
+        if branding.get("mode") == "custom" and entered_emergency_phone:
             extracted_data.product.emergency_phone = entered_emergency_phone
 
     @classmethod
@@ -933,7 +959,7 @@ class LabelPipeline:
             return "horizontal"
         raise LabelPipelineError(400, "INVALID_ORIENTATION: Use vertical or horizontal")
 
-    def _run_agentcore_review(
+    def _run_source_review(
         self,
         *,
         sds_text,
@@ -942,26 +968,34 @@ class LabelPipeline:
         product_name: str,
         mode: str,
     ) -> dict:
-        if not settings.agentcore_enabled:
-            return disabled_agentcore_review()
-        if self.agentcore_client is None:
-            return unavailable_agentcore_review(
-                "AgentCore is enabled but no runtime client is configured; OpenAI extraction was used without AgentCore review."
+        if not settings.openai_review_enabled:
+            return disabled_source_review()
+        review_method = getattr(self.openai_client, "review_label_data", None)
+        if not callable(review_method):
+            return unavailable_source_review(
+                "OpenAI source review is unavailable; primary OpenAI extraction and local validation were used."
             )
 
         try:
-            return self.agentcore_client.review_label_data(
+            deterministic_data = RuleBasedExtractor.extract(
+                sds_text=sds_text,
+                tds_text=tds_text,
+                product_name=product_name,
+            )
+            return review_method(
                 sds_text=sds_text,
                 tds_text=tds_text,
                 openai_extracted=extracted_data.model_dump(mode="json"),
+                deterministic_extracted=deterministic_data.model_dump(mode="json"),
                 product_name=product_name,
                 label_mode=mode,
                 shipment=extracted_data.shipment.model_dump(mode="json"),
             )
         except Exception as exc:
-            logger.warning("AgentCore review failed: %s", exc)
-            return unavailable_agentcore_review(
-                f"AgentCore review failed or timed out: {exc}. OpenAI extraction and local validation were used."
+            logger.warning("OpenAI source review failed: %s", exc)
+            return unavailable_source_review(
+                "OpenAI source review failed or timed out: "
+                f"{self._safe_exception_detail(exc)}. Primary extraction and local validation were used."
             )
 
     def _reconcile_source_backed_extraction(
@@ -1123,16 +1157,31 @@ class LabelPipeline:
 
     @staticmethod
     def _merge_source_statement_list(current_statements, source_statements) -> None:
-        seen = {
-            (statement.code or "", " ".join(statement.text.split()).lower())
-            for statement in current_statements
-        }
-        for source_statement in source_statements:
-            key = (source_statement.code or "", " ".join(source_statement.text.split()).lower())
-            if key in seen:
+        merged = []
+        indexes = {}
+        for statement in [*current_statements, *source_statements]:
+            key = LabelPipeline._statement_identity(statement)
+            if key not in indexes:
+                indexes[key] = len(merged)
+                merged.append(statement)
                 continue
-            current_statements.append(source_statement)
-            seen.add(key)
+
+            existing_index = indexes[key]
+            if not merged[existing_index].code and statement.code:
+                merged[existing_index] = statement
+
+        current_statements[:] = merged
+
+    @staticmethod
+    def _statement_identity(statement) -> tuple[str, str]:
+        explicit_code = str(statement.code or "").strip().upper()
+        text = " ".join(str(statement.text or "").split())
+        embedded = re.search(r"\b([HP]\d{3}(?:\s*\+\s*[HP]?\d{3})*)\b", text, re.IGNORECASE)
+        code = re.sub(r"\s+", "", explicit_code or (embedded.group(1).upper() if embedded else ""))
+        if code:
+            return ("code", code)
+        normalized_text = re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+        return ("text", normalized_text)
 
     def _apply_source_not_regulated_transport(self, extracted_data: ExtractedData, source_data: ExtractedData) -> None:
         regulated_fields = (
@@ -1206,11 +1255,11 @@ class LabelPipeline:
             extracted_data.confidence.append(item)
             existing_confidence.add(key)
 
-    def _reconcile_agentcore_review(self, extracted_data: ExtractedData, review: dict) -> bool:
+    def _reconcile_source_review(self, extracted_data: ExtractedData, review: dict) -> bool:
         needs_review = False
         for field_review in review.get("field_reviews") or []:
             field_path = field_review.get("field_path")
-            if not field_path or field_path not in CRITICAL_AGENTCORE_FIELDS:
+            if not field_path or field_path not in CRITICAL_SOURCE_REVIEW_FIELDS:
                 continue
 
             recommended = field_review.get("recommended_value")
@@ -1220,11 +1269,14 @@ class LabelPipeline:
             has_source = bool(field_review.get("evidence")) and field_review.get("source_document") in {"SDS", "TDS"}
 
             if self._is_missing(current) and not self._is_missing(recommended):
-                if confidence >= AGENTCORE_PROMOTION_CONFIDENCE and has_source and status in {"found", "source_backed", "agentcore_source_backed"}:
-                    if field_path in PROMOTABLE_AGENTCORE_FIELDS:
+                if confidence >= SOURCE_REVIEW_PROMOTION_CONFIDENCE and has_source and status in {"found", "source_backed"}:
+                    if field_path in PROMOTABLE_SOURCE_REVIEW_FIELDS:
                         self._set_field_value(extracted_data, field_path, recommended)
-                        self._add_agentcore_evidence(extracted_data, field_review)
-                        extracted_data.warnings.append(f"AgentCore source-backed value applied for {field_path}.")
+                        self._add_source_review_evidence(extracted_data, field_review)
+                        self._append_warning(
+                            extracted_data,
+                            f"OpenAI source-backed review value applied for {field_path}.",
+                        )
                     else:
                         needs_review = True
                 continue
@@ -1233,12 +1285,12 @@ class LabelPipeline:
                 not self._is_missing(current)
                 and not self._is_missing(recommended)
                 and self._normalized_value(current) != self._normalized_value(recommended)
-                and (status == "conflict" or confidence >= AGENTCORE_PROMOTION_CONFIDENCE)
+                and (status == "conflict" or confidence >= SOURCE_REVIEW_PROMOTION_CONFIDENCE)
             ):
                 field_review["status"] = "conflict"
                 field_review.setdefault(
                     "reason",
-                    f"OpenAI value '{current}' conflicts with AgentCore recommendation '{recommended}'.",
+                    f"Primary extraction value '{current}' conflicts with OpenAI source review recommendation '{recommended}'.",
                 )
                 needs_review = True
 
@@ -1249,17 +1301,17 @@ class LabelPipeline:
         return needs_review
 
     @staticmethod
-    def _apply_agentcore_issues_to_validation(
+    def _apply_source_review_issues_to_validation(
         validation_result: ValidationResult,
         review: dict,
-        agentcore_needs_review: bool,
+        source_review_needs_review: bool,
     ) -> None:
-        if agentcore_needs_review:
+        if source_review_needs_review:
             for field_review in review.get("field_reviews") or []:
                 if str(field_review.get("status") or "").lower() == "conflict":
                     validation_result.errors.append(ValidationError(
-                        field=f"agentcore.{field_review.get('field_path') or 'review'}",
-                        message=field_review.get("reason") or "AgentCore found a source-backed conflict requiring review.",
+                        field=f"source_review.{field_review.get('field_path') or 'review'}",
+                        message=field_review.get("reason") or "OpenAI found a source-backed conflict requiring review.",
                         severity="error",
                     ))
 
@@ -1267,8 +1319,8 @@ class LabelPipeline:
             severity = str(issue.get("severity") or "").lower()
             target = validation_result.warnings if severity == "warning" else validation_result.errors
             target.append(ValidationError(
-                field=f"agentcore.{issue.get('field_path') or 'review'}",
-                message=issue.get("message") or "AgentCore review issue",
+                field=f"source_review.{issue.get('field_path') or 'review'}",
+                message=issue.get("message") or "OpenAI source review issue",
                 severity="warning" if severity == "warning" else "error",
             ))
 
@@ -1366,7 +1418,7 @@ class LabelPipeline:
         extracted_data: ExtractedData,
         validation_result: ValidationResult,
         status: str,
-        agentcore_review: dict,
+        source_review: dict,
         branding: Optional[dict] = None,
         salesperson: Optional[dict] = None,
         dot_shipping_review: Optional[dict] = None,
@@ -1416,7 +1468,8 @@ class LabelPipeline:
             "dot_shipping_review": dot_shipping_review,
             "dot_stickers": dot_stickers,
             "dot_sticker_artifact_path": str(dot_sticker_path) if dot_sticker_path else None,
-            "agentcore_review": agentcore_review,
+            "source_review": source_review,
+            "agentcore_review": source_review,
             "branding": branding or {"mode": "clearedge", "logo_data_uri": None, "logo_filename": None},
             "salesperson": salesperson,
         }
@@ -1424,15 +1477,20 @@ class LabelPipeline:
         return metadata
 
     @staticmethod
-    def _label_status(validation_result: ValidationResult, agentcore_needs_review: bool, review: dict) -> str:
+    def _label_status(validation_result: ValidationResult, source_review_needs_review: bool) -> str:
         if validation_result.errors:
             return "needs_review"
-        if agentcore_needs_review:
+        if source_review_needs_review:
             return "needs_review"
         return "ready" if validation_result.passed else "blocked"
 
     @staticmethod
     def _response_payload(metadata: dict) -> dict:
+        source_review = (
+            metadata.get("source_review")
+            or metadata.get("agentcore_review")
+            or disabled_source_review()
+        )
         inline_svg = LabelPipeline._read_preview_svg(metadata)
         download_data_url = LabelPipeline._read_pdf_data_url(metadata)
         preview_pages = LabelPipeline._preview_pages(metadata, inline_svg)
@@ -1474,14 +1532,15 @@ class LabelPipeline:
             "download": download_payload,
             "dot_shipping_review": metadata.get("dot_shipping_review"),
             "dot_stickers": metadata.get("dot_stickers"),
-            "agentcore_review": metadata.get("agentcore_review"),
+            "source_review": source_review,
+            "agentcore_review": source_review,
             "branding": metadata.get("branding"),
             "salesperson": metadata.get("salesperson"),
             "warnings": metadata["warnings"],
             "errors": metadata["errors"],
             "audit": {
                 "created_at": metadata["created_at"],
-                "phase": "agentcore_review" if metadata.get("agentcore_review", {}).get("status") == "reviewed" else "phase_1",
+                "phase": "openai_source_review" if source_review.get("status") == "reviewed" else "phase_1",
             },
             "success": True,
         }
@@ -1667,7 +1726,7 @@ class LabelPipeline:
         setattr(target, field, value)
 
     @staticmethod
-    def _add_agentcore_evidence(extracted_data: ExtractedData, field_review: dict) -> None:
+    def _add_source_review_evidence(extracted_data: ExtractedData, field_review: dict) -> None:
         evidence = field_review.get("evidence")
         source_document = field_review.get("source_document")
         if not evidence or source_document not in {"SDS", "TDS"}:

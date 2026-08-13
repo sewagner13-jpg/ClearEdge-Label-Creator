@@ -225,6 +225,7 @@ payload = json.loads(response_path.read_text())
 label_id = payload.get("label_id")
 preview_url = (payload.get("preview") or {}).get("url")
 download_url = (payload.get("download") or {}).get("url")
+source_review = payload.get("source_review") or {}
 if not preview_url:
     pages = (payload.get("preview") or {}).get("pages") or []
     preview_url = pages[0].get("url") if pages else None
@@ -232,6 +233,13 @@ if not download_url:
     download_url = (payload.get("label") or {}).get("download_url")
 if not label_id or not preview_url or not download_url:
     raise SystemExit("Generation response did not expose label, preview, and PDF download URLs")
+if source_review.get("status") != "reviewed":
+    raise SystemExit(
+        "Live generation did not complete the OpenAI source review: "
+        f"{source_review.get('status') or 'missing'}"
+    )
+if source_review.get("provider") != "openai":
+    raise SystemExit("Live generation source review did not report the OpenAI provider")
 
 (artifact_dir / "label-id.txt").write_text(label_id)
 (artifact_dir / "preview-url.txt").write_text(preview_url)
@@ -242,6 +250,9 @@ if not label_id or not preview_url or not download_url:
     "success": payload.get("success"),
     "preview_url": preview_url,
     "download_url": download_url,
+    "source_review_status": source_review.get("status"),
+    "source_review_provider": source_review.get("provider"),
+    "openai_response_id": source_review.get("openai_response_id"),
 }, indent=2))
 PY
 

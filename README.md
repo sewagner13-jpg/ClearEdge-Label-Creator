@@ -11,7 +11,7 @@ For the current restart handoff, deployment status, capabilities, and known limi
 - Frontend: static site in `netlify-frontend/`, deployed to Netlify.
 - Backend: FastAPI service deployed to Railway.
 - AI extraction: OpenAI via `OPENAI_API_KEY`.
-- Optional second-pass review: Amazon Bedrock AgentCore via `AGENTCORE_*` variables.
+- Second-pass source review: OpenAI Responses API with strict structured output.
 - Degraded mode: if OpenAI is unavailable, a deterministic source-text fallback extracts only visibly present PDF values and keeps validation gates active.
 - Label artifacts: generated PDF files are stored on the app filesystem under `runtime_data/labels` unless `CLEAREDGE_DATA_DIR` is set.
 
@@ -46,17 +46,14 @@ Required Railway variables:
 ```bash
 OPENAI_API_KEY=<secret>
 OPENAI_MODEL=gpt-4o
+OPENAI_REVIEW_ENABLED=true
 ALLOWED_ORIGINS=https://clearedge-label-creator.netlify.app
 ```
 
-Optional AgentCore variables:
+Optional OpenAI review model override:
 
 ```bash
-AGENTCORE_ENABLED=true
-AGENTCORE_RUNTIME_ARN=<bedrock-agentcore-runtime-arn>
-AGENTCORE_REGION=<aws-region>
-AGENTCORE_QUALIFIER=<optional-runtime-qualifier>
-AGENTCORE_TIMEOUT_SECONDS=60
+OPENAI_REVIEW_MODEL=gpt-4o
 ```
 
 Frontend deployment is configured by root `netlify.toml`, which publishes `netlify-frontend/`.

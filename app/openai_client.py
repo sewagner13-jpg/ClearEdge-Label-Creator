@@ -6,12 +6,14 @@ Sends extracted text and returns validated JSON with evidence.
 import json
 import logging
 import time
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 from openai import OpenAI
 
 from .config import settings
-from .schema import ExtractedData, ExtractedText
+from .schema import ExtractedData, ExtractedText, GHS_PICTOGRAM_OPTIONS
+from .source_review import OpenAISourceReview, reviewed_source_payload
+from .validator import ComplianceValidator
 
 logger = logging.getLogger(__name__)
 
@@ -155,10 +157,27 @@ PRODUCT USES:
 - Return at most 3 short phrases, not full marketing paragraphs
 - Do not invent uses and do not include compliance, storage, or handling instructions as product uses"""
 
+    REVIEW_PROMPT = """You are the independent second-pass reviewer for a chemical label extraction.
+
+Review the SDS/TDS page text, the primary OpenAI extraction, and the deterministic source findings. Return only the structured review model.
+
+Rules:
+1. Do not invent, infer, or complete missing SDS/TDS values from general chemical knowledge.
+2. Every recommended value must identify SDS or TDS, page number when available, and a short source quote.
+3. Prefer exact SDS Section 2 wording for signal word, pictograms, hazards, and precautions.
+4. Prefer exact SDS Section 14 wording for DOT transport status and fields.
+5. Preserve explicit not-regulated transport statements; do not force DOT fields.
+6. Report conflicts instead of silently selecting a value.
+7. Review only fields that affect the printed label or operator review.
+8. The operator product name is authoritative for the label; source product names remain evidence only.
+9. Do not alter branding, logos, colors, label dimensions, or approved regulatory artwork.
+"""
+
     def __init__(self):
         """Initialize OpenAI client."""
         self.client = OpenAI(api_key=settings.openai_api_key)
         self.model_name = settings.openai_model
+        self.review_model_name = settings.openai_review_model or self.model_name
         self.temperature = settings.openai_temperature
         self.max_retries = settings.openai_max_retries
 
@@ -230,6 +249,84 @@ PRODUCT USES:
                 time.sleep(2 ** attempt)
 
         raise ValueError("All OpenAI extraction attempts failed")
+
+    def review_label_data(
+        self,
+        *,
+        sds_text,
+        tds_text,
+        openai_extracted: dict,
+        deterministic_extracted: dict,
+        product_name: str,
+        label_mode: str,
+        shipment: dict,
+    ) -> dict:
+        """Run an independent source-grounded review through the Responses API."""
+        payload = self._build_review_payload(
+            sds_text=sds_text,
+            tds_text=tds_text,
+            openai_extracted=openai_extracted,
+            deterministic_extracted=deterministic_extracted,
+            product_name=product_name,
+            label_mode=label_mode,
+            shipment=shipment,
+        )
+        response = self.client.responses.parse(
+            model=self.review_model_name,
+            input=[
+                {"role": "system", "content": self.REVIEW_PROMPT},
+                {"role": "user", "content": json.dumps(payload, ensure_ascii=True)},
+            ],
+            text_format=OpenAISourceReview,
+            store=False,
+        )
+        review = response.output_parsed
+        if review is None:
+            raise ValueError("OPENAI_SOURCE_REVIEW_EMPTY_RESPONSE")
+        return reviewed_source_payload(review, getattr(response, "id", None))
+
+    @staticmethod
+    def _build_review_payload(
+        *,
+        sds_text,
+        tds_text,
+        openai_extracted: dict,
+        deterministic_extracted: dict,
+        product_name: str,
+        label_mode: str,
+        shipment: dict,
+    ) -> dict:
+        """Build the bounded source-review context sent to OpenAI."""
+        return {
+            "context": {
+                "product_name": product_name,
+                "label_mode": label_mode,
+                "shipment": shipment,
+                "approved_ghs_pictogram_map": GHS_PICTOGRAM_OPTIONS,
+                "supported_dot_label_classes": sorted(ComplianceValidator.SUPPORTED_DOT_LABEL_CLASSES),
+                "validation_rules": [
+                    "Use only source-backed SDS/TDS values.",
+                    "Critical conflicts require operator review.",
+                    "Regulated shipped labels require source-backed DOT fields.",
+                    "Explicit not-regulated transport text must not be replaced with DOT guesses.",
+                ],
+            },
+            "documents": {
+                "sds": OpenAIClient._document_pages(sds_text),
+                "tds": OpenAIClient._document_pages(tds_text),
+            },
+            "primary_openai_extraction": openai_extracted,
+            "deterministic_source_extraction": deterministic_extracted,
+        }
+
+    @staticmethod
+    def _document_pages(extracted_text) -> list[dict]:
+        if not extracted_text:
+            return []
+        return [
+            {"page": page.page, "text": page.text}
+            for page in getattr(extracted_text, "pages", [])
+        ]
 
     def _build_user_prompt(
         self,
@@ -456,6 +553,7 @@ Return ONLY the corrected JSON, no explanations."""
         """Get current model information."""
         return {
             "model_name": self.model_name,
+            "review_model_name": self.review_model_name,
             "temperature": self.temperature,
             "max_retries": self.max_retries
         }

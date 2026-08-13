@@ -112,6 +112,8 @@ class AnalyzeDocumentsResponse(BaseModel):
     extracted: dict
     suggested_logo: Optional[dict] = None
     warnings: List[str] = Field(default_factory=list)
+    source_review: Optional[dict] = None
+    agentcore_review: Optional[dict] = None
 
 
 class GenerateLabelResponse(BaseModel):
@@ -126,6 +128,7 @@ class GenerateLabelResponse(BaseModel):
     download: Optional[DownloadPayload] = None
     dot_shipping_review: Optional[dict] = None
     dot_stickers: Optional[dict] = None
+    source_review: Optional[dict] = None
     agentcore_review: Optional[dict] = None
     branding: Optional[dict] = None
     salesperson: Optional[dict] = None

@@ -89,6 +89,13 @@ def test_frontend_renders_dot_shipping_review_panel():
 
     assert "function renderDotShippingReview" in renderers_js
     assert "dot_shipping_review" in renderers_js
+
+
+def test_frontend_identifies_openai_source_review_without_agentcore_copy():
+    renderers_js = (REPO_ROOT / "netlify-frontend" / "js" / "renderers.js").read_text()
+
+    assert "OpenAI source review" in renderers_js
+    assert "AgentCore status" not in renderers_js
     assert "DOT sticker sheet required" in renderers_js
     assert "includes the DOT-compliant sticker sheet after the product label" in renderers_js
 

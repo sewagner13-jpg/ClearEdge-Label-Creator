@@ -23,13 +23,8 @@ class Settings(BaseSettings):
     openai_model: str = Field(default="gpt-4o", description="OpenAI model name")
     openai_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     openai_max_retries: int = Field(default=3, ge=1, le=10)
-
-    # AgentCore second-pass extraction review
-    agentcore_enabled: bool = Field(default=False)
-    agentcore_runtime_arn: Optional[str] = Field(default=None)
-    agentcore_region: Optional[str] = Field(default=None)
-    agentcore_qualifier: Optional[str] = Field(default=None)
-    agentcore_timeout_seconds: int = Field(default=60, ge=5, le=300)
+    openai_review_enabled: bool = Field(default=True)
+    openai_review_model: Optional[str] = Field(default=None)
 
     # Application
     env: str = Field(default="development", pattern="^(development|production|testing)$")

@@ -54,14 +54,14 @@ Phase 1 will add and stabilize:
 - `GET /api/v1/labels/{id}/download`
 - `PATCH /api/v1/labels/{id}/corrections`
 
-plus a unified response payload shape for frontend consumption (`status`, `extracted`, `validation`, `label`, `download`, `agentcore_review`, `warnings`, `errors`, `audit`).
+plus a unified response payload shape for frontend consumption (`status`, `extracted`, `validation`, `label`, `download`, `source_review`, `warnings`, `errors`, `audit`).
 
 ## Phase 3 lifecycle and override workflow
 
 ### Label lifecycle status
 - `ready`: validation passed, download enabled.
-- `needs_review`: AgentCore or validation review requires operator correction or override.
-- `blocked`: validation failed, download blocked.
+- `needs_review`: OpenAI source review or local validation requires operator correction or override.
+- `blocked`: retained for compatibility with older metadata; current generation returns a preview and download with visible review issues.
 - `override_approved`: validation failed but manually approved with audit reason.
 
 ### Metadata fields
@@ -104,9 +104,9 @@ Request body:
 
 Supported correction fields are two-level extracted data paths such as `product.emergency_phone`, `ghs.signal_word`, `transport.un_number`, and `nfpa.health`.
 
-## Optional AgentCore review
+## OpenAI source review
 
-When `AGENTCORE_ENABLED=true`, the backend invokes an Amazon Bedrock AgentCore Runtime after OpenAI extraction and before local validation.
+When `OPENAI_REVIEW_ENABLED=true`, the backend invokes an independent OpenAI Responses API review after primary extraction and deterministic source reconciliation, before local validation.
 
 Generation responses include:
 
@@ -118,18 +118,20 @@ Generation responses include:
     "url": "/api/v1/labels/{id}/download",
     "reason": null
   },
-  "agentcore_review": {
+  "source_review": {
     "status": "reviewed | disabled | unavailable",
+    "provider": "openai",
+    "review_type": "source_review",
     "field_reviews": [],
     "label_inclusion_decisions": [],
     "critical_issues": [],
     "warnings": [],
-    "agentcore_trace_id": null
+    "openai_response_id": null
   }
 }
 ```
 
-AgentCore failures degrade to OpenAI-only extraction with a warning. AgentCore conflicts on critical fields force `needs_review` and block download until correction or override.
+Second-pass failures degrade to primary OpenAI extraction plus deterministic reconciliation with a warning. Source-backed critical conflicts force `needs_review` while preserving preview and PDF availability. For compatibility, responses currently mirror `source_review` into the legacy `agentcore_review` field.
 
 If OpenAI extraction is unavailable, the backend returns a normal generation response using deterministic source-text extraction. The response records the AI failure under `extracted.warnings`, and validation still blocks download when required DOT/GHS fields are missing or incomplete.
 

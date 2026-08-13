@@ -23,7 +23,6 @@ from .openai_client import OpenAIClient
 from .validator import ComplianceValidator
 from .web_retrieval import WebRetriever
 from .label_stub import LabelGenerator
-from .agentcore_client import AgentCoreClient
 from .api_models import (
     AnalyzeDocumentsResponse,
     CorrectionRequest,
@@ -63,7 +62,6 @@ openai_client: Optional[OpenAIClient] = None
 validator: Optional[ComplianceValidator] = None
 web_retriever: Optional[WebRetriever] = None
 label_generator: Optional[LabelGenerator] = None
-agentcore_client: Optional[AgentCoreClient] = None
 logo_library: Optional[LogoLibrary] = None
 salesperson_library: Optional[SalespersonLibrary] = None
 startup_errors: Dict[str, str] = {}
@@ -105,7 +103,7 @@ def _save_label_metadata_store() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize and cleanup shared resources."""
-    global pdf_extractor, openai_client, validator, web_retriever, label_generator, agentcore_client, logo_library, salesperson_library, startup_errors
+    global pdf_extractor, openai_client, validator, web_retriever, label_generator, logo_library, salesperson_library, startup_errors
 
     logger.info("Initializing CLEAR EDGE Label Pipeline...")
     startup_errors = {}
@@ -122,14 +120,6 @@ async def lifespan(app: FastAPI):
         label_generator = LabelGenerator()
         logo_library = LogoLibrary(LOGOS_DIR)
         salesperson_library = SalespersonLibrary(SALESPEOPLE_DIR)
-        if settings.agentcore_enabled:
-            try:
-                agentcore_client = AgentCoreClient()
-            except Exception as exc:
-                agentcore_client = None
-                startup_errors["agentcore_client"] = str(exc)
-        else:
-            agentcore_client = None
         _load_label_metadata_store()
 
         logger.info("Core clients initialized successfully")
@@ -193,19 +183,12 @@ def _readiness_payload() -> dict:
         "label_generator_initialized": label_generator is not None,
         "openai_api_key_present": bool(settings.openai_api_key),
     }
-    agentcore_checks = {
-        "agentcore_enabled": settings.agentcore_enabled,
-        "agentcore_runtime_configured": bool(settings.agentcore_runtime_arn),
-        "agentcore_client_initialized": agentcore_client is not None if settings.agentcore_enabled else True,
+    source_review_checks = {
+        "openai_review_enabled": settings.openai_review_enabled,
+        "openai_review_client_initialized": openai_client is not None if settings.openai_review_enabled else True,
     }
-    checks = {**required_checks, **agentcore_checks}
-    agentcore_ready = True
-    if settings.agentcore_enabled:
-        agentcore_ready = (
-            agentcore_checks["agentcore_runtime_configured"]
-            and agentcore_checks["agentcore_client_initialized"]
-        )
-    status = "ready" if all(required_checks.values()) and agentcore_ready else "degraded"
+    checks = {**required_checks, **source_review_checks}
+    status = "ready" if all(required_checks.values()) and all(source_review_checks.values()) else "degraded"
     return {
         "status": status,
         "timestamp": datetime.utcnow().isoformat(),
@@ -264,7 +247,6 @@ def _build_label_pipeline() -> LabelPipeline:
         openai_client=openai_client,
         validator=validator,
         label_generator=label_generator,
-        agentcore_client=agentcore_client,
         logo_library=_get_logo_library(),
         salesperson_library=_get_salesperson_library(),
         labels_dir=LABELS_DIR,

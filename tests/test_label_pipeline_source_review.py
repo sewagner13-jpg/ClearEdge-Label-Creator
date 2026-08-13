@@ -14,6 +14,7 @@ from app.schema import (
     ExtractedText,
     ExtractedTextPage,
     GHSClassification,
+    HazardStatement,
     ProductInfo,
     ShipmentInfo,
     TransportClassification,
@@ -31,12 +32,19 @@ class FakePDFExtractor:
 
 
 class FakeOpenAIClient:
-    def __init__(self, extracted: ExtractedData):
+    def __init__(self, extracted: ExtractedData, review=None, review_error=None):
         self.extracted = extracted
+        self.review = review
+        self.review_error = review_error
 
     def extract_from_documents(self, sds_text, tds_text, product_name: str):
         self.extracted.product.name = product_name
         return self.extracted
+
+    def review_label_data(self, **kwargs):
+        if self.review_error:
+            raise self.review_error
+        return self.review
 
 
 class FailingOpenAIClient:
@@ -211,18 +219,7 @@ class FakeLabelGenerator:
         return output.getvalue()
 
 
-class FakeAgentCore:
-    def __init__(self, review=None, error=None):
-        self.review = review
-        self.error = error
-
-    def review_label_data(self, **kwargs):
-        if self.error:
-            raise self.error
-        return self.review
-
-
-def make_pipeline(tmp_path, extracted, agentcore_client=None):
+def make_pipeline(tmp_path, extracted, source_review=None, review_error=None):
     store = {}
 
     def save():
@@ -230,17 +227,16 @@ def make_pipeline(tmp_path, extracted, agentcore_client=None):
 
     return LabelPipeline(
         pdf_extractor=FakePDFExtractor(),
-        openai_client=FakeOpenAIClient(extracted),
+        openai_client=FakeOpenAIClient(extracted, review=source_review, review_error=review_error),
         validator=FakeValidator(),
         label_generator=FakeLabelGenerator(),
-        agentcore_client=agentcore_client,
         labels_dir=tmp_path,
         metadata_store=store,
         save_metadata_store=save,
     ), store
 
 
-def make_pipeline_with_openai(tmp_path, openai_client, agentcore_client=None):
+def make_pipeline_with_openai(tmp_path, openai_client):
     store = {}
 
     def save():
@@ -251,7 +247,6 @@ def make_pipeline_with_openai(tmp_path, openai_client, agentcore_client=None):
         openai_client=openai_client,
         validator=FakeValidator(),
         label_generator=FakeLabelGenerator(),
-        agentcore_client=agentcore_client,
         labels_dir=tmp_path,
         metadata_store=store,
         save_metadata_store=save,
@@ -278,14 +273,56 @@ def test_safe_exception_detail_redacts_openai_keys():
     assert "sk-***" in detail
 
 
+def test_statement_merge_deduplicates_coded_and_embedded_h317_forms():
+    statements = [
+        HazardStatement(code="H317", text="May cause an allergic skin reaction."),
+        HazardStatement(code=None, text="H317: May cause an allergic skin reaction."),
+    ]
+
+    LabelPipeline._merge_source_statement_list(statements, [])
+
+    assert len(statements) == 1
+    assert statements[0].code == "H317"
+
+
 @pytest.mark.asyncio
-async def test_agentcore_disabled_review_degrades_to_openai_only(tmp_path, monkeypatch):
-    monkeypatch.setattr(label_pipeline.settings, "agentcore_enabled", False)
+async def test_openai_source_review_is_primary_and_keeps_legacy_alias(tmp_path, monkeypatch):
+    monkeypatch.setattr(label_pipeline.settings, "openai_review_enabled", True)
+    review = {
+        "status": "reviewed",
+        "provider": "openai",
+        "review_type": "source_review",
+        "field_reviews": [],
+        "label_inclusion_decisions": [],
+        "critical_issues": [],
+        "warnings": [],
+        "openai_response_id": "resp_test",
+        "agentcore_trace_id": "resp_test",
+    }
+    openai_client = FakeOpenAIClient(base_extracted(un_number="UN1263"), review=review)
+    pipeline, _store = make_pipeline_with_openai(tmp_path, openai_client)
+
+    result = await pipeline.generate_label_from_uploads(
+        files=[_upload("test_sds.pdf")],
+        product_name="OpenAI Reviewed Product",
+        mode="shipped_dot",
+        size="pail",
+        fill_amount="441 lb",
+    )
+
+    assert result["source_review"]["status"] == "reviewed"
+    assert result["source_review"]["provider"] == "openai"
+    assert result["agentcore_review"] == result["source_review"]
+
+
+@pytest.mark.asyncio
+async def test_openai_review_disabled_degrades_to_primary_extraction(tmp_path, monkeypatch):
+    monkeypatch.setattr(label_pipeline.settings, "openai_review_enabled", False)
     pipeline, _store = make_pipeline(tmp_path, base_extracted(un_number="UN1263"))
 
     result = await pipeline.generate_label_from_uploads(
         files=[_upload("test_sds.pdf")],
-        product_name="AgentCore Disabled",
+        product_name="OpenAI Review Disabled",
         mode="shipped_dot",
         size="pail",
         fill_amount="441 lb",
@@ -298,7 +335,7 @@ async def test_agentcore_disabled_review_degrades_to_openai_only(tmp_path, monke
 
 @pytest.mark.asyncio
 async def test_pipeline_requires_fill_amount_for_non_sample_labels(tmp_path, monkeypatch):
-    monkeypatch.setattr(label_pipeline.settings, "agentcore_enabled", False)
+    monkeypatch.setattr(label_pipeline.settings, "openai_review_enabled", False)
     pipeline, _store = make_pipeline(tmp_path, base_extracted(un_number="UN1263"))
 
     with pytest.raises(LabelPipelineError) as exc_info:
@@ -315,7 +352,7 @@ async def test_pipeline_requires_fill_amount_for_non_sample_labels(tmp_path, mon
 
 @pytest.mark.asyncio
 async def test_pipeline_allows_sample_4x6_without_fill_amount_and_stores_salesperson(tmp_path, monkeypatch):
-    monkeypatch.setattr(label_pipeline.settings, "agentcore_enabled", False)
+    monkeypatch.setattr(label_pipeline.settings, "openai_review_enabled", False)
     extracted = ExtractedData(
         product=ProductInfo(name="Sample Product"),
         ghs=GHSClassification(signal_word="Warning", pictograms=["GHS07"]),
@@ -357,7 +394,7 @@ async def test_pipeline_allows_sample_4x6_without_fill_amount_and_stores_salespe
 
 @pytest.mark.asyncio
 async def test_pipeline_response_includes_dot_shipping_review_for_separate_stickers(tmp_path, monkeypatch):
-    monkeypatch.setattr(label_pipeline.settings, "agentcore_enabled", False)
+    monkeypatch.setattr(label_pipeline.settings, "openai_review_enabled", False)
     extracted = base_extracted(un_number="UN1263")
     extracted.shipment = ShipmentInfo(fill_amount="441 lb", container_type="drum")
     pipeline, _store = make_pipeline(tmp_path, extracted)
@@ -387,7 +424,7 @@ async def test_pipeline_response_includes_dot_shipping_review_for_separate_stick
 
 @pytest.mark.asyncio
 async def test_openai_failure_uses_deterministic_fallback(tmp_path, monkeypatch):
-    monkeypatch.setattr(label_pipeline.settings, "agentcore_enabled", False)
+    monkeypatch.setattr(label_pipeline.settings, "openai_review_enabled", False)
     pipeline, _store = make_pipeline_with_openai(tmp_path, FailingOpenAIClient())
 
     result = await pipeline.generate_label_from_uploads(
@@ -405,7 +442,7 @@ async def test_openai_failure_uses_deterministic_fallback(tmp_path, monkeypatch)
 
 @pytest.mark.asyncio
 async def test_pipeline_reconciles_incomplete_openai_with_novadd_source_facts(tmp_path, monkeypatch):
-    monkeypatch.setattr(label_pipeline.settings, "agentcore_enabled", False)
+    monkeypatch.setattr(label_pipeline.settings, "openai_review_enabled", False)
     store = {}
 
     pipeline = LabelPipeline(
@@ -460,7 +497,7 @@ async def test_pipeline_reconciles_incomplete_openai_with_novadd_source_facts(tm
 
 @pytest.mark.asyncio
 async def test_pipeline_reconciles_ce_flex_pictograms_from_source_h_codes(tmp_path, monkeypatch):
-    monkeypatch.setattr(label_pipeline.settings, "agentcore_enabled", False)
+    monkeypatch.setattr(label_pipeline.settings, "openai_review_enabled", False)
     store = {}
 
     pipeline = LabelPipeline(
@@ -494,8 +531,8 @@ async def test_pipeline_reconciles_ce_flex_pictograms_from_source_h_codes(tmp_pa
 
 
 @pytest.mark.asyncio
-async def test_agentcore_promotes_missing_source_backed_value(tmp_path, monkeypatch):
-    monkeypatch.setattr(label_pipeline.settings, "agentcore_enabled", True)
+async def test_openai_review_promotes_missing_source_backed_value(tmp_path, monkeypatch):
+    monkeypatch.setattr(label_pipeline.settings, "openai_review_enabled", True)
     review = {
         "status": "reviewed",
         "field_reviews": [
@@ -513,7 +550,7 @@ async def test_agentcore_promotes_missing_source_backed_value(tmp_path, monkeypa
         "critical_issues": [],
         "warnings": [],
     }
-    pipeline, _store = make_pipeline(tmp_path, base_extracted(), FakeAgentCore(review=review))
+    pipeline, _store = make_pipeline(tmp_path, base_extracted(), source_review=review)
 
     result = await pipeline.generate_label_from_uploads(
         files=[_upload("test_sds.pdf")],
@@ -530,8 +567,8 @@ async def test_agentcore_promotes_missing_source_backed_value(tmp_path, monkeypa
 
 
 @pytest.mark.asyncio
-async def test_agentcore_conflict_forces_needs_review(tmp_path, monkeypatch):
-    monkeypatch.setattr(label_pipeline.settings, "agentcore_enabled", True)
+async def test_openai_review_conflict_forces_needs_review(tmp_path, monkeypatch):
+    monkeypatch.setattr(label_pipeline.settings, "openai_review_enabled", True)
     review = {
         "status": "reviewed",
         "field_reviews": [
@@ -549,7 +586,7 @@ async def test_agentcore_conflict_forces_needs_review(tmp_path, monkeypatch):
         "critical_issues": [],
         "warnings": [],
     }
-    pipeline, _store = make_pipeline(tmp_path, base_extracted(un_number="UN1263"), FakeAgentCore(review=review))
+    pipeline, _store = make_pipeline(tmp_path, base_extracted(un_number="UN1263"), source_review=review)
 
     result = await pipeline.generate_label_from_uploads(
         files=[_upload("test_sds.pdf")],
@@ -561,12 +598,12 @@ async def test_agentcore_conflict_forces_needs_review(tmp_path, monkeypatch):
 
     assert result["status"] == "needs_review"
     assert result["download"]["available"] is True
-    assert any(error["field"] == "agentcore.transport.un_number" for error in result["errors"])
+    assert any(error["field"] == "source_review.transport.un_number" for error in result["errors"])
 
 
 @pytest.mark.asyncio
-async def test_agentcore_blocking_issue_marks_needs_review_without_blocking_download(tmp_path, monkeypatch):
-    monkeypatch.setattr(label_pipeline.settings, "agentcore_enabled", True)
+async def test_openai_review_blocking_issue_marks_needs_review_without_blocking_download(tmp_path, monkeypatch):
+    monkeypatch.setattr(label_pipeline.settings, "openai_review_enabled", True)
     review = {
         "status": "reviewed",
         "field_reviews": [],
@@ -580,7 +617,7 @@ async def test_agentcore_blocking_issue_marks_needs_review_without_blocking_down
         ],
         "warnings": [],
     }
-    pipeline, _store = make_pipeline(tmp_path, base_extracted(un_number="UN1263"), FakeAgentCore(review=review))
+    pipeline, _store = make_pipeline(tmp_path, base_extracted(un_number="UN1263"), source_review=review)
 
     result = await pipeline.generate_label_from_uploads(
         files=[_upload("test_sds.pdf")],
@@ -592,16 +629,16 @@ async def test_agentcore_blocking_issue_marks_needs_review_without_blocking_down
 
     assert result["status"] == "needs_review"
     assert result["download"]["available"] is True
-    assert any(error["field"] == "agentcore.transport.proper_shipping_name" for error in result["errors"])
+    assert any(error["field"] == "source_review.transport.proper_shipping_name" for error in result["errors"])
 
 
 @pytest.mark.asyncio
-async def test_agentcore_failure_continues_with_warning(tmp_path, monkeypatch):
-    monkeypatch.setattr(label_pipeline.settings, "agentcore_enabled", True)
+async def test_openai_review_failure_continues_with_warning(tmp_path, monkeypatch):
+    monkeypatch.setattr(label_pipeline.settings, "openai_review_enabled", True)
     pipeline, _store = make_pipeline(
         tmp_path,
         base_extracted(un_number="UN1263"),
-        FakeAgentCore(error=TimeoutError("timed out")),
+        review_error=TimeoutError("timed out"),
     )
 
     result = await pipeline.generate_label_from_uploads(

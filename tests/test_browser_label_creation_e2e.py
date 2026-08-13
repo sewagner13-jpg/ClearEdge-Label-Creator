@@ -74,7 +74,6 @@ def local_label_server(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "validator", BrowserTestValidator())
     monkeypatch.setattr(main, "web_retriever", object())
     monkeypatch.setattr(main, "label_generator", LabelGenerator())
-    monkeypatch.setattr(main, "agentcore_client", None)
     monkeypatch.setattr(main, "logo_library", LogoLibrary(logos_dir))
     monkeypatch.setattr(main, "salesperson_library", SalespersonLibrary(salespeople_dir))
 
