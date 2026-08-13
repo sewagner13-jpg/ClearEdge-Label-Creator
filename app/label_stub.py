@@ -10,7 +10,7 @@ from html import escape as html_escape
 from pathlib import Path
 from typing import Optional
 import svgwrite
-from jinja2 import Template
+from jinja2 import Environment
 import qrcode
 import cairosvg
 
@@ -343,6 +343,7 @@ class LabelGenerator:
     def __init__(self):
         self.header_color = settings.purple_header_color
         self.default_template_id = "clearedge_pail_v1"
+        self.svg_template = Environment(autoescape=True).from_string(self.SVG_TEMPLATE)
         self.logo_data_uri = self._load_logo_data_uri()
         self.brand_palette = {
             "primary": "#110251",
@@ -1321,8 +1322,7 @@ class LabelGenerator:
         }
 
         # Render template
-        template = Template(self.SVG_TEMPLATE)
-        svg_content = template.render(**context)
+        svg_content = self.svg_template.render(**context)
 
         logger.info(f"Generated SVG ({len(svg_content)} bytes) for {size} label")
         return svg_content

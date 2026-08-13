@@ -176,6 +176,10 @@ def _health_payload() -> dict:
         "timestamp": datetime.utcnow().isoformat(),
         "ai_provider": "openai",
         "openai_model": settings.openai_model,
+        "build": {
+            "commit_sha": os.getenv("RAILWAY_GIT_COMMIT_SHA", "unknown"),
+            "branch": os.getenv("RAILWAY_GIT_BRANCH", "unknown"),
+        },
     }
 
 

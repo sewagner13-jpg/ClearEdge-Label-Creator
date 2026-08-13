@@ -69,6 +69,32 @@ def test_generated_pdf_uses_full_requested_label_page_size():
     assert float(drum_page.mediabox.height) == 648
 
 
+def test_standard_label_escapes_xml_sensitive_dynamic_text_before_pdf_rendering():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(
+            name="Coating & Ink Resin",
+            product_uses=["Resins of Coating & Ink"],
+            emergency_phone="Support <24 hours>",
+        ),
+        ghs=GHSClassification(signal_word="Warning", pictograms=["GHS07"]),
+        transport=TransportClassification(not_regulated=True),
+    )
+
+    svg = generator.generate_svg(
+        data,
+        mode="shipped_dot",
+        size="drum",
+        orientation="horizontal",
+    )
+    pdf = generator.generate_pdf(svg)
+
+    assert "Coating &amp; Ink Resin" in svg
+    assert "Resins of Coating &amp; Ink" in svg
+    assert "Support &lt;24 hours&gt;" in svg
+    assert pdf.startswith(b"%PDF")
+
+
 def test_sample_4x6_label_renders_compact_sales_contact_and_thermal_page_size():
     generator = LabelGenerator()
     data = ExtractedData(

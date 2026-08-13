@@ -2,13 +2,7 @@ name: Tests
 
 on:
   pull_request:
-    branches:
-      - main
-      - production
   push:
-    branches:
-      - main
-      - production
 
 jobs:
   test:
@@ -37,8 +31,8 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest pytest-cov pytest-mock
+          pip install -r requirements-dev.txt
+          python -m playwright install --with-deps chromium
 
       - name: Run linting
         run: |

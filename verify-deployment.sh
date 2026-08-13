@@ -70,5 +70,12 @@ else
     log_warning "OpenAI model was not reported"
 fi
 
+COMMIT_SHA=$(echo "$HEALTH_BODY" | jq -r '.build.commit_sha' 2>/dev/null || true)
+if [ -n "$COMMIT_SHA" ] && [ "$COMMIT_SHA" != "null" ] && [ "$COMMIT_SHA" != "unknown" ]; then
+    log_success "Deployed commit: $COMMIT_SHA"
+else
+    log_warning "Deployment commit identity was not reported"
+fi
+
 echo
 log_success "Deployment verification complete"

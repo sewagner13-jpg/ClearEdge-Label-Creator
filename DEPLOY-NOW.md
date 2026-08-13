@@ -1,40 +1,21 @@
-# Deploy Now
+# Production Release
 
-## Backend
+All production releases must use the repository gate. It runs the complete test suite, real-browser test, local Railway-parity check, clean-tree and production-branch checks, deployed-commit verification, and a live SDS/TDS label-generation smoke.
 
-Railway uses `railway.json`:
-
-```json
-{
-  "build": { "builder": "NIXPACKS" },
-  "deploy": {
-    "startCommand": "uvicorn app.main:app --host 0.0.0.0 --port 8000"
-  }
-}
-```
-
-Set these Railway variables:
+Verify without deploying:
 
 ```bash
-OPENAI_API_KEY=<secret>
-OPENAI_MODEL=gpt-4o
-ALLOWED_ORIGINS=https://clearedge-label-creator.netlify.app,http://localhost:8000,http://127.0.0.1:8000
+PYTHON_BIN=.venv/bin/python ./scripts/release.sh --verify-only
 ```
 
-Verify:
+Deploy and run the required live behavior smoke:
 
 ```bash
-curl https://clearedgelabelcreator-production.up.railway.app/api/v1/health
-curl https://clearedgelabelcreator-production.up.railway.app/api/v1/readiness
+PYTHON_BIN=.venv/bin/python ./scripts/release.sh --deploy \
+  --sds /absolute/path/product-sds.pdf \
+  --tds /absolute/path/product-tds.pdf
 ```
 
-## Frontend
+The release command pushes the branch configured as `origin/HEAD`. Railway and Netlify must remain connected to that branch for automatic deployment. Railway provides `RAILWAY_GIT_COMMIT_SHA`; the gate waits for that exact commit before certifying the live app.
 
-Netlify publishes `netlify-frontend/` via root `netlify.toml`.
-
-Verify:
-
-```bash
-curl https://clearedge-label-creator.netlify.app/
-curl https://clearedge-label-creator.netlify.app/config.js
-```
+Do not deploy with a direct `git push`, Railway CLI, or Netlify CLI. Those paths bypass the required behavior evidence.

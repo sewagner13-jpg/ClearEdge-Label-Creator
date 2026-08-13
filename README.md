@@ -80,5 +80,7 @@ window.CLEAREDGE_API_URL = 'https://clearedgelabelcreator-production.up.railway.
 ## Tests
 
 ```bash
-pytest
+pip install -r requirements-dev.txt
+python -m playwright install chromium
+python -m pytest
 ```
