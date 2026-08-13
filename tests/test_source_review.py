@@ -1,11 +1,19 @@
 import pytest
+from openai.lib._pydantic import to_strict_json_schema
 from pydantic import ValidationError
 
 from app.source_review import OpenAISourceReview, reviewed_source_payload
 
 
+def test_openai_source_review_schema_declares_status_as_string():
+    schema = to_strict_json_schema(OpenAISourceReview)
+
+    assert schema["properties"]["status"]["type"] == "string"
+
+
 def test_source_review_accepts_strict_source_backed_field():
     review = OpenAISourceReview(
+        status="reviewed",
         field_reviews=[
             {
                 "field_path": "transport.un_number",
@@ -33,6 +41,7 @@ def test_source_review_accepts_strict_source_backed_field():
 def test_source_review_rejects_unknown_status():
     with pytest.raises(ValidationError):
         OpenAISourceReview(
+            status="reviewed",
             field_reviews=[
                 {
                     "field_path": "transport.un_number",

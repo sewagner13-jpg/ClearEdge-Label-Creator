@@ -49,7 +49,7 @@ class OpenAISourceReview(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    status: Literal["reviewed"] = "reviewed"
+    status: str = Field(pattern=r"^reviewed$")
     field_reviews: List[SourceFieldReview] = Field(default_factory=list)
     label_inclusion_decisions: List[SourceInclusionDecision] = Field(default_factory=list)
     critical_issues: List[SourceCriticalIssue] = Field(default_factory=list)

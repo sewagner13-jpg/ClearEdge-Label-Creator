@@ -20,6 +20,9 @@
 - Complete `T0003` without changing existing label branding, layouts, regulatory assets, or export behavior.
 
 ## Verification State
+- First `T0003` live attempt on commit `a2753248484995951074f57b864f6d25a54a85a2` reached Railway but was rejected by the release gate because OpenAI returned `Invalid schema ... status ... must have a type key`; the existing label fallback remained available.
+- The strict-schema regression was proven red with the production error and green after declaring `status` as a required patterned string.
+- Post-fix `PYTHON_BIN=./.venv/bin/python ./scripts/release.sh --verify-only`: 207 passed with 85% coverage on 2026-08-13.
 - `T0003` regressions were proven red before implementation for filename cleanup, duplicate H/P statements, ClearEdge emergency contact, OpenAI review routing, and the live-review release assertion.
 - `PYTHON_BIN=./.venv/bin/python ./scripts/release.sh --verify-only`: 206 passed with 85% coverage on 2026-08-13.
 - Browser E2E, Python compilation, all frontend JavaScript syntax checks, workflow YAML parsing, local Railway parity, and `git diff --check` passed for `T0003`.

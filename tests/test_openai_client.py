@@ -125,7 +125,7 @@ def test_openai_client_runs_responses_api_second_pass_with_strict_schema():
             self.kwargs = kwargs
             return SimpleNamespace(
                 id="resp_review_123",
-                output_parsed=OpenAISourceReview(),
+                output_parsed=OpenAISourceReview(status="reviewed"),
             )
 
     responses = FakeResponses()
