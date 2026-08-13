@@ -32,4 +32,4 @@ Deployment is explicitly in scope under the project's standing deploy-after-chan
 - Real browser E2E and release gate pass before deploy.
 
 ## Status
-Implementation and local release verification complete on 2026-08-13; production deployment pending.
+Complete and production-verified on 2026-08-13 at commit `7725e8f7eff063c2525de221393ad2dbb2d5f9eb`. Live proof: `label_EdgemerE618_76e35861` with a reviewed OpenAI source-review response, parsed SVG preview, and parsed PDF download.

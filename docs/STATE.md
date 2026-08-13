@@ -4,22 +4,22 @@
 - Frontend: https://clearedge-label-creator.netlify.app
 - Backend: https://clearedgelabelcreator-production.up.railway.app
 - Production branch: `claude/product-label-pipeline-Gw3uq`
-- Renderer release verified from code commit `40b0b806fbf772a77a0f882b36bd0a3415d634fd`.
+- Current release verified from code commit `7725e8f7eff063c2525de221393ad2dbb2d5f9eb`.
 
 ## Active Ticket
-- `T0003` - OpenAI Source Review And Extraction Corrections.
-- Detail: `docs/tickets/T0003-openai-source-review.md`
+- None. `T0003` is complete.
 
 ## Open Defects
-- `D0003-1` Medium: analysis can suggest an MSDS filename suffix as part of the product name.
-- `D0003-2` Medium: coded and code-less forms of the same H/P statement can print twice.
-- `D0003-3` High: ClearEdge branding can print a foreign SDS emergency phone instead of the approved ClearEdge contact.
-- `D0003-4` Medium: the second-pass review still exposes an inactive AWS AgentCore path instead of the OpenAI platform.
+- None.
 
 ## Current Objective
-- Complete `T0003` without changing existing label branding, layouts, regulatory assets, or export behavior.
+- Await the next user-observable label workflow improvement.
 
 ## Verification State
+- `scripts/release.sh --deploy` passed for commit `7725e8f7eff063c2525de221393ad2dbb2d5f9eb`: 207 tests, 85% coverage, browser E2E, static checks, local Railway parity, exact-commit production wait, and real SDS/TDS generation.
+- Live Edgemer label `label_EdgemerE618_76e35861` returned `status=ready`, `source_review.status=reviewed`, `source_review.provider=openai`, and a non-empty OpenAI response ID.
+- Live preview and PDF were fetched and parsed. The PDF is one 864 x 648 pt page; the preview preserved the ClearEdge logo and purple layout, showed one GHS07 pictogram, one H317 statement, the approved `704-799-5769` contact, and the source-backed DOT not-regulated panel.
+- Release artifacts: `test_output/release/7725e8f7eff0/`.
 - First `T0003` live attempt on commit `a2753248484995951074f57b864f6d25a54a85a2` reached Railway but was rejected by the release gate because OpenAI returned `Invalid schema ... status ... must have a type key`; the existing label fallback remained available.
 - The strict-schema regression was proven red with the production error and green after declaring `status` as a required patterned string.
 - Post-fix `PYTHON_BIN=./.venv/bin/python ./scripts/release.sh --verify-only`: 207 passed with 85% coverage on 2026-08-13.
@@ -44,4 +44,4 @@
 - None.
 
 ## Next Action
-- Commit `T0003`, run the gated production release with real Edgemer SDS/TDS files, and record the live label evidence.
+- Use the live app for the next SDS/TDS pair and review the OpenAI source-review findings beside the generated preview.
