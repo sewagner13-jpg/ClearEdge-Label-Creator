@@ -4,18 +4,21 @@
 - Frontend: https://clearedge-label-creator.netlify.app
 - Backend: https://clearedgelabelcreator-production.up.railway.app
 - Production branch: `claude/product-label-pipeline-Gw3uq`
-- Current label-completeness release verified from code commit `3bf69729f82b6212b7c785d5cdd1ebbc2908c615`.
+- Current two-up DOT sticker release verified from code commit `75ea2daeadd7d66d3e71253c32a6ba448d27038f`.
 
 ## Active Ticket
-- `T0007` - maximize DOT sticker sheets with an exact two-up layout.
+- None. `T0007` is complete.
 
 ## Open Defects
 - None.
 
 ## Current Objective
-- Render exactly two maximum-size DOT labels/marks per sheet and deploy the verified change.
+- Await operator review of the maximum-size two-up DOT sticker sheet.
 
 ## Verification State
+- `scripts/release.sh --deploy` passed for commit `75ea2daeadd7d66d3e71253c32a6ba448d27038f`: 221 tests, 86% coverage, browser E2E, static checks, local Railway parity, exact-commit production wait, and live Edgemer generation `label_EdgemerE618_6c63e32f`.
+- Live SilaPox generation `label_CESilaPoxEF_d94319fa` returned a two-page preview and full PDF. Page 2 is US Letter landscape with exactly one Class 9 label and one marine-pollutant mark, both 135 mm square; the separate DOT PDF contains the same sheet.
+- The one-type duplication, two-type one-each, and three-type pagination regressions were proven red against the old four-up renderer before all focused and full tests passed. Visual proof: `test_output/browser/T0007-two-up-dot-sheet.png`; release artifacts: `test_output/release/75ea2daeadd7/`.
 - `scripts/release.sh --deploy` passed for commit `3bf69729f82b6212b7c785d5cdd1ebbc2908c615`: 221 tests, 86% coverage, browser E2E, static checks, local Railway parity, exact-commit production wait, and live Edgemer generation `label_EdgemerE618_7d9e2809`.
 - Live SilaPox generation `label_CESilaPoxEF_5a9f6c7b` parsed all 8 H-statements and 21 P-statements, Warning, GHS02/GHS07/GHS08, UN3082, Class 9, PG III, and `marine_pollutant=true` without manual transport inputs.
 - The live page-1 SVG contains all 29 coded statements, uses a three-column no-overlap safety layout, and has no `nfpa-704` element. The full PDF has two pages; page 2 is US Letter landscape with one 120 mm Class 9 label and one 120 mm official marine-pollutant mark.
@@ -58,4 +61,4 @@
 - None.
 
 ## Next Action
-- Complete `T0007` with red/green renderer proof, gated deployment, and live two-page verification.
+- Review the live SilaPox two-up preview and continue with the next operator label.

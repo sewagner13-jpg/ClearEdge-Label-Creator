@@ -31,4 +31,13 @@ Deployment is in scope under the standing deploy-after-change instruction. Use o
 - The full label PDF appends the same sticker-sheet pages returned by the preview and separate DOT PDF.
 
 ## Status
-In progress.
+Complete.
+
+## Verification
+- Red proof: focused tests failed because the old renderer produced four 100 mm copies for one type, repeated two types twice, retained 120 mm for the marine pair, and kept three unique types on one four-up page.
+- Green proof: `./.venv/bin/python -m pytest -q` passed 221 tests with 86% coverage.
+- Static proof: `python -m compileall -q app`, all frontend JavaScript syntax checks, and `git diff --check` passed.
+- Visual proof: `test_output/browser/T0007-two-up-dot-sheet.png` shows one Class 9 label and one marine-pollutant mark without clipping or overlap.
+- Gated release: commit `75ea2daeadd7d66d3e71253c32a6ba448d27038f` passed browser E2E, local Railway parity, exact-commit deployment, and live Edgemer generation `label_EdgemerE618_6c63e32f`.
+- Live SilaPox proof: `label_CESilaPoxEF_d94319fa` returns `sticker_size_mm=135`, `sheet_size=US Letter landscape`, two preview/download pages, and exactly one Class 9 plus one marine-pollutant graphic on page 2.
+- Release artifacts: `test_output/release/75ea2daeadd7/`.
