@@ -1053,8 +1053,25 @@ class LabelPipeline:
                 self._promote_source_scalar(extracted_data, source_data, field_path)
             self._merge_source_list(extracted_data, source_data, "transport.subsidiary_hazard_classes")
 
+        self._reconcile_nfpa(extracted_data, source_data)
+
+    def _reconcile_nfpa(
+        self,
+        extracted_data: ExtractedData,
+        source_data: ExtractedData,
+    ) -> None:
+        if source_data.nfpa.source == "clearedge_default":
+            extracted_data.nfpa.health = 0
+            extracted_data.nfpa.flammability = 0
+            extracted_data.nfpa.instability = 0
+            extracted_data.nfpa.special = None
+            extracted_data.nfpa.source = "clearedge_default"
+            self._remove_warning_containing(extracted_data, "NFPA 704 values were defaulted")
+            return
+
         for field_path in ("nfpa.health", "nfpa.flammability", "nfpa.instability", "nfpa.special"):
             self._promote_source_nfpa_field(extracted_data, source_data, field_path)
+        extracted_data.nfpa.source = source_data.nfpa.source
 
     def _promote_source_signal_word(self, extracted_data: ExtractedData, source_data: ExtractedData) -> None:
         source_value = source_data.ghs.signal_word

@@ -16,6 +16,7 @@ from app.schema import (
     ExtractedTextPage,
     GHSClassification,
     HazardStatement,
+    NFPA704Ratings,
     ProductInfo,
     ShipmentInfo,
     TransportClassification,
@@ -80,6 +81,12 @@ def test_pipeline_replaces_conflicting_ai_pictogram_with_authoritative_sds_image
             pictograms=["GHS05", "GHS07", "GHS08"],
         ),
         transport=TransportClassification(),
+        nfpa=NFPA704Ratings(
+            health=0,
+            flammability=0,
+            instability=0,
+            source="sds",
+        ),
     )
     pipeline = LabelPipeline(
         pdf_extractor=FakePDFExtractor(),
@@ -98,7 +105,15 @@ def test_pipeline_replaces_conflicting_ai_pictogram_with_authoritative_sds_image
     )
 
     assert extracted.ghs.pictograms == ["GHS02", "GHS07", "GHS08"]
+    assert extracted.nfpa.model_dump() == {
+        "health": 0,
+        "flammability": 0,
+        "instability": 0,
+        "special": None,
+        "source": "clearedge_default",
+    }
     assert any("embedded SDS pictograms" in warning for warning in extracted.warnings)
+    assert any("not a source-derived rating" in warning for warning in extracted.warnings)
 
 
 class FailingOpenAIClient:
