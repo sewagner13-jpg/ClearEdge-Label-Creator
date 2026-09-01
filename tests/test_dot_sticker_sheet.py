@@ -5,7 +5,6 @@ from pypdf import PdfReader
 import pytest
 
 from app.dot_sticker_sheet import (
-    DOT_STICKER_SIZE_PT,
     DOT_STICKERS_PER_PAGE,
     DotStickerSheetRenderer,
     DotStickerSheetUnavailable,
@@ -35,21 +34,23 @@ def _marine_pollutant_mark():
     }
 
 
-def test_one_required_dot_sticker_fills_letter_sheet_with_four_100mm_placements():
+def test_one_required_dot_sticker_renders_two_135mm_copies_on_landscape_sheet():
     renderer = DotStickerSheetRenderer()
+    expected_size_pt = 135 * 72 / 25.4
 
     pages = renderer.render_svg_pages([_sticker("3")])
 
     assert len(pages) == 1
     assert pages[0].count('class="dot-sticker"') == DOT_STICKERS_PER_PAGE
-    assert f'width="{DOT_STICKER_SIZE_PT:.3f}"' in pages[0]
-    assert f'height="{DOT_STICKER_SIZE_PT:.3f}"' in pages[0]
+    assert pages[0].count('data-hazard-class="3"') == 2
+    assert pages[0].count(f'width="{expected_size_pt:.3f}"') == 2
+    assert pages[0].count(f'height="{expected_size_pt:.3f}"') == 2
 
     pdf = renderer.generate_pdf([_sticker("3")])
     reader = PdfReader(BytesIO(pdf))
     assert len(reader.pages) == 1
-    assert float(reader.pages[0].mediabox.width) == US_LETTER_WIDTH_PT
-    assert float(reader.pages[0].mediabox.height) == US_LETTER_HEIGHT_PT
+    assert float(reader.pages[0].mediabox.width) == US_LETTER_HEIGHT_PT
+    assert float(reader.pages[0].mediabox.height) == US_LETTER_WIDTH_PT
 
 
 def test_dot_sticker_assets_are_normalized_to_square_viewbox():
@@ -70,14 +71,15 @@ def test_class_3_sticker_sheet_renders_required_red_background():
     assert 'fill="#D71920"' in pages[0]
 
 
-def test_multiple_required_dot_sticker_types_alternate_on_sheet():
+def test_two_required_dot_sticker_types_render_once_each():
     renderer = DotStickerSheetRenderer()
 
     pages = renderer.render_svg_pages([_sticker("3", "primary"), _sticker("8", "subsidiary")])
 
     assert len(pages) == 1
-    assert pages[0].count('data-hazard-class="3"') == 2
-    assert pages[0].count('data-hazard-class="8"') == 2
+    assert pages[0].count('class="dot-sticker"') == 2
+    assert pages[0].count('data-hazard-class="3"') == 1
+    assert pages[0].count('data-hazard-class="8"') == 1
 
 
 def test_class_9_and_marine_pollutant_render_once_each_as_large_landscape_pair():
@@ -85,7 +87,7 @@ def test_class_9_and_marine_pollutant_render_once_each_as_large_landscape_pair()
 
     pages = renderer.render_svg_pages([_sticker("9"), _marine_pollutant_mark()])
 
-    large_size_pt = 120 * 72 / 25.4
+    large_size_pt = 135 * 72 / 25.4
     assert len(pages) == 1
     assert '<svg xmlns="http://www.w3.org/2000/svg" width="792pt" height="612pt"' in pages[0]
     assert pages[0].count('class="dot-sticker"') == 2
@@ -106,14 +108,18 @@ def test_marine_pollutant_mark_uses_packaged_official_image_asset():
     assert asset.data_uri.startswith("data:image/png;base64,")
 
 
-def test_five_required_dot_stickers_create_second_page_and_fill_both_pages():
+def test_three_unique_required_assets_create_two_filled_two_up_pages():
     renderer = DotStickerSheetRenderer()
 
-    pdf = renderer.generate_pdf([_sticker("3", quantity=5)])
-    pages = renderer.render_svg_pages([_sticker("3", quantity=5)])
+    stickers = [_sticker("3"), _sticker("8", source="subsidiary"), _sticker("9", source="subsidiary")]
+    pdf = renderer.generate_pdf(stickers)
+    pages = renderer.render_svg_pages(stickers)
 
     assert len(pages) == 2
     assert all(page.count('class="dot-sticker"') == DOT_STICKERS_PER_PAGE for page in pages)
+    assert pages[0].count('data-hazard-class="3"') == 1
+    assert pages[0].count('data-hazard-class="8"') == 1
+    assert pages[1].count('data-hazard-class="9"') == 2
     assert len(PdfReader(BytesIO(pdf)).pages) == 2
 
 

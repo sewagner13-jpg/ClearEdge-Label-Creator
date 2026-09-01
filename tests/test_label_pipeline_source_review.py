@@ -487,8 +487,10 @@ async def test_pipeline_response_includes_dot_shipping_review_for_separate_stick
     pdf_bytes = base64.b64decode(result["download"]["data_url"].split(",", 1)[1])
     reader = PdfReader(BytesIO(pdf_bytes))
     assert len(reader.pages) == 2
-    assert float(reader.pages[1].mediabox.width) == US_LETTER_WIDTH_PT
-    assert float(reader.pages[1].mediabox.height) == US_LETTER_HEIGHT_PT
+    assert result["dot_stickers"]["sticker_size_mm"] == 135
+    assert result["dot_stickers"]["sheet_size"] == "US Letter landscape"
+    assert float(reader.pages[1].mediabox.width) == US_LETTER_HEIGHT_PT
+    assert float(reader.pages[1].mediabox.height) == US_LETTER_WIDTH_PT
 
 
 @pytest.mark.asyncio

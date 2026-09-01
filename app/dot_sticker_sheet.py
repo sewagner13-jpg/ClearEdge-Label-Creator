@@ -22,13 +22,11 @@ from pypdf import PdfReader, PdfWriter
 US_LETTER_WIDTH_PT = 612
 US_LETTER_HEIGHT_PT = 792
 MM_TO_PT = 72 / 25.4
-DOT_STICKER_SIZE_MM = 100
-DOT_STICKER_SIZE_PT = DOT_STICKER_SIZE_MM * MM_TO_PT
-LARGE_PAIR_STICKER_SIZE_MM = 120
-LARGE_PAIR_STICKER_SIZE_PT = LARGE_PAIR_STICKER_SIZE_MM * MM_TO_PT
-DOT_STICKERS_PER_PAGE = 4
+TWO_UP_STICKER_SIZE_MM = 135
+TWO_UP_STICKER_SIZE_PT = TWO_UP_STICKER_SIZE_MM * MM_TO_PT
+DOT_STICKERS_PER_PAGE = 2
 DOT_STICKER_COLUMNS = 2
-DOT_STICKER_ROWS = 2
+DOT_STICKER_ROWS = 1
 
 DOT_LABEL_ASSET_MANIFEST = {
     "3": {
@@ -87,11 +85,10 @@ class DotStickerSheetRenderer:
     def render_svg_pages(self, stickers: list[dict]) -> list[str]:
         """Return one or more SVG pages filled with approved DOT sticker images."""
         expanded = self._expanded_stickers(stickers)
-        page_capacity = 2 if _uses_large_marine_pair_layout(expanded) else DOT_STICKERS_PER_PAGE
         pages = []
-        for page_index in range(ceil(len(expanded) / page_capacity)):
+        for page_index in range(ceil(len(expanded) / DOT_STICKERS_PER_PAGE)):
             page_stickers = expanded[
-                page_index * page_capacity:(page_index + 1) * page_capacity
+                page_index * DOT_STICKERS_PER_PAGE:(page_index + 1) * DOT_STICKERS_PER_PAGE
             ]
             pages.append(self._render_svg_page(page_stickers, page_index + 1))
         return pages
@@ -157,7 +154,7 @@ class DotStickerSheetRenderer:
         return svg_text[:svg_match.start()] + "<svg" + attrs + ">" + svg_text[svg_match.end():]
 
     def _expanded_stickers(self, stickers: list[dict]) -> list[dict]:
-        requested = []
+        requested_by_asset = {}
         for sticker in stickers or []:
             asset_key = normalize_dot_sticker_asset_key(
                 sticker.get("asset_key") or sticker.get("hazard_class")
@@ -172,40 +169,37 @@ class DotStickerSheetRenderer:
                     f"DOT_STICKER_ASSET_UNAVAILABLE: No approved DOT sticker asset for {asset_key}"
                 )
 
-            quantity = _positive_quantity(sticker.get("quantity"))
             asset = self.assets[asset_key]
-            for _ in range(quantity):
-                requested.append({
+            if asset_key not in requested_by_asset:
+                requested_by_asset[asset_key] = {
                     **sticker,
                     "hazard_class": asset.hazard_class,
                     "asset_key": asset_key,
                     "mark_type": asset.mark_type,
                     "label_name": sticker.get("label_name") or asset.label_name,
-                })
+                    "quantity": 1,
+                }
 
+        requested = list(requested_by_asset.values())
         if not requested:
             raise DotStickerSheetUnavailable("DOT_STICKER_ASSET_UNAVAILABLE: No DOT stickers were requested")
 
-        if _uses_large_marine_pair_layout(requested):
-            return requested
-
-        target_count = ceil(len(requested) / DOT_STICKERS_PER_PAGE) * DOT_STICKERS_PER_PAGE
-        expanded = []
-        for index in range(target_count):
-            expanded.append(requested[index % len(requested)])
-        return expanded
+        if len(requested) == 1:
+            return [requested[0], requested[0]]
+        if len(requested) % DOT_STICKERS_PER_PAGE:
+            requested.append(requested[-1])
+        return requested
 
     def _render_svg_page(self, stickers: list[dict], page_number: int) -> str:
-        large_pair_layout = _uses_large_marine_pair_layout(stickers)
-        page_width = US_LETTER_HEIGHT_PT if large_pair_layout else US_LETTER_WIDTH_PT
-        page_height = US_LETTER_WIDTH_PT if large_pair_layout else US_LETTER_HEIGHT_PT
-        sticker_size = LARGE_PAIR_STICKER_SIZE_PT if large_pair_layout else DOT_STICKER_SIZE_PT
+        page_width = US_LETTER_HEIGHT_PT
+        page_height = US_LETTER_WIDTH_PT
+        sticker_size = TWO_UP_STICKER_SIZE_PT
         positions = self._positions(
             page_width=page_width,
             page_height=page_height,
             sticker_size=sticker_size,
-            columns=2,
-            rows=1 if large_pair_layout else 2,
+            columns=DOT_STICKER_COLUMNS,
+            rows=DOT_STICKER_ROWS,
         )
         images = []
         for index, sticker in enumerate(stickers):
@@ -309,24 +303,14 @@ def normalize_dot_sticker_asset_key(value: str | None) -> str | None:
     return normalize_dot_hazard_class(value)
 
 
-def _uses_large_marine_pair_layout(stickers: Iterable[dict]) -> bool:
-    """Use the large two-up sheet only for one hazard label plus one marine mark."""
-    items = list(stickers or [])
-    asset_keys = [
-        normalize_dot_sticker_asset_key(item.get("asset_key") or item.get("hazard_class"))
-        for item in items
-    ]
-    return len(asset_keys) == 2 and "marine_pollutant" in asset_keys
-
-
 def sticker_size_mm_for(stickers: list[dict]) -> int:
     """Return the physical side length used by the selected sheet layout."""
-    return LARGE_PAIR_STICKER_SIZE_MM if _uses_large_marine_pair_layout(stickers) else DOT_STICKER_SIZE_MM
+    return TWO_UP_STICKER_SIZE_MM
 
 
 def sheet_size_for(stickers: list[dict]) -> str:
     """Return the operator-facing paper size and orientation."""
-    return "US Letter landscape" if _uses_large_marine_pair_layout(stickers) else "US Letter"
+    return "US Letter landscape"
 
 
 def unsupported_dot_sticker_classes(stickers: Iterable[dict]) -> list[str]:
@@ -343,11 +327,3 @@ def unsupported_dot_sticker_classes(stickers: Iterable[dict]) -> list[str]:
         if asset_key and asset_key not in SUPPORTED_DOT_STICKER_CLASSES and asset_key not in unsupported:
             unsupported.append(asset_key)
     return unsupported
-
-
-def _positive_quantity(value) -> int:
-    try:
-        quantity = int(value)
-    except (TypeError, ValueError):
-        return 1
-    return max(1, quantity)

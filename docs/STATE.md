@@ -7,13 +7,13 @@
 - Current label-completeness release verified from code commit `3bf69729f82b6212b7c785d5cdd1ebbc2908c615`.
 
 ## Active Ticket
-- None. `T0006` is complete.
+- `T0007` - maximize DOT sticker sheets with an exact two-up layout.
 
 ## Open Defects
 - None.
 
 ## Current Objective
-- Await operator review of the corrected live SilaPox label.
+- Render exactly two maximum-size DOT labels/marks per sheet and deploy the verified change.
 
 ## Verification State
 - `scripts/release.sh --deploy` passed for commit `3bf69729f82b6212b7c785d5cdd1ebbc2908c615`: 221 tests, 86% coverage, browser E2E, static checks, local Railway parity, exact-commit production wait, and live Edgemer generation `label_EdgemerE618_7d9e2809`.
@@ -58,4 +58,4 @@
 - None.
 
 ## Next Action
-- Review the corrected live SilaPox two-page preview and continue with the next operator label.
+- Complete `T0007` with red/green renderer proof, gated deployment, and live two-page verification.
