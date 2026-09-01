@@ -23,6 +23,7 @@ def test_parse_response_defaults_missing_nfpa_values_to_zero():
     assert extracted.nfpa.health == 0
     assert extracted.nfpa.flammability == 0
     assert extracted.nfpa.instability == 0
+    assert extracted.nfpa.source == "clearedge_default"
     assert any("defaulted missing values to 0" in warning for warning in extracted.warnings)
 
 
@@ -49,6 +50,7 @@ def test_parse_response_accepts_explicit_nfpa_values():
     assert extracted.nfpa.flammability == 3
     assert extracted.nfpa.instability == 1
     assert extracted.nfpa.special == "OX"
+    assert extracted.nfpa.source == "sds"
 
 
 def test_parse_response_normalizes_common_ai_shape_drift():

@@ -10,6 +10,7 @@ from app.label_stub import LabelGenerator
 from app.label_pipeline import LabelPipeline, LabelPipelineError
 from app.validator import ComplianceValidator
 from app.schema import (
+    DetectedGHSPictogram,
     ExtractedData,
     ExtractedText,
     ExtractedTextPage,
@@ -45,6 +46,59 @@ class FakeOpenAIClient:
         if self.review_error:
             raise self.review_error
         return self.review
+
+
+def test_pipeline_replaces_conflicting_ai_pictogram_with_authoritative_sds_images(tmp_path):
+    sds_text = ExtractedText(
+        doc="SDS",
+        method_used="text",
+        pages=[
+            ExtractedTextPage(
+                page=1,
+                text="""
+                Section 2 Hazards Identification
+                GHS Classification:
+                Skin Corrosion/Irritation Category 2
+                Serious Eye Damage/Eye Irritation Category 2
+                Germ Cell Mutagenicity Category 2
+                Carcinogenicity Category 2
+                Reproductive Toxicity Category 2
+                Warning
+                """,
+            )
+        ],
+        detected_ghs_pictograms=[
+            DetectedGHSPictogram(code="GHS02", page=1, confidence=0.95),
+            DetectedGHSPictogram(code="GHS07", page=1, confidence=0.95),
+            DetectedGHSPictogram(code="GHS08", page=1, confidence=0.95),
+        ],
+    )
+    ai_data = ExtractedData(
+        product=ProductInfo(name="CE SilaPox EF"),
+        ghs=GHSClassification(
+            signal_word="Warning",
+            pictograms=["GHS05", "GHS07", "GHS08"],
+        ),
+        transport=TransportClassification(),
+    )
+    pipeline = LabelPipeline(
+        pdf_extractor=FakePDFExtractor(),
+        openai_client=FakeOpenAIClient(ai_data),
+        validator=ComplianceValidator(),
+        label_generator=LabelGenerator(),
+        labels_dir=tmp_path,
+        metadata_store={},
+        save_metadata_store=lambda: None,
+    )
+
+    extracted = pipeline._extract_structured_data(
+        sds_text=sds_text,
+        tds_text=None,
+        product_name="CE SilaPox EF",
+    )
+
+    assert extracted.ghs.pictograms == ["GHS02", "GHS07", "GHS08"]
+    assert any("embedded SDS pictograms" in warning for warning in extracted.warnings)
 
 
 class FailingOpenAIClient:

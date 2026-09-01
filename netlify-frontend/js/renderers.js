@@ -356,6 +356,7 @@ export function renderExtractedInformation(data = {}) {
     const product = extracted.product || {};
     const ghs = extracted.ghs || {};
     const transport = extracted.transport || {};
+    const nfpa = extracted.nfpa || {};
     const shipment = extracted.shipment || {};
     const dotSummary = createDotAnalysisSummary(data);
     const uses = product.product_uses || [];
@@ -375,6 +376,11 @@ export function renderExtractedInformation(data = {}) {
                 ${renderReadOnlyField('Hazard Class', transport.hazard_class || '')}
                 ${renderReadOnlyField('Packing Group', transport.packing_group || '')}
                 ${renderReadOnlyField('Emergency Phone', product.emergency_phone || '')}
+                ${renderReadOnlyField(
+                    'NFPA 704',
+                    `${nfpa.health ?? 0}-${nfpa.flammability ?? 0}-${nfpa.instability ?? 0}`
+                    + (nfpa.source === 'clearedge_default' ? ' (ClearEdge default; SDS/HMIS not listed)' : '')
+                )}
                 ${renderReadOnlyField('Lot / Exp / Fill', [shipment.lot_number, shipment.expiration_date, shipment.fill_amount].filter(Boolean).join(' | '))}
                 ${hazardStatements.length ? renderReadOnlyField(
                     `Hazard Statements (${hazardStatements.length})`,

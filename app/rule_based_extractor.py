@@ -120,7 +120,10 @@ class RuleBasedExtractor:
         )
 
         cls._extract_product_fields(data, sources, compact)
-        cls._extract_ghs_fields(data, sources)
+        detected_pictograms = list(
+            getattr(sds_text, "detected_ghs_pictograms", None) or []
+        )
+        cls._extract_ghs_fields(data, sources, detected_pictograms)
         cls._extract_transport_fields(data, sources, compact)
         cls._extract_nfpa_fields(data, sources)
         return data
@@ -179,7 +182,7 @@ class RuleBasedExtractor:
                 )
 
     @classmethod
-    def _extract_ghs_fields(cls, data: ExtractedData, sources) -> None:
+    def _extract_ghs_fields(cls, data: ExtractedData, sources, detected_pictograms=None) -> None:
         signal = cls._find_regex(r"\b(Danger|Warning)\b", sources, flags=re.IGNORECASE)
         if signal:
             value = signal["match"].title()
@@ -187,9 +190,10 @@ class RuleBasedExtractor:
                 data.ghs.signal_word = value
                 cls._add_evidence(data, "ghs.signal_word", value, signal)
 
-        pictograms = []
+        detected_pictograms = list(detected_pictograms or [])
+        pictograms = [item.code for item in detected_pictograms]
         pictogram_match = cls._find_regex(r"\b(GHS0[1-9](?:\s+GHS0[1-9])*)\b", sources, flags=re.IGNORECASE)
-        if pictogram_match:
+        if pictogram_match and not detected_pictograms:
             for raw_code in pictogram_match["match"].split():
                 code = normalize_ghs_pictogram(raw_code)
                 cls._append_unique(pictograms, code)
@@ -213,13 +217,32 @@ class RuleBasedExtractor:
                 hazard_statements.append(HazardStatement(code=None, text=statement))
         data.ghs.hazard_statements = hazard_statements
 
-        for derived_code in cls._derive_pictograms_from_classifications(sources):
-            cls._append_unique(pictograms, derived_code)
-        for derived_code in cls._derive_pictograms_from_hazard_statements(hazard_statements):
-            cls._append_unique(pictograms, derived_code)
+        if not detected_pictograms:
+            for derived_code in cls._derive_pictograms_from_classifications(sources):
+                cls._append_unique(pictograms, derived_code)
+            for derived_code in cls._derive_pictograms_from_hazard_statements(hazard_statements):
+                cls._append_unique(pictograms, derived_code)
         if pictograms:
             data.ghs.pictograms = cls._sort_pictograms(pictograms)
-            if pictogram_match:
+            if detected_pictograms:
+                pages = sorted({item.page for item in detected_pictograms})
+                confidence = min(item.confidence for item in detected_pictograms)
+                data.evidence.append(
+                    Evidence(
+                        field_path="ghs.pictograms",
+                        doc="SDS",
+                        section="2",
+                        page=pages[0],
+                        quote=(
+                            "Embedded SDS pictogram images matched approved assets: "
+                            + ", ".join(data.ghs.pictograms)
+                        ),
+                    )
+                )
+                data.confidence.append(
+                    FieldConfidence(field_path="ghs.pictograms", confidence=confidence)
+                )
+            elif pictogram_match:
                 cls._add_evidence(data, "ghs.pictograms", ", ".join(data.ghs.pictograms), pictogram_match)
             else:
                 match = (
@@ -361,8 +384,18 @@ class RuleBasedExtractor:
                 cls._set_field(data, field_path, int(match["match"]))
                 cls._add_evidence(data, field_path, match["match"], match)
 
-        if not found_nfpa:
+        if found_nfpa:
+            data.nfpa.source = "sds"
+        else:
             cls._extract_hmis_as_nfpa_fields(data, sources)
+        if data.nfpa.source == "clearedge_default":
+            cls._append_unique(
+                data.warnings,
+                (
+                    "NFPA 704 and HMIS ratings were not listed in the SDS/TDS; "
+                    "0-0-0 is the ClearEdge default and is not a source-derived rating."
+                ),
+            )
 
     @staticmethod
     def _shipping_name_from_text(compact: str) -> Optional[str]:
@@ -517,7 +550,7 @@ class RuleBasedExtractor:
             return []
 
         pictograms = []
-        if "serious eye damage" in block or "skin corrosion" in block or "corrosive to metals" in block:
+        if cls._block_has_corrosion_category(block):
             cls._append_unique(pictograms, "GHS05")
         if (
             "skin sensitizer" in block
@@ -541,6 +574,15 @@ class RuleBasedExtractor:
         if cls._block_has_aquatic_category_requiring_environment(block):
             cls._append_unique(pictograms, "GHS09")
         return pictograms
+
+    @staticmethod
+    def _block_has_corrosion_category(block: str) -> bool:
+        category_one_patterns = (
+            r"skin\s+corrosion(?:/irritation)?[^\n]{0,80}\bcategory\s+1(?:[abc])?\b",
+            r"serious\s+eye\s+damage(?:/eye\s+irritation)?[^\n]{0,80}\bcategory\s+1\b",
+            r"corrosive\s+to\s+metals?[^\n]{0,80}\bcategory\s+1\b",
+        )
+        return any(re.search(pattern, block, flags=re.IGNORECASE) for pattern in category_one_patterns)
 
     @classmethod
     def _classification_block(cls, sources) -> str:
@@ -696,6 +738,7 @@ class RuleBasedExtractor:
             cls._set_field(data, field_path, int(match["match"]))
             cls._add_evidence(data, field_path, match["match"], match)
         if found_any:
+            data.nfpa.source = "hmis"
             cls._append_unique(
                 data.warnings,
                 "NFPA 704 values were populated from SDS HMIS Hazard ID values because NFPA 704 values were not listed.",

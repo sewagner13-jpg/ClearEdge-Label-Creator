@@ -12,6 +12,7 @@ from pypdf import PdfReader
 from PIL import Image
 
 from .config import settings
+from .ghs_pictogram_detector import GHSPictogramDetector
 from .schema import ExtractedText, ExtractedTextPage
 
 logger = logging.getLogger(__name__)
@@ -103,10 +104,15 @@ class PDFExtractor:
         else:
             method = "text"
 
+        detected_ghs_pictograms = []
+        if str(doc_type).upper() == "SDS":
+            detected_ghs_pictograms = GHSPictogramDetector.detect_pdf(pdf_bytes)
+
         return ExtractedText(
             doc=doc_type,
             method_used=method,
-            pages=pages_data
+            pages=pages_data,
+            detected_ghs_pictograms=detected_ghs_pictograms,
         )
 
     def _extract_with_pypdf(

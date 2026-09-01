@@ -272,6 +272,10 @@ class NFPA704Ratings(BaseModel):
         max_length=12,
         description="White/bottom special hazard code such as OX or W, if explicitly stated"
     )
+    source: Literal["sds", "hmis", "operator", "clearedge_default"] = Field(
+        "clearedge_default",
+        description="Provenance for the NFPA values; defaults are not source-derived ratings",
+    )
 
     @field_validator("special")
     @classmethod
@@ -400,6 +404,20 @@ class ExtractedTextPage(BaseModel):
     text: str
 
 
+class DetectedGHSPictogram(BaseModel):
+    """GHS pictogram detected from embedded SDS artwork."""
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    page: int = Field(..., ge=1)
+    confidence: float = Field(..., ge=0.0, le=1.0)
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def normalize_code(cls, value: str) -> str:
+        return normalize_ghs_pictogram(value)
+
+
 class ExtractedText(BaseModel):
     """Complete extracted text from PDF document."""
     model_config = ConfigDict(extra="forbid")
@@ -407,6 +425,7 @@ class ExtractedText(BaseModel):
     doc: Literal["SDS", "TDS"]
     method_used: Literal["text", "ocr", "mixed"]
     pages: List[ExtractedTextPage]
+    detected_ghs_pictograms: List[DetectedGHSPictogram] = Field(default_factory=list)
 
 
 class ValidationError(BaseModel):

@@ -162,6 +162,48 @@ def test_rule_based_extractor_does_not_invent_environment_for_category_3_aquatic
     assert extracted.ghs.pictograms == ["GHS07"]
 
 
+def test_rule_based_extractor_does_not_treat_silapox_category_2_irritation_as_corrosion():
+    extracted = RuleBasedExtractor.extract(
+        sds_text=_text(
+            """
+            Section 2 Hazards Identification
+            2.1 GHS Classification:
+            Flammable Liquids Category 4
+            Skin Corrosion/Irritation Category 2
+            Skin Sensitization Category 1
+            Serious Eye Damage/Eye Irritation Category 2
+            Germ Cell Mutagenicity Category 2
+            Carcinogenicity Category 2
+            Reproductive Toxicity Category 2
+            Hazardous to The Aquatic Environment - Long-term (Chronic) Hazard Category 2
+            Warning
+            Hazard Statements:
+            H227 Combustible liquid
+            H315 Causes skin irritation
+            H317 May cause an allergic skin reaction
+            H319 Causes serious eye irritation
+            H341 Suspected of causing genetic defects
+            H351 Suspected of causing cancer
+            H361 Suspected of damaging fertility or the unborn child
+            H411 Toxic to aquatic life with long lasting effects
+            """
+        ),
+        tds_text=None,
+        product_name="CE SilaPox EF",
+    )
+
+    assert "GHS05" not in extracted.ghs.pictograms
+    assert {"GHS07", "GHS08"}.issubset(extracted.ghs.pictograms)
+    assert extracted.nfpa.model_dump() == {
+        "health": 0,
+        "flammability": 0,
+        "instability": 0,
+        "special": None,
+        "source": "clearedge_default",
+    }
+    assert any("ClearEdge default" in warning for warning in extracted.warnings)
+
+
 def test_rule_based_extractor_captures_transport_class_and_pg_from_section_14_shorthand():
     extracted = RuleBasedExtractor.extract(
         sds_text=_text(

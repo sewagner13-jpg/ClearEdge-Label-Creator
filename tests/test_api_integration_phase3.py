@@ -407,7 +407,10 @@ def test_corrections_endpoint_reruns_validation_and_enables_download(tmp_path):
             json={
                 "updated_by": "QA Lead",
                 "reason": "Confirmed ID number against source SDS",
-                "fields": {"transport.un_number": "UN1263"},
+                "fields": {
+                    "transport.un_number": "UN1263",
+                    "nfpa.health": 2,
+                },
             },
         )
 
@@ -416,6 +419,8 @@ def test_corrections_endpoint_reruns_validation_and_enables_download(tmp_path):
         assert corrected["status"] == "ready"
         assert corrected["download"]["available"] is True
         assert corrected["extracted"]["transport"]["un_number"] == "UN1263"
+        assert corrected["extracted"]["nfpa"]["health"] == 2
+        assert corrected["extracted"]["nfpa"]["source"] == "operator"
 
 
 def test_generate_applies_operator_dot_fields_before_validation(tmp_path):

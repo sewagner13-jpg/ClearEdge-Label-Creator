@@ -357,6 +357,8 @@ class LabelPipeline:
         extracted_data = ExtractedData(**metadata["extracted"])
         for field_path, value in request.fields.items():
             self._set_field_value(extracted_data, field_path, value)
+        if any(field_path.startswith("nfpa.") for field_path in request.fields):
+            extracted_data.nfpa.source = "operator"
 
         extracted_data.warnings.append(
             f"Operator corrections applied by {request.updated_by.strip()}: {request.reason.strip()}"
@@ -1023,7 +1025,10 @@ class LabelPipeline:
         self._merge_product_uses(extracted_data, source_data)
 
         self._promote_source_signal_word(extracted_data, source_data)
-        self._merge_source_list(extracted_data, source_data, "ghs.pictograms")
+        if getattr(sds_text, "detected_ghs_pictograms", None):
+            self._replace_with_authoritative_source_pictograms(extracted_data, source_data)
+        else:
+            self._merge_source_list(extracted_data, source_data, "ghs.pictograms")
         self._merge_source_statement_list(extracted_data.ghs.hazard_statements, source_data.ghs.hazard_statements)
         self._copy_source_evidence(extracted_data, source_data, "ghs.hazard_statements")
         self._merge_source_statement_list(
@@ -1135,6 +1140,26 @@ class LabelPipeline:
         if changed:
             self._set_field_value(extracted_data, field_path, current_values)
             self._copy_source_evidence(extracted_data, source_data, field_path)
+
+    def _replace_with_authoritative_source_pictograms(
+        self,
+        extracted_data: ExtractedData,
+        source_data: ExtractedData,
+    ) -> None:
+        source_values = list(source_data.ghs.pictograms or [])
+        if not source_values:
+            return
+        current_values = list(extracted_data.ghs.pictograms or [])
+        if current_values != source_values:
+            extracted_data.ghs.pictograms = source_values
+            self._append_warning(
+                extracted_data,
+                (
+                    "Authoritative embedded SDS pictograms replaced conflicting AI or text-derived "
+                    f"pictograms: {', '.join(source_values)}."
+                ),
+            )
+        self._copy_source_evidence(extracted_data, source_data, "ghs.pictograms")
 
     def _merge_product_uses(self, extracted_data: ExtractedData, source_data: ExtractedData) -> None:
         source_uses = list(source_data.product.product_uses or [])

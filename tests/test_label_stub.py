@@ -689,7 +689,7 @@ def test_nfpa_704_diamond_is_rendered_on_every_label():
     assert int(nfpa_match.group("x")) >= 470
     assert int(nfpa_match.group("y")) >= 128
     assert "NFPA 704" in svg
-    assert "0=min 4=severe" in svg
+    assert "SDS not listed; default 0" in svg
     assert "#ED1C24" in svg
     assert "#0094D8" in svg
     assert "#FFD700" in svg
@@ -702,7 +702,13 @@ def test_nfpa_704_diamond_renders_source_values():
         product=ProductInfo(name="ClearEdge NFPA Rated Test"),
         ghs=GHSClassification(),
         transport=TransportClassification(),
-        nfpa=NFPA704Ratings(health=2, flammability=3, instability=1, special="OX"),
+        nfpa=NFPA704Ratings(
+            health=2,
+            flammability=3,
+            instability=1,
+            special="OX",
+            source="sds",
+        ),
     )
 
     svg = generator.generate_svg(data, mode="workplace", size="pail")
@@ -711,6 +717,7 @@ def test_nfpa_704_diamond_renders_source_values():
     assert ">3<" in svg
     assert ">1<" in svg
     assert ">OX<" in svg
+    assert "0=min 4=severe" in svg
 
 
 def test_shipped_dot_not_regulated_state_renders():

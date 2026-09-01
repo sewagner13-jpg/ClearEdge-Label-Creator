@@ -376,7 +376,12 @@ Rules:
         nfpa_payload = data.get("nfpa") or {}
         nfpa_defaulted = (
             "nfpa" not in data
-            or any(key not in nfpa_payload or nfpa_payload.get(key) is None for key in ("health", "flammability", "instability"))
+            or nfpa_payload.get("health") is None
+            or nfpa_payload.get("flammability") is None
+            or (
+                nfpa_payload.get("instability") is None
+                and nfpa_payload.get("reactivity") is None
+            )
         )
         data["nfpa"] = {
             "health": nfpa_payload.get("health") if nfpa_payload.get("health") is not None else 0,
@@ -389,13 +394,15 @@ Rules:
                 else 0
             ),
             "special": nfpa_payload.get("special"),
+            "source": "clearedge_default" if nfpa_defaulted else nfpa_payload.get("source", "sds"),
         }
 
         # Validate with Pydantic
         extracted = ExtractedData(**data)
         if nfpa_defaulted:
             extracted.warnings.append(
-                "NFPA 704 ratings were not fully listed in the SDS/TDS extraction response; defaulted missing values to 0 per ClearEdge policy."
+                "NFPA 704 ratings were not fully listed in the SDS/TDS extraction response; "
+                "defaulted missing values to 0 as the ClearEdge default, not a source-derived rating."
             )
 
         # Verify product name matches

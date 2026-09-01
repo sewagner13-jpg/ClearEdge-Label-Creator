@@ -120,7 +120,7 @@ class LabelGenerator:
         NFPA 704
       </text>
       <text x="58" y="22" font-size="7" text-anchor="middle" fill="{{ text_color }}" opacity="0.75">
-        0=min 4=severe
+        {% if nfpa_source == "clearedge_default" %}SDS not listed; default 0{% else %}0=min 4=severe{% endif %}
       </text>
       <g transform="translate(28, 28) scale(0.49)">
         <polygon points="60,0 120,60 60,120 0,60" fill="#222222"/>
@@ -1318,6 +1318,7 @@ class LabelGenerator:
             "nfpa_flammability": data.nfpa.flammability,
             "nfpa_instability": data.nfpa.instability,
             "nfpa_special": data.nfpa.special or "",
+            "nfpa_source": data.nfpa.source,
             "template_id": template_key or self.default_template_id,
         }
 

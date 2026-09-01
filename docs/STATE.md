@@ -7,13 +7,14 @@
 - Current UI release verified from code commit `ead56a2235bdfc3e6f84d967d33decb49e6ae8de`.
 
 ## Active Ticket
-- None. `T0004` is complete.
+- `T0005` - SilaPox pictogram and NFPA source trust.
 
 ## Open Defects
-- None.
+- `D0005-1` High: Category-blind Section 2 matching adds the corrosion pictogram to a Category 2 irritant SilaPox label even though the SDS displays only flame, exclamation, and health hazard.
+- `D0005-2` Medium: Missing NFPA/HMIS data renders as `0-0-0` without machine-readable provenance distinguishing the ClearEdge default from a sourced rating.
 
 ## Current Objective
-- Await the next operator label workflow test.
+- Make embedded SDS pictograms authoritative and make NFPA default provenance explicit without inferring ratings.
 
 ## Verification State
 - `scripts/release.sh --deploy` passed for commit `ead56a2235bdfc3e6f84d967d33decb49e6ae8de`: 212 tests, 85% coverage, browser E2E, static checks, local Railway parity, exact-commit production wait, and live Edgemer generation `label_EdgemerE618_a7fd596f`.
@@ -50,4 +51,4 @@
 - None.
 
 ## Next Action
-- Enter the intended net weight in the live analyzed Edgemer workflow, generate the preview, and review the finished PDF.
+- Add red SilaPox regressions, implement the source-trust fix, run the gated release, and deploy.
