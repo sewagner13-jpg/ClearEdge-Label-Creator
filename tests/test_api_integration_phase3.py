@@ -555,6 +555,52 @@ def test_generate_regulated_dot_label_exposes_separate_sticker_pdf_when_download
         assert len(inline_pdf.pages) == 2
 
 
+def test_generate_class_9_marine_pollutant_label_adds_large_pair_to_page_two(tmp_path):
+    setup_fakes(tmp_path, passed=True)
+    main.label_generator = LabelGenerator()
+
+    with TestClient(main.app) as client:
+        files = {"files": ("silapox-sds.pdf", b"%PDF-1.4 test", "application/pdf")}
+        data = {
+            "product_name": "CE SilaPox EF",
+            "mode": "shipped_dot",
+            "size": "drum",
+            "orientation": "horizontal",
+            "fill_amount": "200 kg",
+            "transport_status": "regulated",
+            "un_number": "UN3082",
+            "proper_shipping_name": "ENVIRONMENTALLY HAZARDOUS SUBSTANCE, LIQUID, N.O.S.",
+            "hazard_class": "9",
+            "packing_group": "III",
+            "marine_pollutant": "true",
+        }
+
+        generate_res = client.post("/api/v1/labels/generate", files=files, data=data)
+
+        assert generate_res.status_code == 200
+        payload = generate_res.json()
+        label_id = payload["label_id"]
+        assert [item["asset_key"] for item in payload["dot_stickers"]["stickers"]] == [
+            "9",
+            "marine_pollutant",
+        ]
+        assert payload["dot_stickers"]["sticker_size_mm"] == 120
+        assert payload["dot_stickers"]["sheet_size"] == "US Letter landscape"
+
+        sticker_preview = client.get(
+            f"/api/v1/labels/{label_id}/dot-stickers/preview-page-1.svg"
+        )
+        assert sticker_preview.status_code == 200
+        assert sticker_preview.text.count('class="dot-sticker"') == 2
+        assert sticker_preview.text.count('data-hazard-class="9"') == 1
+        assert sticker_preview.text.count('data-mark-type="marine_pollutant"') == 1
+
+        label_pdf = PdfReader(BytesIO(client.get(payload["label"]["download_url"]).content))
+        assert len(label_pdf.pages) == 2
+        assert float(label_pdf.pages[1].mediabox.width) == US_LETTER_HEIGHT_PT
+        assert float(label_pdf.pages[1].mediabox.height) == US_LETTER_WIDTH_PT
+
+
 def test_generate_combustible_class_3_label_still_exposes_sticker_sheet(tmp_path):
     setup_fakes(tmp_path, passed=True)
     main.label_generator = LabelGenerator()

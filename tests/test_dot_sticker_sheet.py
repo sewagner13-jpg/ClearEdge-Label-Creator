@@ -24,6 +24,17 @@ def _sticker(hazard_class="3", source="primary", quantity=1):
     }
 
 
+def _marine_pollutant_mark():
+    return {
+        "hazard_class": None,
+        "label_name": "MARINE POLLUTANT",
+        "asset_key": "marine_pollutant",
+        "mark_type": "marine_pollutant",
+        "source": "marine_pollutant",
+        "quantity": 1,
+    }
+
+
 def test_one_required_dot_sticker_fills_letter_sheet_with_four_100mm_placements():
     renderer = DotStickerSheetRenderer()
 
@@ -67,6 +78,32 @@ def test_multiple_required_dot_sticker_types_alternate_on_sheet():
     assert len(pages) == 1
     assert pages[0].count('data-hazard-class="3"') == 2
     assert pages[0].count('data-hazard-class="8"') == 2
+
+
+def test_class_9_and_marine_pollutant_render_once_each_as_large_landscape_pair():
+    renderer = DotStickerSheetRenderer()
+
+    pages = renderer.render_svg_pages([_sticker("9"), _marine_pollutant_mark()])
+
+    large_size_pt = 120 * 72 / 25.4
+    assert len(pages) == 1
+    assert '<svg xmlns="http://www.w3.org/2000/svg" width="792pt" height="612pt"' in pages[0]
+    assert pages[0].count('class="dot-sticker"') == 2
+    assert pages[0].count('data-hazard-class="9"') == 1
+    assert pages[0].count('data-mark-type="marine_pollutant"') == 1
+    assert pages[0].count(f'width="{large_size_pt:.3f}" height="{large_size_pt:.3f}"') == 2
+
+    pdf = renderer.generate_pdf([_sticker("9"), _marine_pollutant_mark()])
+    page = PdfReader(BytesIO(pdf)).pages[0]
+    assert float(page.mediabox.width) == US_LETTER_HEIGHT_PT
+    assert float(page.mediabox.height) == US_LETTER_WIDTH_PT
+
+
+def test_marine_pollutant_mark_uses_packaged_official_image_asset():
+    asset = DotStickerSheetRenderer().assets["marine_pollutant"]
+
+    assert asset.asset_key == "marine_pollutant"
+    assert asset.data_uri.startswith("data:image/png;base64,")
 
 
 def test_five_required_dot_stickers_create_second_page_and_fill_both_pages():

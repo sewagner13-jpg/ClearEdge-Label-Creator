@@ -85,20 +85,20 @@ class LabelGenerator:
 
   <!-- Signal word brand band (kept blank by design) -->
   {% if signal_word %}
-  <rect id="signal-strip" x="10" y="122" width="{{ width - 20 }}" height="30"
+  <rect id="signal-strip" x="10" y="122" width="{{ width - 20 }}" height="{{ signal_strip_height }}"
         fill="{{ brand_purple }}"
         rx="2"/>
-  {% set y_offset = 160 %}
+  {% set y_offset = symbols_y_with_signal %}
   {% else %}
-  {% set y_offset = 124 %}
+  {% set y_offset = symbols_y_without_signal %}
   {% endif %}
 
   <!-- Safety symbols band -->
   <g id="symbols-summary">
-    <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="96"
+    <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="{{ symbols_band_height }}"
           fill="#FBFAFE" stroke="#C8BEDD" stroke-width="1.5" rx="3"/>
     {% if signal_word %}
-    <text id="signal-word-heading" x="20" y="{{ y_offset + 30 }}" font-size="21"
+    <text id="signal-word-heading" x="20" y="{{ y_offset + signal_word_y_offset }}" font-size="{{ signal_word_font_size }}"
           font-weight="bold" fill="{{ brand_purple }}" style="text-transform: uppercase;">
       {{ signal_word }}
     </text>
@@ -106,36 +106,14 @@ class LabelGenerator:
 
     <!-- Pictogram images pulled only from the approved GHS pictogram table asset. -->
     {% for pictogram in pictogram_icons[:4] %}
-    <g transform="translate({{ 20 + (loop.index0 % 4) * 64 }}, {{ y_offset + 36 }})">
-      <image id="pictogram-{{ pictogram.code }}" x="0" y="0" width="58" height="58"
+    <g transform="translate({{ 20 + (loop.index0 % 4) * pictogram_spacing }}, {{ y_offset + pictogram_y_offset }})">
+      <image id="pictogram-{{ pictogram.code }}" x="0" y="0" width="{{ pictogram_size }}" height="{{ pictogram_size }}"
              href="{{ pictogram.data_uri }}" xlink:href="{{ pictogram.data_uri }}"
              preserveAspectRatio="xMidYMid meet"/>
     </g>
     {% endfor %}
-
-    <!-- NFPA 704 Diamond: included on every label. -->
-    <g id="nfpa-704" transform="translate({{ width - 136 }}, {{ y_offset + 4 }})">
-      <rect x="0" y="0" width="116" height="88" fill="white" stroke="#D8D3E6" stroke-width="1" rx="3"/>
-      <text x="58" y="12" font-size="10" text-anchor="middle" fill="{{ text_color }}" font-weight="bold">
-        NFPA 704
-      </text>
-      <text x="58" y="22" font-size="7" text-anchor="middle" fill="{{ text_color }}" opacity="0.75">
-        {% if nfpa_source == "clearedge_default" %}SDS not listed; default 0{% else %}0=min 4=severe{% endif %}
-      </text>
-      <g transform="translate(28, 28) scale(0.49)">
-        <polygon points="60,0 120,60 60,120 0,60" fill="#222222"/>
-        <polygon points="60,8 87,35 60,60 33,35" fill="#ED1C24"/>
-        <polygon points="8,60 33,35 60,60 33,87" fill="#0094D8"/>
-        <polygon points="112,60 87,35 60,60 87,87" fill="#FFD700"/>
-        <polygon points="60,112 33,87 60,60 87,87" fill="white"/>
-        <text x="60" y="45" font-size="22" font-weight="bold" text-anchor="middle" fill="white">{{ nfpa_flammability }}</text>
-        <text x="34" y="68" font-size="22" font-weight="bold" text-anchor="middle" fill="white">{{ nfpa_health }}</text>
-        <text x="87" y="68" font-size="22" font-weight="bold" text-anchor="middle" fill="black">{{ nfpa_instability }}</text>
-        <text x="60" y="94" font-size="14" font-weight="bold" text-anchor="middle" fill="black">{{ nfpa_special }}</text>
-      </g>
-    </g>
   </g>
-  {% set y_offset = y_offset + 104 %}
+  {% set y_offset = y_offset + symbols_advance %}
 
   <!-- Compact TDS product uses. Kept short so compliance blocks keep priority. -->
   {% if product_uses %}
@@ -151,11 +129,43 @@ class LabelGenerator:
     </text>
     {% endfor %}
   </g>
-  {% set y_offset = y_offset + product_uses_block_height + 8 %}
+  {% set y_offset = y_offset + product_uses_block_height + product_uses_gap %}
+  {% endif %}
+
+  {% if safety_columns and (hazard_statements or precautionary_statements) %}
+  <g id="safety-statements" data-safety-columns="{{ safety_groups|length }}">
+    <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="{{ safety_block_height }}"
+          fill="white" stroke="#D8D3E6" stroke-width="1.5" rx="3"/>
+    {% for group in safety_groups %}
+    {% if not loop.first %}
+    <line x1="{{ group.x - 10 }}" y1="{{ y_offset + 6 }}"
+          x2="{{ group.x - 10 }}" y2="{{ y_offset + safety_block_height - 6 }}"
+          stroke="#D8D3E6" stroke-width="1"/>
+    {% endif %}
+    <text x="{{ group.x }}" y="{{ y_offset + safety_heading_y_offset }}"
+          font-size="{{ safety_heading_font_size }}" font-weight="bold" fill="{{ brand_purple }}">
+      {{ group.heading }}
+    </text>
+    {% for statement in group.statements %}
+    <g class="safety-statement" data-code="{{ statement.code }}" aria-label="{{ statement.code }}: {{ statement.text }}">
+      <text x="{{ group.x }}"
+            y="{{ y_offset + safety_text_y_offset + statement.y }}" font-size="{{ safety_font_size }}" fill="{{ text_color }}">
+        <tspan font-weight="bold">{{ statement.code }}:</tspan> {{ statement.lines[0] }}
+      </text>
+      {% for line in statement.lines[1:] %}
+      <text x="{{ group.continuation_x }}"
+            y="{{ y_offset + safety_text_y_offset + statement.y + loop.index * safety_line_height }}"
+            font-size="{{ safety_font_size }}" fill="{{ text_color }}">{{ line }}</text>
+      {% endfor %}
+    </g>
+    {% endfor %}
+    {% endfor %}
+  </g>
+  {% set y_offset = y_offset + safety_block_height + 8 %}
   {% endif %}
 
   <!-- Hazard Statements Section -->
-  {% if hazard_statements %}
+  {% if hazard_statements and not safety_columns %}
   <g id="hazard-statements">
     <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="{{ hazard_block_height }}"
           fill="white" stroke="#D8D3E6" stroke-width="1.5" rx="3"/>
@@ -177,7 +187,7 @@ class LabelGenerator:
   {% endif %}
 
   <!-- Precautionary Statements Section -->
-  {% if precautionary_statements %}
+  {% if precautionary_statements and not safety_columns %}
   <g id="precautionary-statements">
     <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="{{ precautionary_block_height }}"
           fill="white" stroke="#D8D3E6" stroke-width="1.5" rx="3"/>
@@ -201,6 +211,29 @@ class LabelGenerator:
   <!-- DOT TRANSPORT INFORMATION -->
   {% if mode == 'shipped_dot' and un_number %}
   <g id="transport-info">
+    {% if compact_dot_panel %}
+    <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="{{ dot_panel_height }}"
+          fill="#FFF" stroke="{{ brand_purple }}" stroke-width="3" rx="5"/>
+    <rect x="15" y="{{ y_offset + 5 }}" width="{{ width - 30 }}" height="23" fill="{{ brand_purple }}" rx="3"/>
+    <text x="{{ width // 2 }}" y="{{ y_offset + 21 }}" font-size="13" font-weight="bold" fill="white" text-anchor="middle">
+      DOT TRANSPORT INFORMATION
+    </text>
+    <rect x="20" y="{{ y_offset + 35 }}" width="126" height="{{ dot_panel_height - 45 }}"
+          fill="{{ brand_purple_light }}" stroke="{{ brand_purple }}" stroke-width="2" rx="4"/>
+    <text x="83" y="{{ y_offset + 54 }}" font-size="11" font-weight="bold" fill="{{ brand_purple }}" text-anchor="middle">UN/NA ID:</text>
+    <text x="83" y="{{ y_offset + 82 }}" font-size="25" font-weight="bold" fill="{{ brand_purple }}" text-anchor="middle">{{ identification_number }}</text>
+    <g transform="translate(160, {{ y_offset + 35 }})">
+      <text x="0" y="11" font-size="9.5" fill="{{ text_color }}"><tspan font-weight="bold">Proper Shipping Name:</tspan></text>
+      {% for line in shipping_name_lines %}
+      <text x="0" y="{{ 24 + (loop.index0 * 11) }}" font-size="8.6" fill="{{ text_color }}">{{ line }}</text>
+      {% endfor %}
+      <text x="0" y="{{ compact_hazard_class_y }}" font-size="9.2" fill="{{ text_color }}"><tspan font-weight="bold">Hazard Class:</tspan> {{ hazard_class or 'N/A' }}</text>
+      {% if packing_group %}<text x="0" y="{{ compact_packing_group_y }}" font-size="9.2" fill="{{ text_color }}"><tspan font-weight="bold">Packing Group:</tspan> {{ packing_group }}</text>{% endif %}
+      <text x="0" y="{{ compact_dot_label_y }}" font-size="9.2" fill="{{ text_color }}"><tspan font-weight="bold">DOT Label:</tspan> {{ dot_label_name or 'Review required' }}</text>
+      {% if marine_pollutant_display %}<text x="330" y="{{ compact_hazard_class_y }}" font-size="9.2" fill="{{ text_color }}"><tspan font-weight="bold">Marine Pollutant:</tspan> {{ marine_pollutant_display }}</text>{% endif %}
+      {% if limited_quantity_display %}<text x="330" y="{{ compact_packing_group_y }}" font-size="9.2" fill="{{ text_color }}"><tspan font-weight="bold">Limited Quantity:</tspan> {{ limited_quantity_display }}</text>{% endif %}
+    </g>
+    {% else %}
     <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="{{ dot_panel_height }}"
           fill="#FFF" stroke="{{ brand_purple }}" stroke-width="4" rx="5"/>
 
@@ -264,6 +297,7 @@ class LabelGenerator:
            href="{{ dot_label.data_uri }}" xlink:href="{{ dot_label.data_uri }}"
            preserveAspectRatio="xMidYMid meet"/>
     {% endfor %}
+    {% endif %}
     {% endif %}
   </g>
   {% set y_offset = y_offset + dot_panel_height + 10 %}
@@ -843,6 +877,83 @@ class LabelGenerator:
             y += (len(wrapped) * 10) + 3
         return formatted
 
+    @staticmethod
+    def _wrap_all_lines(text: Optional[str], line_width: int) -> list[str]:
+        """Wrap all source text without clipping or adding ellipses."""
+        clean = " ".join(str(text or "").split())
+        if not clean:
+            return [""]
+
+        lines: list[str] = []
+        current = ""
+        for word in clean.split(" "):
+            if len(word) > line_width:
+                if current:
+                    lines.append(current)
+                    current = ""
+                while len(word) > line_width:
+                    lines.append(word[:line_width])
+                    word = word[line_width:]
+            candidate = f"{current} {word}".strip()
+            if len(candidate) <= line_width:
+                current = candidate
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+        return lines or [""]
+
+    def _format_all_statements(
+        self,
+        statements,
+        *,
+        line_width: int,
+        line_height: float,
+    ) -> list[dict]:
+        """Format every SDS statement for the two-column shipped-label panel."""
+        formatted = []
+        y = 0.0
+        for statement in statements or []:
+            code = getattr(statement, "code", None) or "•"
+            text = " ".join(str(getattr(statement, "text", "") or "").split())
+            lines = self._wrap_all_lines(text, line_width)
+            formatted.append({
+                "code": code,
+                "text": text,
+                "lines": lines,
+                "y": y,
+            })
+            y += (len(lines) * line_height) + 2.0
+        return formatted
+
+    @staticmethod
+    def _statement_column_height(formatted_statements, line_height: float) -> float:
+        if not formatted_statements:
+            return 0.0
+        last = formatted_statements[-1]
+        return last["y"] + (len(last["lines"]) * line_height)
+
+    def _split_statements_balanced(self, statements, *, line_width: int) -> tuple[list, list]:
+        """Split ordered statements into two columns with similar wrapped-line weight."""
+        items = list(statements or [])
+        if len(items) < 2:
+            return items, []
+
+        weights = [len(self._wrap_all_lines(getattr(item, "text", ""), line_width)) + 0.25 for item in items]
+        total = sum(weights)
+        running = 0.0
+        best_cut = 1
+        best_delta = float("inf")
+        for index, weight in enumerate(weights[:-1], start=1):
+            running += weight
+            delta = abs((total / 2) - running)
+            if delta < best_delta:
+                best_delta = delta
+                best_cut = index
+        return items[:best_cut], items[best_cut:]
+
     def _fit_safety_statements_for_page(
         self,
         data: ExtractedData,
@@ -854,15 +965,24 @@ class LabelGenerator:
         transport_layout: dict,
     ) -> tuple[list[dict], list[dict]]:
         """Format safety statements so downstream transport content stays above the footer."""
-        base_line_width = 96 if width >= 760 else (78 if width > 612 else 68)
         if mode == "shipped_dot":
-            candidates = (
-                [(4, 2, 4, 2), (3, 2, 3, 2), (2, 2, 2, 1), (1, 1, 1, 1), (1, 1, 0, 0)]
-                if width <= height
-                else [(3, 2, 2, 1), (2, 1, 1, 1), (1, 1, 0, 0), (0, 0, 0, 0)]
+            line_width = 82 if width > height else 58
+            line_height = 8.5 if width > height else 9.0
+            return (
+                self._format_all_statements(
+                    data.ghs.hazard_statements,
+                    line_width=line_width,
+                    line_height=line_height,
+                ),
+                self._format_all_statements(
+                    data.ghs.precautionary_statements,
+                    line_width=line_width,
+                    line_height=line_height,
+                ),
             )
-        else:
-            candidates = [(6, 3, 6, 3), (5, 2, 5, 2), (4, 2, 4, 2), (3, 2, 3, 2), (2, 2, 2, 2)]
+
+        base_line_width = 96 if width >= 760 else (78 if width > 612 else 68)
+        candidates = [(6, 3, 6, 3), (5, 2, 5, 2), (4, 2, 4, 2), (3, 2, 3, 2), (2, 2, 2, 2)]
 
         product_uses_height = 50 if getattr(data.product, "product_uses", None) else 0
         content_start = (160 if signal_word else 124) + 104 + product_uses_height
@@ -1197,12 +1317,23 @@ class LabelGenerator:
         product_area_width = width - product_area_x - 22
         shipment_spacing = self._shipment_header_spacing(width, product_area_x)
         heading = self._format_product_heading(data.product.name, product_area_width)
+        compact_compliance_layout = (
+            mode == "shipped_dot"
+            and width > height
+            and bool(data.ghs.hazard_statements or data.ghs.precautionary_statements)
+        )
+        dense_safety_layout = (
+            compact_compliance_layout
+            and len(data.ghs.hazard_statements) + len(data.ghs.precautionary_statements) > 16
+        )
         product_uses = self._format_product_uses(data.product.product_uses, width=width)
+        if compact_compliance_layout:
+            product_uses = product_uses[:1]
         shipment = data.shipment
         dot_labels = self._format_dot_labels(data.transport)
         shipping_name_lines = self._wrap_lines(
             data.transport.proper_shipping_name,
-            line_width=44 if width > 612 else 38,
+            line_width=68 if compact_compliance_layout else (44 if width > 612 else 38),
             max_lines=2,
         )
         marine_pollutant_display = self._format_true_transport_flag(data.transport.marine_pollutant)
@@ -1213,14 +1344,82 @@ class LabelGenerator:
             marine_pollutant_display=marine_pollutant_display,
             limited_quantity_display=limited_quantity_display,
         )
-        hazard_statements, precautionary_statements = self._fit_safety_statements_for_page(
-            data,
-            mode=mode,
-            width=width,
-            height=height,
-            signal_word=data.ghs.signal_word,
-            transport_layout=transport_layout,
+        if compact_compliance_layout:
+            line_count = max(1, len(shipping_name_lines))
+            compact_hazard_class_y = 24 + ((line_count - 1) * 11) + 17
+            transport_layout.update({
+                "dot_panel_height": 120 if dense_safety_layout else 124,
+                "compact_hazard_class_y": compact_hazard_class_y,
+                "compact_packing_group_y": compact_hazard_class_y + 14,
+                "compact_dot_label_y": compact_hazard_class_y + 28,
+            })
+        else:
+            transport_layout.update({
+                "compact_hazard_class_y": 0,
+                "compact_packing_group_y": 0,
+                "compact_dot_label_y": 0,
+            })
+        safety_columns = mode == "shipped_dot"
+        if dense_safety_layout:
+            safety_line_height = 7.8
+            hazard_statements = self._format_all_statements(
+                data.ghs.hazard_statements,
+                line_width=60,
+                line_height=safety_line_height,
+            )
+            precaution_groups = self._split_statements_balanced(
+                data.ghs.precautionary_statements,
+                line_width=60,
+            )
+            formatted_precaution_groups = [
+                self._format_all_statements(
+                    group,
+                    line_width=60,
+                    line_height=safety_line_height,
+                )
+                for group in precaution_groups
+            ]
+            precautionary_statements = [
+                statement
+                for group in formatted_precaution_groups
+                for statement in group
+            ]
+            safety_groups = [
+                {"heading": "HAZARD STATEMENTS (H)", "statements": hazard_statements},
+                {"heading": "PRECAUTIONARY (P) 1/2", "statements": formatted_precaution_groups[0]},
+                {"heading": "PRECAUTIONARY (P) 2/2", "statements": formatted_precaution_groups[1]},
+            ]
+        else:
+            hazard_statements, precautionary_statements = self._fit_safety_statements_for_page(
+                data,
+                mode=mode,
+                width=width,
+                height=height,
+                signal_word=data.ghs.signal_word,
+                transport_layout=transport_layout,
+            )
+            safety_line_height = 8.5 if compact_compliance_layout else 9.0
+            safety_groups = [
+                {"heading": "HAZARD STATEMENTS (H)", "statements": hazard_statements},
+                {"heading": "PRECAUTIONARY STATEMENTS (P)", "statements": precautionary_statements},
+            ] if safety_columns else []
+
+        visible_safety_groups = [group for group in safety_groups if group["statements"]]
+        safety_column_width = (width - 20) / max(1, len(visible_safety_groups))
+        for index, group in enumerate(visible_safety_groups):
+            group["x"] = 20 + (index * safety_column_width)
+            group["continuation_x"] = group["x"] + 22
+        safety_groups = visible_safety_groups
+        safety_block_padding = 34 if dense_safety_layout else 40
+        safety_block_height = safety_block_padding + max(
+            (
+                self._statement_column_height(group["statements"], safety_line_height)
+                for group in safety_groups
+            ),
+            default=0,
         )
+        if not hazard_statements and not precautionary_statements:
+            safety_block_height = 0
 
         # Prepare template context
         context = {
@@ -1277,10 +1476,29 @@ class LabelGenerator:
                 shipment_spacing["fill_max_chars"],
             ),
             "signal_word": data.ghs.signal_word,
+            "signal_strip_height": 18 if dense_safety_layout else (22 if compact_compliance_layout else 30),
+            "symbols_y_with_signal": 146 if dense_safety_layout else (150 if compact_compliance_layout else 160),
+            "symbols_y_without_signal": 124,
+            "symbols_band_height": 62 if dense_safety_layout else (70 if compact_compliance_layout else 96),
+            "symbols_advance": 68 if dense_safety_layout else (76 if compact_compliance_layout else 104),
+            "signal_word_y_offset": 18 if dense_safety_layout else (21 if compact_compliance_layout else 30),
+            "signal_word_font_size": 16 if dense_safety_layout else (18 if compact_compliance_layout else 21),
+            "pictogram_y_offset": 21 if dense_safety_layout else (25 if compact_compliance_layout else 36),
+            "pictogram_size": 38 if dense_safety_layout else (42 if compact_compliance_layout else 58),
+            "pictogram_spacing": 44 if dense_safety_layout else (48 if compact_compliance_layout else 64),
             "pictograms": data.ghs.pictograms,
             "pictogram_icons": self._format_pictograms(data.ghs.pictograms),
             "product_uses": product_uses,
-            "product_uses_block_height": 40,
+            "product_uses_block_height": 24 if dense_safety_layout else (28 if compact_compliance_layout else 40),
+            "product_uses_gap": 4 if dense_safety_layout else (6 if compact_compliance_layout else 8),
+            "safety_columns": safety_columns,
+            "safety_groups": safety_groups,
+            "safety_block_height": safety_block_height,
+            "safety_font_size": 7.2 if dense_safety_layout else (7.4 if compact_compliance_layout else 7.8),
+            "safety_line_height": safety_line_height,
+            "safety_heading_y_offset": 15 if dense_safety_layout else 17,
+            "safety_text_y_offset": 28 if dense_safety_layout else 34,
+            "safety_heading_font_size": 8.8 if dense_safety_layout else 10.5,
             "hazard_statements": hazard_statements,
             "hazard_block_height": self._statement_block_height(hazard_statements),
             "precautionary_statements": precautionary_statements,
@@ -1295,6 +1513,7 @@ class LabelGenerator:
             "dot_label_name": dot_labels[0]["name"] if dot_labels else None,
             "marine_pollutant_display": marine_pollutant_display,
             "limited_quantity_display": limited_quantity_display,
+            "compact_dot_panel": compact_compliance_layout,
             **transport_layout,
             "supplier_name": self._fit_text(
                 resolved_branding["supplier_name"],

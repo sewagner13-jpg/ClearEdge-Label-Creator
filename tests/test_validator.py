@@ -185,6 +185,33 @@ class TestComplianceValidator:
             for warning in result.warnings
         )
 
+    def test_class_9_marine_pollutant_requires_hazard_label_and_marine_mark(self):
+        data = ExtractedData(
+            product=ProductInfo(name="CE SilaPox EF"),
+            shipment=ShipmentInfo(fill_amount="200 kg", container_type="drum"),
+            ghs=GHSClassification(signal_word="Warning"),
+            transport=TransportClassification(
+                un_number="UN3082",
+                proper_shipping_name="ENVIRONMENTALLY HAZARDOUS SUBSTANCE, LIQUID, N.O.S.",
+                hazard_class="9",
+                packing_group="III",
+                marine_pollutant=True,
+            ),
+        )
+
+        shipping_review = build_dot_shipping_review(data, "shipped_dot")
+
+        assert shipping_review["separate_dot_sticker_required"] is True
+        assert [item["asset_key"] for item in shipping_review["required_stickers"]] == [
+            "9",
+            "marine_pollutant",
+        ]
+        assert all(item["quantity"] == 1 for item in shipping_review["required_stickers"])
+        assert any(
+            action["code"] == "APPLY_MARINE_POLLUTANT_MARK"
+            for action in shipping_review["required_actions"]
+        )
+
     def test_shipped_dot_blocks_unsupported_dot_hazard_label_asset(self, validator):
         """Shipped DOT labels must have a supported DOT hazard label asset."""
         data = ExtractedData(

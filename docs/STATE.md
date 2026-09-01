@@ -7,13 +7,14 @@
 - Current source-trust release verified from code commit `d4bfd9d6d2dfe6da63bb0bd9b39b334e87aa8ec3`.
 
 ## Active Ticket
-- None. `T0005` is complete.
+- `T0006` - SilaPox label and DOT sheet completeness.
 
 ## Open Defects
-- None.
+- `D0006-1` High: Section 14 `marine_pollutant=true` produces only a Class 9 label on page 2 because the DOT review records the marine mark as an action but omits it from `required_stickers`.
+- `D0006-2` High: The horizontal shipped-label fitter suppresses all source-backed H/P statements when the NFPA, product-use, and DOT blocks exhaust the available page height.
 
 ## Current Objective
-- Await operator review of the corrected live SilaPox label.
+- Keep all source-backed H/P statements on page 1 without NFPA, and generate one large Class 9 label plus one large official marine-pollutant mark on page 2.
 
 ## Verification State
 - `scripts/release.sh --deploy` passed for commit `d4bfd9d6d2dfe6da63bb0bd9b39b334e87aa8ec3`: 215 tests, 85% coverage, browser E2E, static checks, local Railway parity, exact-commit production wait, and live Edgemer generation `label_EdgemerE618_8b3e081f`.
@@ -54,4 +55,4 @@
 - None.
 
 ## Next Action
-- Review the corrected live SilaPox preview and continue with the next operator label.
+- Commit the verified T0006 implementation, run the gated release, deploy, and regenerate a live SilaPox label for exact production proof.

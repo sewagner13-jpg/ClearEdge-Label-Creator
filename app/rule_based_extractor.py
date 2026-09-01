@@ -200,21 +200,22 @@ class RuleBasedExtractor:
 
         hazard_statements = [
             HazardStatement(code=code, text=text)
-            for code, text in cls._statement_matches(r"(H[0-9]{3}[A-Z]?)\s*:\s*([^\n]+)", sources)
+            for code, text in cls._coded_statement_matches("H", sources)
         ]
-        for statement in cls._plain_section_statements(
-            sources,
-            start_pattern=r"^\s*Hazard\s+Statement\s*:?\s*$",
-            stop_patterns=(
-                r"^\s*Precautionary\b",
-                r"^\s*Other\s+Hazards?\b",
-                r"^\s*3\.",
-                r"^\s*Section\s+3\b",
-            ),
-        ):
-            key = statement.lower()
-            if key not in {item.text.lower() for item in hazard_statements}:
-                hazard_statements.append(HazardStatement(code=None, text=statement))
+        if not hazard_statements:
+            for statement in cls._plain_section_statements(
+                sources,
+                start_pattern=r"^\s*Hazard\s+Statement\s*:?\s*$",
+                stop_patterns=(
+                    r"^\s*Precautionary\b",
+                    r"^\s*Other\s+Hazards?\b",
+                    r"^\s*3\.",
+                    r"^\s*Section\s+3\b",
+                ),
+            ):
+                key = statement.lower()
+                if key not in {item.text.lower() for item in hazard_statements}:
+                    hazard_statements.append(HazardStatement(code=None, text=statement))
         data.ghs.hazard_statements = hazard_statements
 
         if not detected_pictograms:
@@ -258,27 +259,28 @@ class RuleBasedExtractor:
 
         precautionary_statements = [
             PrecautionaryStatement(code=code, text=text)
-            for code, text in cls._statement_matches(r"(P[0-9]{3}(?:\+P[0-9]{3})*)\s*:\s*([^\n]+)", sources)
+            for code, text in cls._coded_statement_matches("P", sources)
         ]
-        for statement in cls._plain_section_statements(
-            sources,
-            start_pattern=r"^\s*Precautionary\b",
-            stop_patterns=(
-                r"^\s*3\.",
-                r"^\s*Section\s+3\b",
-                r"^\s*14\.",
-                r"^\s*Section\s+14\b",
-                r"^\s*Transport\s+information\b",
-                r"^\s*HMIS\s+Hazard\s+ID\b",
-            ),
-            skip_patterns=(
-                r"^\s*Statements?\s*$",
-                r"^\s*(Prevention|Response|Storage|Disposal|General)\s*:?\s*$",
-            ),
-        ):
-            key = statement.lower()
-            if key not in {item.text.lower() for item in precautionary_statements}:
-                precautionary_statements.append(PrecautionaryStatement(code=None, text=statement))
+        if not precautionary_statements:
+            for statement in cls._plain_section_statements(
+                sources,
+                start_pattern=r"^\s*Precautionary\b",
+                stop_patterns=(
+                    r"^\s*3\.",
+                    r"^\s*Section\s+3\b",
+                    r"^\s*14\.",
+                    r"^\s*Section\s+14\b",
+                    r"^\s*Transport\s+information\b",
+                    r"^\s*HMIS\s+Hazard\s+ID\b",
+                ),
+                skip_patterns=(
+                    r"^\s*Statements?\s*$",
+                    r"^\s*(Prevention|Response|Storage|Disposal|General)\s*:?\s*$",
+                ),
+            ):
+                key = statement.lower()
+                if key not in {item.text.lower() for item in precautionary_statements}:
+                    precautionary_statements.append(PrecautionaryStatement(code=None, text=statement))
         data.ghs.precautionary_statements = precautionary_statements
 
     @classmethod
@@ -745,17 +747,69 @@ class RuleBasedExtractor:
             )
 
     @classmethod
-    def _statement_matches(cls, pattern: str, sources) -> list[tuple[str, str]]:
+    def _coded_statement_matches(cls, prefix: str, sources) -> list[tuple[str, str]]:
+        """Extract coded SDS statements with optional colons and wrapped lines."""
         matches: list[tuple[str, str]] = []
         seen = set()
-        for doc, page, text in sources:
-            for match in re.finditer(pattern, text, flags=re.IGNORECASE):
-                code = match.group(1).upper()
-                statement = cls._humanize_compacted_statement(match.group(2))
-                key = (code, statement.lower())
+
+        code_re = re.compile(
+            rf"^\s*({prefix}[0-9]{{3}}[A-Z]?(?:\s*\+\s*(?:{prefix})?[0-9]{{3}}[A-Z]?)*)(?:\s*:\s*|\s+)(.*)$",
+            flags=re.IGNORECASE,
+        )
+        category_re = re.compile(
+            r"^\s*(Prevention|Response|Storage|Disposal|General)\b\s*:?[ \t]*(.*)$",
+            flags=re.IGNORECASE,
+        )
+        stop_re = re.compile(
+            r"^\s*(?:Section\s+\d+|\d+\.|SAFETY\s+DATA\s+SHEET|Hazard\s+Statements?|Preca(?:u)?tionary\s+Statements?)\b",
+            flags=re.IGNORECASE,
+        )
+
+        for _doc, _page, text in sources:
+            current_code: str | None = None
+            current_parts: list[str] = []
+            pending_prefix = ""
+
+            def flush() -> None:
+                nonlocal current_code, current_parts
+                if not current_code:
+                    return
+                statement = cls._humanize_compacted_statement(" ".join(current_parts))
+                key = (current_code, statement.lower())
                 if statement and key not in seen:
-                    matches.append((code, statement))
+                    matches.append((current_code, statement))
                     seen.add(key)
+                current_code = None
+                current_parts = []
+
+            for raw_line in text.splitlines():
+                clean = raw_line.strip()
+                if not clean:
+                    continue
+
+                category_match = category_re.match(clean)
+                if category_match:
+                    flush()
+                    pending_prefix = category_match.group(2).strip()
+                    continue
+
+                code_match = code_re.match(clean)
+                if code_match:
+                    flush()
+                    current_code = re.sub(r"\s+", "", code_match.group(1).upper())
+                    current_parts = [part for part in (pending_prefix, code_match.group(2).strip()) if part]
+                    pending_prefix = ""
+                    continue
+
+                if stop_re.match(clean):
+                    flush()
+                    pending_prefix = ""
+                    continue
+
+                if current_code and current_parts and not re.search(r"[.!?]\s*$", current_parts[-1]):
+                    current_parts.append(clean)
+
+            flush()
         return matches
 
     @staticmethod

@@ -146,9 +146,13 @@ def build_dot_shipping_review(data: ExtractedData, mode: str) -> dict:
 
     if regulated_for_label_actions and data.transport.marine_pollutant is True:
         required_actions.append({
-            "code": "MARINE_POLLUTANT_MARK_REVIEW",
+            "code": "APPLY_MARINE_POLLUTANT_MARK",
             "field": "transport.marine_pollutant",
-            "message": "Marine pollutant marking may be required; confirm against the shipment mode and SDS.",
+            "message": (
+                "The SDS identifies this product as a marine pollutant. Apply the separate "
+                "marine-pollutant mark in association with the hazard label and confirm final "
+                "shipment-mode applicability."
+            ),
         })
 
     if regulated_for_label_actions and _truthy_limited_quantity(data.transport.limited_quantity):
@@ -249,6 +253,15 @@ def _required_dot_stickers(data: ExtractedData) -> list[dict]:
     add_sticker(data.transport.hazard_class, "primary")
     for subsidiary_class in data.transport.subsidiary_hazard_classes:
         add_sticker(subsidiary_class, "subsidiary")
+    if data.transport.marine_pollutant is True:
+        stickers.append({
+            "hazard_class": None,
+            "label_name": "MARINE POLLUTANT",
+            "asset_key": "marine_pollutant",
+            "mark_type": "marine_pollutant",
+            "source": "marine_pollutant",
+            "quantity": 1,
+        })
     return stickers
 
 

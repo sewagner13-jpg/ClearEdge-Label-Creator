@@ -22,9 +22,10 @@ from .canva_export import (
 from .config import settings
 from .dot_shipping import build_dot_shipping_review
 from .dot_sticker_sheet import (
-    DOT_STICKER_SIZE_MM,
     DotStickerSheetRenderer,
     DotStickerSheetUnavailable,
+    sheet_size_for,
+    sticker_size_mm_for,
     unsupported_dot_sticker_classes,
 )
 from .rule_based_extractor import RuleBasedExtractor
@@ -1709,8 +1710,8 @@ class LabelPipeline:
         return {
             "available": bool(sticker_url),
             "url": sticker_url,
-            "sticker_size_mm": DOT_STICKER_SIZE_MM,
-            "sheet_size": "US Letter",
+            "sticker_size_mm": sticker_size_mm_for(required_stickers),
+            "sheet_size": sheet_size_for(required_stickers),
             "stickers": required_stickers,
             "preview_pages": LabelPipeline._dot_sticker_preview_pages(
                 label_id,

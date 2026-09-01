@@ -204,6 +204,83 @@ def test_rule_based_extractor_does_not_treat_silapox_category_2_irritation_as_co
     assert any("ClearEdge default" in warning for warning in extracted.warnings)
 
 
+def test_rule_based_extractor_captures_all_silapox_coded_h_and_p_statements_without_colons():
+    extracted = RuleBasedExtractor.extract(
+        sds_text=_text(
+            """
+            Section 2 Hazards Identification
+            2.2 Hazard Statements:
+            H227                                 Combustible liquid
+            H315                                 Causes skin irritation
+            H317                                 May cause an allergic skin reaction
+            H319                                 Causes serious eye irritation
+            H341                                 Suspected of causing genetic defects
+            H351                                 Suspected of causing cancer
+            H361                                 Suspected of damaging fertility or the unborn child
+            H411                                 Toxic to aquatic life with long lasting effects
+            Precationary Statements
+            Prevention
+            P203                                 Obtain, read and follow all safety instructions before use.
+            P210                                 Keep away from heat, hot surfaces, sparks, open flames and other
+                                                 ignition sources. No smoking.
+            P261                                 Avoid breathing dust/fume/gas/mist/vapours/spray.
+            P264                                 Wash hands and other parts of the body thoroughly after handling.
+            P272                                 Contaminated work clothing should not be allowed out of the
+                                                 workplace.
+            P273                                 Avoid release to the environment.
+            P280                                 Wear protective gloves/protective clothing/eye protection/face
+                                                 protection/hearing protection.
+            P264+P265                            Wash hands and other parts of the body thoroughly after handling. Do
+                                                 not touch eyes.
+            Response
+            P318                                 IF exposed or concerned, get medical advice.
+            P321                                 Specific treatment (see measures on this label).
+            P391                                 Collect spillage.
+            P302+P352                            IF ON SKIN: Wash with plenty of water.
+            P332+P317                            If skin irritation occurs: Get medical help.
+            P333+P317                            If skin irritation or rash occurs: Get medical help.
+            P337+P317                            If eye irritation persists: Get medical help.
+            P362+P364                            Take off contaminated clothing and wash it before reuse.
+            P370+P378                            In case of fire: Use suitable extinguishing medium to extinguish.
+            P305+P351+P338                       IF IN EYES: Rinse cautiously with water for several minutes. Remove
+                                                 contact lenses, if present and easy to do. Continue rinsing.
+            Storage
+            P403                                 Store in a well-ventilated place.
+            P405                                 Store locked up.
+            Disposal                             Dispose of contents/container in accordance with
+            P501                                 local/regional/national/international regulations.
+            Section 3 Composition / Information on Ingredients
+            """
+        ),
+        tds_text=None,
+        product_name="CE SilaPox EF",
+    )
+
+    assert [statement.code for statement in extracted.ghs.hazard_statements] == [
+        "H227", "H315", "H317", "H319", "H341", "H351", "H361", "H411",
+    ]
+    assert extracted.ghs.hazard_statements[-1].text == (
+        "Toxic to aquatic life with long lasting effects."
+    )
+    expected_p_codes = [
+        "P203", "P210", "P261", "P264", "P272", "P273", "P280", "P264+P265",
+        "P318", "P321", "P391", "P302+P352", "P332+P317", "P333+P317",
+        "P337+P317", "P362+P364", "P370+P378", "P305+P351+P338", "P403",
+        "P405", "P501",
+    ]
+    assert [statement.code for statement in extracted.ghs.precautionary_statements] == expected_p_codes
+    by_code = {statement.code: statement.text for statement in extracted.ghs.precautionary_statements}
+    assert by_code["P210"] == (
+        "Keep away from heat, hot surfaces, sparks, open flames and other ignition sources. No smoking."
+    )
+    assert by_code["P305+P351+P338"] == (
+        "IF IN EYES: Rinse cautiously with water for several minutes. Remove contact lenses, if present and easy to do. Continue rinsing."
+    )
+    assert by_code["P501"] == (
+        "Dispose of contents/container in accordance with local/regional/national/international regulations."
+    )
+
+
 def test_rule_based_extractor_captures_transport_class_and_pg_from_section_14_shorthand():
     extracted = RuleBasedExtractor.extract(
         sds_text=_text(

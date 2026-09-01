@@ -288,7 +288,7 @@ def test_label_uses_brand_purple_for_previous_red_accents():
     assert "data:image/png;base64" in svg
 
 
-def test_label_theme_uses_clearedge_royal_purple_without_changing_regulatory_colors():
+def test_label_theme_uses_clearedge_royal_purple_and_approved_ghs_asset():
     generator = LabelGenerator()
     data = ExtractedData(
         product=ProductInfo(name="ClearEdge Purple Test"),
@@ -301,10 +301,9 @@ def test_label_theme_uses_clearedge_royal_purple_without_changing_regulatory_col
 
     assert "#110251" in svg
     assert "#1B006E" not in svg
-    assert "#ED1C24" in svg
-    assert "#0094D8" in svg
-    assert "#FFD700" in svg
     assert 'id="pictogram-GHS07"' in svg
+    assert "data:image/png;base64" in svg
+    assert 'id="nfpa-704"' not in svg
 
 
 def test_signal_word_replaces_ghs_heading_and_strip_stays_blank():
@@ -672,7 +671,7 @@ def test_all_ghs_assets_are_derived_from_approved_table_file():
         assert asset["source"] == "GHS Pictogram Table.png"
 
 
-def test_nfpa_704_diamond_is_rendered_on_every_label():
+def test_nfpa_704_diamond_is_not_rendered_on_product_labels():
     generator = LabelGenerator()
     data = ExtractedData(
         product=ProductInfo(name="ClearEdge NFPA Test"),
@@ -682,21 +681,13 @@ def test_nfpa_704_diamond_is_rendered_on_every_label():
 
     svg = generator.generate_svg(data, mode="workplace", size="pail")
 
-    assert 'id="nfpa-704"' in svg
+    assert 'id="nfpa-704"' not in svg
     assert 'id="symbols-summary"' in svg
-    nfpa_match = re.search(r'id="nfpa-704" transform="translate\((?P<x>\d+), (?P<y>\d+)\)"', svg)
-    assert nfpa_match
-    assert int(nfpa_match.group("x")) >= 470
-    assert int(nfpa_match.group("y")) >= 128
-    assert "NFPA 704" in svg
-    assert "SDS not listed; default 0" in svg
-    assert "#ED1C24" in svg
-    assert "#0094D8" in svg
-    assert "#FFD700" in svg
-    assert svg.count(">0<") == 3
+    assert "NFPA 704" not in svg
+    assert "SDS not listed; default 0" not in svg
 
 
-def test_nfpa_704_diamond_renders_source_values():
+def test_nfpa_source_values_remain_metadata_only_and_are_not_rendered():
     generator = LabelGenerator()
     data = ExtractedData(
         product=ProductInfo(name="ClearEdge NFPA Rated Test"),
@@ -713,11 +704,91 @@ def test_nfpa_704_diamond_renders_source_values():
 
     svg = generator.generate_svg(data, mode="workplace", size="pail")
 
-    assert ">2<" in svg
-    assert ">3<" in svg
-    assert ">1<" in svg
-    assert ">OX<" in svg
-    assert "0=min 4=severe" in svg
+    assert 'id="nfpa-704"' not in svg
+    assert "NFPA 704" not in svg
+    assert "0=min 4=severe" not in svg
+
+
+def test_silapox_horizontal_label_renders_all_source_h_and_p_statements_without_nfpa():
+    generator = LabelGenerator()
+    hazards = [
+        ("H227", "Combustible liquid"),
+        ("H315", "Causes skin irritation"),
+        ("H317", "May cause an allergic skin reaction"),
+        ("H319", "Causes serious eye irritation"),
+        ("H341", "Suspected of causing genetic defects"),
+        ("H351", "Suspected of causing cancer"),
+        ("H361", "Suspected of damaging fertility or the unborn child"),
+        ("H411", "Toxic to aquatic life with long lasting effects"),
+    ]
+    precautions = [
+        ("P203", "Obtain, read and follow all safety instructions before use."),
+        ("P210", "Keep away from heat, hot surfaces, sparks, open flames and other ignition sources. No smoking."),
+        ("P261", "Avoid breathing dust/fume/gas/mist/vapours/spray."),
+        ("P264", "Wash hands and other parts of the body thoroughly after handling."),
+        ("P272", "Contaminated work clothing should not be allowed out of the workplace."),
+        ("P273", "Avoid release to the environment."),
+        ("P280", "Wear protective gloves/protective clothing/eye protection/face protection/hearing protection."),
+        ("P264+P265", "Wash hands and other parts of the body thoroughly after handling. Do not touch eyes."),
+        ("P318", "IF exposed or concerned, get medical advice."),
+        ("P321", "Specific treatment (see measures on this label)."),
+        ("P391", "Collect spillage."),
+        ("P302+P352", "IF ON SKIN: Wash with plenty of water."),
+        ("P332+P317", "If skin irritation occurs: Get medical help."),
+        ("P333+P317", "If skin irritation or rash occurs: Get medical help."),
+        ("P337+P317", "If eye irritation persists: Get medical help."),
+        ("P362+P364", "Take off contaminated clothing and wash it before reuse."),
+        ("P370+P378", "In case of fire: Use suitable extinguishing medium to extinguish."),
+        ("P305+P351+P338", "IF IN EYES: Rinse cautiously with water for several minutes. Remove contact lenses, if present and easy to do. Continue rinsing."),
+        ("P403", "Store in a well-ventilated place."),
+        ("P405", "Store locked up."),
+        ("P501", "Dispose of contents/container in accordance with local/regional/national/international regulations."),
+    ]
+    data = ExtractedData(
+        product=ProductInfo(name="CE SilaPox EF", product_uses=["High-temperature coatings"]),
+        shipment=ShipmentInfo(fill_amount="200 kg", container_type="drum"),
+        ghs=GHSClassification(
+            signal_word="Warning",
+            pictograms=["GHS02", "GHS07", "GHS08"],
+            hazard_statements=[HazardStatement(code=code, text=text) for code, text in hazards],
+            precautionary_statements=[
+                PrecautionaryStatement(code=code, text=text) for code, text in precautions
+            ],
+        ),
+        transport=TransportClassification(
+            un_number="UN3082",
+            proper_shipping_name="ENVIRONMENTALLY HAZARDOUS SUBSTANCE, LIQUID, N.O.S.",
+            hazard_class="9",
+            packing_group="III",
+            marine_pollutant=True,
+        ),
+    )
+
+    svg = generator.generate_svg(
+        data,
+        mode="shipped_dot",
+        size="drum",
+        orientation="horizontal",
+    )
+
+    assert 'id="nfpa-704"' not in svg
+    assert 'id="safety-statements"' in svg
+    assert 'data-safety-columns="3"' in svg
+    for code, text in hazards + precautions:
+        assert code in svg
+        assert text in svg
+    safety_block = re.search(
+        r'<g id="safety-statements"[^>]*>[\s\S]*?<rect x="10" y="(?P<y>[\d.]+)" width="[\d.]+" height="(?P<height>[\d.]+)"',
+        svg,
+    )
+    transport_block = re.search(
+        r'<g id="transport-info">[\s\S]*?<rect x="10" y="(?P<y>[\d.]+)" width="[\d.]+" height="(?P<height>[\d.]+)"',
+        svg,
+    )
+    footer_line = re.search(r'<g id="footer">[\s\S]*?<line x1="10" y1="(?P<y>[\d.]+)"', svg)
+    assert safety_block and transport_block and footer_line
+    assert float(safety_block.group("y")) + float(safety_block.group("height")) < float(transport_block.group("y"))
+    assert float(transport_block.group("y")) + float(transport_block.group("height")) <= float(footer_line.group("y")) - 8
 
 
 def test_shipped_dot_not_regulated_state_renders():
@@ -848,13 +919,13 @@ def test_dense_shipped_label_keeps_transport_panel_above_footer():
     )
 
     footer_line = re.search(r'<g id="footer">[\s\S]*?<line x1="10" y1="(?P<y>\d+)" x2="\d+" y2="\d+"\s+stroke="#110251"', svg)
-    transport_rect = re.search(r'<rect x="10" y="(?P<y>\d+)" width="\d+" height="(?P<height>\d+)"\s+fill="#FFF" stroke="#110251" stroke-width="4"', svg)
+    transport_rect = re.search(r'<g id="transport-info">[\s\S]*?<rect x="10" y="(?P<y>[\d.]+)" width="[\d.]+" height="(?P<height>[\d.]+)"\s+fill="#FFF" stroke="#110251" stroke-width="[34]"', svg)
 
     assert footer_line
     assert transport_rect
     assert 'id="product-uses"' in svg
-    transport_bottom = int(transport_rect.group("y")) + int(transport_rect.group("height"))
-    assert transport_bottom <= int(footer_line.group("y")) - 8
+    transport_bottom = float(transport_rect.group("y")) + float(transport_rect.group("height"))
+    assert transport_bottom <= float(footer_line.group("y")) - 8
 
 
 def test_dot_transport_panel_offsets_fields_after_wrapped_shipping_name():
