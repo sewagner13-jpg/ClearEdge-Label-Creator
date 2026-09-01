@@ -42,4 +42,14 @@ Deployment is in scope under the standing deploy-after-change instruction. Use o
 - The horizontal DOT and safety panels remain above the footer with no overlap.
 
 ## Status
-In progress.
+Complete.
+
+## Verification
+- Red proof: the initial focused run failed 7 tests because NFPA was still rendered, the marine mark was not a supported printable asset, and the sticker payload contained only Class 9.
+- Red proof: the SilaPox parser regression initially returned no colonless H-codes and omitted the wrapped P-code set.
+- Green proof: `./.venv/bin/python -m pytest -q` passed 221 tests with 86% coverage.
+- Static proof: `python -m compileall -q app`, `node --check netlify-frontend/app.js`, and `git diff --check` passed.
+- Gated release: commit `3bf69729f82b6212b7c785d5cdd1ebbc2908c615` passed browser E2E, local Railway parity, exact-commit deployment, and live Edgemer generation `label_EdgemerE618_7d9e2809`.
+- Live SilaPox proof: `label_CESilaPoxEF_5a9f6c7b` parsed 8 H-statements, 21 P-statements, Warning, GHS02/GHS07/GHS08, UN3082, Class 9, PG III, and marine pollutant status without manual transport fields.
+- Live artifact proof: preview and full PDF contain two pages; page 1 has no NFPA element; page 2 is 792 x 612 pt with exactly one 120 mm Class 9 label and one 120 mm marine-pollutant mark.
+- Release artifacts: `test_output/release/3bf69729f82b/`.

@@ -4,19 +4,22 @@
 - Frontend: https://clearedge-label-creator.netlify.app
 - Backend: https://clearedgelabelcreator-production.up.railway.app
 - Production branch: `claude/product-label-pipeline-Gw3uq`
-- Current source-trust release verified from code commit `d4bfd9d6d2dfe6da63bb0bd9b39b334e87aa8ec3`.
+- Current label-completeness release verified from code commit `3bf69729f82b6212b7c785d5cdd1ebbc2908c615`.
 
 ## Active Ticket
-- `T0006` - SilaPox label and DOT sheet completeness.
+- None. `T0006` is complete.
 
 ## Open Defects
-- `D0006-1` High: Section 14 `marine_pollutant=true` produces only a Class 9 label on page 2 because the DOT review records the marine mark as an action but omits it from `required_stickers`.
-- `D0006-2` High: The horizontal shipped-label fitter suppresses all source-backed H/P statements when the NFPA, product-use, and DOT blocks exhaust the available page height.
+- None.
 
 ## Current Objective
-- Keep all source-backed H/P statements on page 1 without NFPA, and generate one large Class 9 label plus one large official marine-pollutant mark on page 2.
+- Await operator review of the corrected live SilaPox label.
 
 ## Verification State
+- `scripts/release.sh --deploy` passed for commit `3bf69729f82b6212b7c785d5cdd1ebbc2908c615`: 221 tests, 86% coverage, browser E2E, static checks, local Railway parity, exact-commit production wait, and live Edgemer generation `label_EdgemerE618_7d9e2809`.
+- Live SilaPox generation `label_CESilaPoxEF_5a9f6c7b` parsed all 8 H-statements and 21 P-statements, Warning, GHS02/GHS07/GHS08, UN3082, Class 9, PG III, and `marine_pollutant=true` without manual transport inputs.
+- The live page-1 SVG contains all 29 coded statements, uses a three-column no-overlap safety layout, and has no `nfpa-704` element. The full PDF has two pages; page 2 is US Letter landscape with one 120 mm Class 9 label and one 120 mm official marine-pollutant mark.
+- Marine inventory, two-up sheet layout, full SilaPox statement rendering, and colonless/wrapped SDS parsing were proven red before the implementation was proven green. Release artifacts: `test_output/release/3bf69729f82b/`.
 - `scripts/release.sh --deploy` passed for commit `d4bfd9d6d2dfe6da63bb0bd9b39b334e87aa8ec3`: 215 tests, 85% coverage, browser E2E, static checks, local Railway parity, exact-commit production wait, and live Edgemer generation `label_EdgemerE618_8b3e081f`.
 - Live SilaPox generation `label_CESilaPoxEF_bdd3bb8b` returned exactly `GHS02`, `GHS07`, and `GHS08`, excluded `GHS05`, retained `Warning`, and returned NFPA `0-0-0` with `source=clearedge_default`.
 - The live SilaPox preview SVG contains the three approved pictogram assets, excludes the corrosion asset, and displays `SDS not listed; default 0`. Release artifacts: `test_output/release/d4bfd9d6d2df/`.
@@ -55,4 +58,4 @@
 - None.
 
 ## Next Action
-- Commit the verified T0006 implementation, run the gated release, deploy, and regenerate a live SilaPox label for exact production proof.
+- Review the corrected live SilaPox two-page preview and continue with the next operator label.
