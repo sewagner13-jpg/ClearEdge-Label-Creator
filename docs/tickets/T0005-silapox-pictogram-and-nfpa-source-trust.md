@@ -32,4 +32,10 @@ Deployment is in scope under the standing deploy-after-change instruction. Use o
 - Actual local `SDS_LYLC-405_Silicone Resin EF_LYSON.pdf` detects exactly the three Section 2 pictograms and no NFPA/HMIS evidence.
 
 ## Status
-In progress.
+Complete.
+
+## Verification
+- `PYTHON_BIN=./.venv/bin/python ./scripts/release.sh --deploy --sds '/Users/seanwagner/Downloads/Edgemer E618_MSDS (1).pdf' --tds '/Users/seanwagner/Downloads/Edgemer E618 TDS (1).pdf'` passed for `d4bfd9d6d2dfe6da63bb0bd9b39b334e87aa8ec3` with 215 tests, 85% coverage, browser E2E, static checks, local Railway parity, and exact-commit production confirmation.
+- Live SilaPox acceptance label: `label_CESilaPoxEF_bdd3bb8b`.
+- Live API assertions: `pictograms=[GHS02,GHS07,GHS08]`, no `GHS05`, `signal_word=Warning`, and NFPA `0-0-0` with `source=clearedge_default`.
+- Live preview assertions: approved flame, exclamation, and health-hazard assets present; corrosion absent; `SDS not listed; default 0` present.

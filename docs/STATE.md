@@ -4,19 +4,22 @@
 - Frontend: https://clearedge-label-creator.netlify.app
 - Backend: https://clearedgelabelcreator-production.up.railway.app
 - Production branch: `claude/product-label-pipeline-Gw3uq`
-- Current UI release verified from code commit `ead56a2235bdfc3e6f84d967d33decb49e6ae8de`.
+- Current source-trust release verified from code commit `d4bfd9d6d2dfe6da63bb0bd9b39b334e87aa8ec3`.
 
 ## Active Ticket
-- `T0005` - SilaPox pictogram and NFPA source trust.
+- None. `T0005` is complete.
 
 ## Open Defects
-- `D0005-1` High: Category-blind Section 2 matching adds the corrosion pictogram to a Category 2 irritant SilaPox label even though the SDS displays only flame, exclamation, and health hazard.
-- `D0005-2` Medium: Missing NFPA/HMIS data renders as `0-0-0` without machine-readable provenance distinguishing the ClearEdge default from a sourced rating.
+- None.
 
 ## Current Objective
-- Make embedded SDS pictograms authoritative and make NFPA default provenance explicit without inferring ratings.
+- Await operator review of the corrected live SilaPox label.
 
 ## Verification State
+- `scripts/release.sh --deploy` passed for commit `d4bfd9d6d2dfe6da63bb0bd9b39b334e87aa8ec3`: 215 tests, 85% coverage, browser E2E, static checks, local Railway parity, exact-commit production wait, and live Edgemer generation `label_EdgemerE618_8b3e081f`.
+- Live SilaPox generation `label_CESilaPoxEF_bdd3bb8b` returned exactly `GHS02`, `GHS07`, and `GHS08`, excluded `GHS05`, retained `Warning`, and returned NFPA `0-0-0` with `source=clearedge_default`.
+- The live SilaPox preview SVG contains the three approved pictogram assets, excludes the corrosion asset, and displays `SDS not listed; default 0`. Release artifacts: `test_output/release/d4bfd9d6d2df/`.
+- SilaPox category, embedded-artwork reconciliation, and NFPA-provenance regressions were each proven red before the implementation was proven green.
 - `scripts/release.sh --deploy` passed for commit `ead56a2235bdfc3e6f84d967d33decb49e6ae8de`: 212 tests, 85% coverage, browser E2E, static checks, local Railway parity, exact-commit production wait, and live Edgemer generation `label_EdgemerE618_a7fd596f`.
 - Live frontend browser proof at `?release=ead56a2`: Generate remained clickable with blank weight, named only `Net Weight / Fill Amount` as missing, focused `fillAmount`, and did not start generation.
 - Live Edgemer analysis showed `Section 14 parsed: Not regulated for DOT transport` with source `SDS, Section 14, page 5: UN Number Not applicable`; the analysis result repeated the conclusion and browser error/warning logs were empty.
@@ -51,4 +54,4 @@
 - None.
 
 ## Next Action
-- Add red SilaPox regressions, implement the source-trust fix, run the gated release, and deploy.
+- Review the corrected live SilaPox preview and continue with the next operator label.
