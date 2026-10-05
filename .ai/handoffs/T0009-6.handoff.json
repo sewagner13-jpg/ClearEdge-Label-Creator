@@ -1,0 +1,28 @@
+{
+  "task_id": "T0009",
+  "repo": "/Users/seanwagner/Documents/Playground/ClearEdge-Label-Creator",
+  "kind": "review",
+  "tier": "frontier",
+  "objective": "Review the exact label-appearance delta that removes the visible NFPA caption/panel and clears only the outer backgrounds of approved GHS pictogram crops.",
+  "current_state": "Branch codex/T0009-us-label-legibility is at commit d6afe79. Review only be14736..d6afe79. Production was not deployed.",
+  "relevant_surface": [
+    "git diff be14736..d6afe79 -- app/label_stub.py tests/test_label_stub.py",
+    "app/label_stub.py NFPA SVG group and _edge_transparent_png_data_uri",
+    "tests/test_label_stub.py approved-asset transparency and NFPA no-caption regressions"
+  ],
+  "changes": "The visible NFPA 704 - SUPPLEMENTAL text and its white rounded panel were removed while preserving the colored 3-1-0 diamond and internal source/role metadata. Approved GHS table-derived PNG crops are transformed at runtime by flood-clearing only edge-connected near-white pixels; enclosed white diamond interiors remain opaque. The transformed data URIs are cached to avoid repeated image-processing cost. No classification, dimensions, approved asset selection, H/P statement, DOT data, or sticker-sheet behavior changed.",
+  "evidence": [
+    "Targeted transparency/NFPA tests passed.",
+    "Complete renderer suite passed 55 tests in 5.61 seconds after caching; the uncached implementation took 46.10 seconds.",
+    "Full release verification passed at exact commit d6afe79: 244 tests, browser E2E, 86 percent coverage, static verification, and local Railway-parity startup; no deployment was performed.",
+    "Fresh source-exact CE SilaCure SC PNG/PDF/SVG inspection shows no rectangular white GHS crop backgrounds, no NFPA caption/panel, intact white GHS diamond interiors, intact NFPA white quadrant, and no overlap or clipping."
+  ],
+  "assignment": "Inspect the exact delta for critical, high, or medium defects. Confirm the edge flood cannot erase the enclosed white GHS field, only approved source assets remain in use, caching cannot cross-contaminate assets, and removing the NFPA panel/caption does not remove ratings or displace required content. Report material findings in one batch with file and line evidence. Do not edit files, deploy, or rerun tests.",
+  "constraints": [
+    "The required white interior of each red GHS diamond must remain opaque.",
+    "Approved GHS source assets remain the only pictogram source; no symbols may be invented or redrawn.",
+    "NFPA remains supplemental internal metadata and source-transcribed 3-1-0 values, but the user explicitly requested no visible caption or panel background.",
+    "No production deployment and no compliance certification."
+  ],
+  "return_contract": "Return exactly one raw JSON object with only these top-level keys: kind, summary, acceptable, findings, evidence_used, could_not_verify, recommendation. Each finding must contain only severity, location, defect, and reasoning. Do not include markdown fences, a preface, trailing prose, extra finding keys, or a meta key. Set acceptable=true only when there are no critical, high, or medium defects."
+}

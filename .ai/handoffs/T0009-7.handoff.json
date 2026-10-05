@@ -1,0 +1,28 @@
+{
+  "task_id": "T0009",
+  "repo": "/Users/seanwagner/Documents/Playground/ClearEdge-Label-Creator",
+  "kind": "review",
+  "tier": "frontier",
+  "objective": "Review the exact follow-up delta that resolves the prior NFPA footer overlap finding and strengthens the transparent GHS asset guards.",
+  "current_state": "Branch codex/T0009-us-label-legibility is at commit 0fa7e1e. Review only d6afe79..0fa7e1e. Production was not deployed.",
+  "relevant_surface": [
+    "git diff d6afe79..0fa7e1e -- app/label_stub.py tests/test_label_stub.py",
+    "app/label_stub.py supplier footer width fitting and GHS transparency cache",
+    "tests/test_label_stub.py long supplier geometry, approved asset opacity, and global caption absence guards"
+  ],
+  "changes": "Supplier name, address, and phone are now fitted to the actual footer space before the NFPA diamond or ClearEdge mark. Stable SVG ids support geometry assertions. Approved GHS crop conversion now caches by path, mtime, and size and does not cache missing files. Tests require edge transparency, retained central opaque white field, global absence of the removed NFPA caption, and no supplier text crossing the NFPA boundary in every standard size/orientation.",
+  "evidence": [
+    "The long-supplier regression failed before implementation because supplier elements were not width-constrained.",
+    "The three focused regressions passed after implementation.",
+    "The complete renderer suite passed 55 tests in 5.60 seconds.",
+    "git diff --check passed.",
+    "The earlier exact application release gate at d6afe79 remains valid for unchanged pipeline and API layers: 244 tests, browser E2E, 86 percent coverage, static verification, and local Railway-parity startup."
+  ],
+  "assignment": "Inspect only the exact follow-up diff for critical, high, or medium defects. Confirm long supplier text cannot overlap the NFPA diamond or ClearEdge mark, required GHS white interiors remain opaque, and cache invalidation cannot cross-contaminate or permanently suppress approved assets. Report material findings in one batch with file and line evidence. Do not edit files, deploy, or rerun tests.",
+  "constraints": [
+    "Do not weaken or remove required supplier, GHS, DOT, or NFPA data.",
+    "Approved GHS source assets remain the only pictogram source.",
+    "No production deployment and no compliance certification."
+  ],
+  "return_contract": "Return exactly one raw JSON object with only these top-level keys: kind, summary, acceptable, findings, evidence_used, could_not_verify, recommendation. Each finding must contain only severity, location, defect, and reasoning. Do not include markdown fences, a preface, trailing prose, extra finding keys, or a meta key. Set acceptable=true only when there are no critical, high, or medium defects."
+}

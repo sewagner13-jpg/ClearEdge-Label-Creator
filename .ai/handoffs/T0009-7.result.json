@@ -1,0 +1,64 @@
+{
+  "kind": "review",
+  "summary": "Reviewed the current working-tree state of app/label_stub.py and tests/test_label_stub.py against the stated follow-up objective (git tooling unavailable this session, so the d6afe79..0fa7e1e boundary itself could not be confirmed). Supplier footer fitting is now geometrically bounded by the NFPA/ClearEdge boundary and the computed clearances hold for every standard size and orientation; the GHS crop cache is keyed on path+mtime_ns+size, excludes missing files, and cannot cross-contaminate or permanently suppress approved assets; the flood fill preserves the diamond interior because the red border blocks propagation. One medium requirement conflict: the NFPA diamond now carries no human-visible supplemental caption, which contradicts the acceptance record that the task branch still ships, and the new tests lock that absence globally.",
+  "acceptable": false,
+  "findings": [
+    {
+      "severity": "medium",
+      "location": "app/label_stub.py:360-379 and tests/test_label_stub.py:800-805 versus .ai/tasks/T0009.md:34",
+      "defect": "The printed NFPA 704 block now contains no human-readable text identifying it as NFPA 704 or as supplemental; only machine attributes data-nfpa-role=\"supplemental\" and data-nfpa-source carry that meaning (label_stub.py:361). tests/test_label_stub.py:800-801 assert \"NFPA 704\" and \"SUPPLEMENTAL\" are absent from the entire SVG, and :804-805 repeat it inside the group, permanently locking the absence. The task record it ships with still states the implemented behavior as \"The compact NFPA 704 3-1-0 symbol is visibly labeled supplemental\" (.ai/tasks/T0009.md:34), and non-goal .ai/tasks/T0009.md:20 is \"No claim that the compact footer NFPA symbol is a stand-alone facility placard.\"",
+      "reasoning": "A bare four-colour diamond with ratings and no caption is exactly the artifact a reader interprets as a stand-alone NFPA placard, which is the misreading the task explicitly set out to avoid; and the branch now carries an acceptance statement that the code no longer satisfies, so the documented done-criteria cannot be used to judge completion. Minimal fix: either restore a short caption (for example a supplemental marker) placed below the supplier block and width-fitted like the supplier runs, relaxing the global absence assertions to the overlap assertion only, or correct .ai/tasks/T0009.md:34 to record the deliberate removal and the rationale."
+    },
+    {
+      "severity": "low",
+      "location": "app/label_stub.py:678-696, 1597-1603, 1891-1917 and tests/test_label_stub.py:1225-1229",
+      "defect": "Supplier fitting is validated against the same heuristic that produced it. Production computes supplier_max_width = boundary - 28 (label_stub.py:1603) and the test asserts 20 + _estimated_text_width_units(value) * font_size + 8 <= nfpa_x using the identical estimator, so the check is satisfied by construction and cannot detect estimator error. The estimator charges 0.56 em for all ordinary lowercase (label_stub.py:695), while Arial Bold 'm' is 0.889 em and 'w' is 0.778 em, so supplier-name width is underestimated for lowercase-heavy strings. In the common non-NFPA ClearEdge-mark layout (label_stub.py:1599-1600) the geometric clearance is only 8 pt.",
+      "reasoning": "The regression that was supposed to prove no supplier text crosses the NFPA boundary proves only internal consistency; a glyph-width mismatch would reproduce the original overlap while the suite stays green. The practical margin currently survives because _fit_text caps the name at 50 characters and the address at 70 (label_stub.py:1894, 1903) before width fitting binds, so realistic strings stay inside the boundary; the exposure is to unusual lowercase-dense names. Minimal fix: add one assertion that measures the rendered run with an independent metric (for example a cairosvg/Pillow text extent or a static per-character Arial Bold table defined in the test) rather than reusing _estimated_text_width_units."
+    },
+    {
+      "severity": "low",
+      "location": "app/label_stub.py:559-561 and tests/test_label_stub.py:737-739",
+      "defect": "The border flood fill treats an already transparent pixel as a stopping condition (\"if alpha == 0 or min(red, green, blue) < 240: continue\"), so any approved crop that ships with a transparent outer ring would halt the fill immediately and leave the interior white crop band opaque. The guard that is supposed to catch this only samples pixel (0,0) and the bottom-right pixel for alpha == 0, which a pre-existing transparent border satisfies without any work being performed.",
+      "reasoning": "The transparency guard can pass while the white box artifact that motivated the change remains, so a future asset revision with transparent padding would regress silently. Minimal fix: treat alpha == 0 as traversable rather than terminal, and assert on an opaque-white pixel count outside the diamond (for example a sample point in the upper-left corner region a few pixels inside the edge) instead of only the two corner pixels."
+    },
+    {
+      "severity": "low",
+      "location": "app/label_stub.py:407-412 and app/label_stub.py:1920",
+      "defect": "revision_date is passed through to the centered footer text with no width fitting and no character cap, unlike supplier_name/address/phone which are now fitted (label_stub.py:1891-1917). The run is centered at width // 2 at y = height - 8; the NFPA diamond's lower tip occupies roughly x = nfpa_panel_x + 52 +/- 4 across those same rows (polygon at label_stub.py:367), leaving only a few points of clearance for a short ISO date and none for a longer SDS revision string.",
+      "reasoning": "The delta's stated objective is that footer content cannot collide with the NFPA diamond, and this is the one remaining unfitted footer run on that surface; a source revision string such as a date plus a supersedes note would both collide with the diamond tip and overflow the label edges. Minimal fix: route revision_date through _fit_text_for_width with max_width derived from the same supplier_right_boundary arithmetic, or left-align it inside the supplier column."
+    }
+  ],
+  "evidence_used": [
+    "app/label_stub.py:1584-1603 - footer geometry: process_mark_x = width - process_mark_width - 20, nfpa_panel_x = process_mark_x - 104 - 12 when the ClearEdge mark shows, supplier_right_boundary selection, supplier_max_width = boundary - 28.",
+    "app/label_stub.py:1891-1917 - supplier name/address/phone each pass through _fit_text (50/70/35 char caps) then _fit_text_for_width(max_width=supplier_max_width) at font sizes 10.5/8/8.5.",
+    "app/label_stub.py:350-358, 361-379, 383-395 - supplier runs start at x=20 with ids supplier-name/supplier-address/supplier-phone; the NFPA group translates to nfpa_panel_x with the leftmost diamond vertex at local x=16; the ClearEdge mark rect starts at local x=0 of process_mark_x. Derived clearance: supplier right edge = boundary - 8, so 24 pt before the diamond and 8 pt before the mark.",
+    "Derived geometry for every standard template (label_stub.py:433-478 widths 612/648 and _oriented_dimensions at :658-665): pail vertical nfpa_panel_x=296 with emergency box right edge 284; pail horizontal 446 vs 390; drum/tote vertical 332 vs 320; drum/tote horizontal 518 vs 390 - emergency box and supplier block both stay left of the diamond in all eight combinations.",
+    "app/label_stub.py:518-575 - existence check and path.stat() happen outside the cache, so missing files are never cached; the cached function is keyed on (path, st_mtime_ns, st_size) with maxsize=16 for 9 assets; exceptions are not memoized by lru_cache, so a transient decode failure cannot permanently suppress an approved asset.",
+    "app/label_stub.py:541-571 - 4-connected border flood fill clears only pixels with min(r,g,b) >= 240 reachable from the edges; the continuous dark-stroked red diamond border blocks propagation, so the interior white field is unreachable and stays opaque.",
+    "app/assets/ghs_pictograms/GHS05_corrosion.png viewed directly - source crop is a red diamond with white outer corner triangles and a white interior field, matching the fill assumptions.",
+    "tests/test_label_stub.py:1157-1229 - long-supplier regression iterates pail/drum/tote x vertical/horizontal, asserts emergency_right + 12 <= nfpa_x, nfpa_x + 104 + 12 <= process_mark_x, and the per-element supplier width bound.",
+    "tests/test_label_stub.py:715-751 - approved-asset guard: data URI prefix, source table name, corner alpha 0, centre alpha 255, and at least one opaque near-white pixel in the central crop.",
+    "tests/test_label_stub.py:764-766 and 800-806 - global absence assertions for \"NFPA 704\" and \"SUPPLEMENTAL\", plus the no-<rect> assertion inside the nfpa-704 group.",
+    ".ai/tasks/T0009.md:20,27,34,37-42 - recorded non-goals, acceptance criteria, and prior verification evidence (244-test release gate at de42622, 55-test renderer suite at 53a63f1).",
+    "Reused without rerun, per instruction: pre-implementation failure of the long-supplier regression, the three focused regressions passing, the 55-test renderer suite, git diff --check, and the d6afe79 release gate."
+  ],
+  "could_not_verify": [
+    "The exact commit range d6afe79..0fa7e1e. Bash is disabled in this session and no git tool was available, so I reviewed the current on-disk state of app/label_stub.py and tests/test_label_stub.py rather than the isolated delta; findings that predate the delta are marked as such where I could infer it, but line-level attribution to this range is unconfirmed.",
+    "Whether the working tree is clean at 0fa7e1e, i.e. whether the reviewed files contain uncommitted changes.",
+    "Actual rasterized output. I did not run cairosvg or Pillow, so true Arial Bold advance widths, final pixel alpha values, and visual clearance at print size are reasoned from the code and the published metrics, not measured.",
+    "Whether the approved GHS crops contain any transparent border pixels, which determines whether the alpha == 0 stop condition is currently latent or active; the asset preview cannot distinguish white from transparent."
+  ],
+  "recommendation": "Reconcile the NFPA caption conflict before merge: either restore a width-fitted supplemental caption placed clear of the supplier block and narrow the global absence assertions, or amend .ai/tasks/T0009.md:34 so the shipped acceptance record matches the implemented behavior. The supplier width-fitting and GHS cache changes are sound as implemented; strengthening the supplier regression with an independent width metric and making the flood fill traverse already-transparent pixels are worthwhile follow-ups but do not block. Re-run only tests/test_label_stub.py after whichever caption decision is taken; no other evidence is invalidated.",
+  "meta": {
+    "vendor": "claude",
+    "model": "opus",
+    "tier": "frontier",
+    "exit_code": 0,
+    "duration_s": 278.4,
+    "cost_usd": 1.290569,
+    "turns": 17,
+    "depth": 1,
+    "raw_ref": "/var/folders/cf/xt2t1kr95tl5hkp3yxfdqbfr0000gn/T/ai-ask-claude.f1b_rnye",
+    "error": null
+  }
+}

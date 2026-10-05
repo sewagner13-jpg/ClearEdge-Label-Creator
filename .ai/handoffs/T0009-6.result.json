@@ -1,0 +1,63 @@
+{
+  "kind": "review",
+  "summary": "Delta is sound on its core constraints: the 4-connected flood only clears edge-connected pixels whose min(R,G,B)>=240, so the red diamond border (and its anti-alias ramp) blocks it and the enclosed white GHS field stays opaque; pictograms still come only from the approved table crops; the lru_cache key is the absolute per-asset Path so no cross-asset contamination; NFPA ratings, quadrant colors, white special quadrant and internal data-nfpa-* metadata survive the caption/panel removal. One medium layout regression: removing the opaque white NFPA panel exposes footer supplier text that is clamped by character count, not against the diamond's pixel position, so long custom supplier name/address can now visibly overlap the colored diamond. Plus three low items on test guard strength and cache keying.",
+  "acceptable": false,
+  "findings": [
+    {
+      "severity": "medium",
+      "location": "app/label_stub.py:350-358 (supplier text), app/label_stub.py:360-379 (nfpa-704 group, panel rect removed), app/label_stub.py:1868-1882 (char-count clamp), app/label_stub.py:1572-1580 (nfpa_panel_x / emergency_box_width)",
+      "defect": "Footer supplier name/address are clamped only by character count (_fit_text, 50 and 70 chars) and never against nfpa_panel_x. With the opaque white panel rect gone, overflowing supplier text is no longer painted over and now collides with the colored NFPA diamond. Worst realizable case at the narrowest Jinja-footer width (612, show_clearedge_mark true): process_mark_x=412, nfpa_panel_x=412-104-12=296, diamond left edge=296+16=312; a 50-char supplier name at font-size 10.5 measured with the repo's own estimator (_estimated_text_width_units, ~0.60 units/char) is ~315px from x=20, right edge ~335; a 70-char address at font-size 8 is ~308px, right edge ~328. Both cross 312. All three supplier lines (height-77, height-63, height-50) lie inside the diamond's vertical span (height-82..height-10).",
+      "reasoning": "Supplier name and address are required US label content on a printed compliance artifact, and the ticket objective is legibility. The emergency box already reserves footer width (line 1580, reserved_footer_width) but supplier text does not, so the panel rect was the only thing masking the overflow. ClearEdge defaults (41-char address, ~196px right edge) stay clear, which is why the CE SilaCure SC inspection showed no overlap; custom long supplier strings are not covered by that evidence. Minimal fix: clamp the three supplier lines with _fit_text_for_width against (nfpa_panel_x - 20 - 8) when show_nfpa, mirroring the reservation at line 1580."
+    },
+    {
+      "severity": "low",
+      "location": "app/label_stub.py:544-555; tests/test_label_stub.py:731-739",
+      "defect": "The interior-opacity guard asserts alpha only at (0,0), (w-1,h-1) and the exact center. If the flood ever leaked through an anti-aliased apex on an asset whose center pixel is dark symbol ink (e.g. GHS02 flame), the enclosed white field around that ink could be cleared while the center pixel stays alpha 255 and the test still passes.",
+      "reasoning": "The required white field inside the red diamond is the one hard constraint of this delta, and the regression guard can miss a partial interior clear on some assets. Minimal fix: for each asset also assert alpha==255 at a known white interior offset just inside the red border."
+    },
+    {
+      "severity": "low",
+      "location": "app/label_stub.py:518-524",
+      "defect": "lru_cache keys only on path. A missing asset caches None for the process lifetime, and an in-place replacement of an approved crop keeps serving the pre-replacement transformed bytes until restart; no mtime/size in the key.",
+      "reasoning": "Approved-asset provenance is a project invariant; a silently stale or permanently-None pictogram would be served with no warning after the first call. Minimal fix: key on (path, st_mtime_ns, st_size), or skip caching the None result."
+    },
+    {
+      "severity": "low",
+      "location": "tests/test_label_stub.py:788-792",
+      "defect": "The no-caption regression only checks inside the nfpa-704 group body for \"NFPA 704\", \"SUPPLEMENTAL\" and \"<rect\". A caption or panel reintroduced as a sibling outside the group would pass this test; the whole-SVG assertion exists only in the unrated case (line 754).",
+      "reasoning": "The user requirement is no visible caption or panel anywhere on the label, so the guard for the source-backed path is weaker than the requirement. Minimal fix: assert \"SUPPLEMENTAL\" and \"NFPA 704\" absent from the full svg in test_source_backed_nfpa_values_render_in_standard_orientation."
+    }
+  ],
+  "evidence_used": [
+    "app/label_stub.py:518-560 \u2014 _edge_transparent_png_data_uri: 4-connected flood seeded from all border pixels, stop condition `alpha == 0 or min(red, green, blue) < 240` (line 545), mutates only the in-memory RGBA copy, re-encodes PNG; @lru_cache(maxsize=16) on absolute Path (lines 518-520).",
+    "app/label_stub.py:583-612 \u2014 _load_ghs_pictogram_assets: 9 approved crops, each routed through _edge_transparent_png_data_uri, source recorded as 'GHS Pictogram Table.png'.",
+    "app/label_stub.py:1253-1262 and template lines 113-119 \u2014 only ghs_pictogram_assets data URIs are emitted; no synthetic symbol fallback.",
+    "app/label_stub.py:360-379 \u2014 nfpa-704 group contains four quadrant polygons (including fill=\"#FFFFFF\" special quadrant) and four rating text nodes with data-rating, plus data-nfpa-source / data-nfpa-diamond-size-mm / data-nfpa-role; no caption text and no rect.",
+    "app/label_stub.py:1569-1580, 1886-1893 \u2014 show_nfpa gating, nfpa_panel_x/reserved_footer_width/emergency_box_width math, all rating values still in template context.",
+    "app/label_stub.py:1398, 1519-1545 \u2014 sample_4x6 (width 432) uses a separate renderer, so the narrowest width reaching the Jinja NFPA footer is 612 (templates at lines 436, 451, 466).",
+    "app/label_stub.py:662-681 \u2014 _estimated_text_width_units, used to size the supplier-text overflow estimate.",
+    "app/main.py:103-128 \u2014 LabelGenerator() is constructed once in the FastAPI lifespan, so the flood cost is paid at startup, not per request.",
+    "app/canva_export.py:161-238 \u2014 NFPA ratings and nfpa_704_summary still exported as data, so ratings are not lost by the label-side removal.",
+    "tests/test_label_stub.py:689-739 (approved-source + edge-transparency asserts), 742-792 (NFPA no-caption/no-rect), 1143-1196 (footer emergency/NFPA/process-mark spacing asserts).",
+    "Reused lead evidence (not rerun): targeted transparency/NFPA tests pass; renderer suite 55 tests in 5.61s cached vs 46.10s uncached; full release verification at d6afe79 (244 tests, browser E2E, 86% coverage, static verification, Railway-parity startup); source-exact CE SilaCure SC PNG/PDF/SVG inspection showing no white crop backgrounds, no caption/panel, intact GHS diamond interiors and NFPA white quadrant."
+  ],
+  "could_not_verify": [
+    "The literal diff be14736..d6afe79 \u2014 Bash is disabled in this session (\"Error: No such tool available: Bash\"), so git diff/show could not be run. Review is based on the post-change working-tree state of app/label_stub.py and tests/test_label_stub.py plus the stated change description; I could not confirm the working tree equals d6afe79 or that no other files changed in the range.",
+    "Per-asset enclosed-white opacity for all nine crops beyond the three pixels asserted at tests/test_label_stub.py:737-739; anti-aliasing at each diamond apex was reasoned from the 240 threshold, not measured (no image inspection tool available here).",
+    "Actual rendered appearance of a custom long supplier name/address with show_nfpa true at width 612 \u2014 no render was executed, so the predicted supplier/diamond overlap is arithmetic from the repo's own width estimator, not an observed artifact.",
+    "Startup latency added by the nine floods at first LabelGenerator() construction; the 46.10s figure is suite-wide, not per instantiation."
+  ],
+  "recommendation": "Clamp the three footer supplier lines against the NFPA diamond's left edge (pixel-based fit when show_nfpa, mirroring reserved_footer_width at app/label_stub.py:1580), then re-render one custom-supplier label at width 612 with show_clearedge_mark and a near-cap supplier name/address to confirm no text crosses nfpa_panel_x+16. Tighten the two guards cheaply in the same pass: assert alpha==255 at an interior white offset per pictogram, and assert caption strings absent from the full SVG in the source-backed NFPA test. Re-run the targeted renderer tests only; the transparency/caching and release evidence at d6afe79 stays valid for everything else. Also re-run git diff be14736..d6afe79 and confirm no files outside app/label_stub.py and tests/test_label_stub.py moved, since that could not be verified here.",
+  "meta": {
+    "vendor": "claude",
+    "model": "opus",
+    "tier": "frontier",
+    "exit_code": 0,
+    "duration_s": 318.1,
+    "cost_usd": 1.2343820000000003,
+    "turns": 31,
+    "depth": 1,
+    "raw_ref": "/var/folders/cf/xt2t1kr95tl5hkp3yxfdqbfr0000gn/T/ai-ask-claude.7xquwpl_",
+    "error": null
+  }
+}
