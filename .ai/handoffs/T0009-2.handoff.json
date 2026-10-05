@@ -1,0 +1,36 @@
+{
+  "task_id": "T0009",
+  "repo": "/Users/seanwagner/Documents/Playground/ClearEdge-Label-Creator",
+  "kind": "review",
+  "tier": "frontier",
+  "objective": "Review the exact final T0009 implementation that preserves source-backed OSHA/GHS and DOT label content while making required marks readable and preventing dense-layout overlap.",
+  "current_state": "Branch codex/T0009-us-label-legibility is at commit 57a6c73. The final T0009 range is 2c7f2fd..57a6c73. It enlarges the printed marks, adds adaptive all-statement layout, renders every approved required GHS pictogram, validates the transport identification number, bounds compact DOT flags, and explicitly marks the compact NFPA footer symbol as supplemental. Production was not deployed.",
+  "relevant_surface": [
+    "git diff 2c7f2fd..57a6c73 -- app/label_stub.py app/validator.py tests/test_label_stub.py tests/test_validator.py",
+    "app/label_stub.py standard shipped/DOT SVG template and adaptive compact safety layout",
+    "app/validator.py shipped/DOT identification-number validation",
+    "tests/test_label_stub.py CE SilaCure, five-pictogram, dense-layout, DOT flag, and transport-ID regressions",
+    "tests/test_validator.py malformed and multiple transport-ID regressions",
+    "app/dot_sticker_sheet.py unchanged approved two-up 135 mm DOT sheet behavior"
+  ],
+  "changes": "Review the complete final diff from 2c7f2fd through 57a6c73, not only the latest commit. The prior invalid review result had no accepted verdict; its material findings were independently checked and corrected in 57a6c73.",
+  "evidence": [
+    "PYTHON_BIN=./.venv/bin/python ./scripts/release.sh --verify-only passed at commit 57a6c73: 236 tests, browser E2E, 86 percent coverage, static verification, and local Railway-parity startup.",
+    "Renderer and validator suites passed 74 tests.",
+    "Fresh CE SilaCure 12 x 9 inch SVG/PDF/PNG retains Danger, GHS05/GHS07, every supplied H/P statement, UN2735, proper shipping name, Class 8, PG III, supplier contact, emergency phone, and source NFPA 3-1-0 with no visual overlap or clipping.",
+    "pdftotext bounding-box output measures rendered UN2735 at 53.568 pt or about 18.9 mm high, above the 12 mm rule for the package.",
+    "Fresh separate DOT sheet is US Letter landscape with two 135 mm Class 8 labels, above the 100 mm minimum per side.",
+    "A synthetic long-label regression with four long H statements and 18 long P statements preserves every statement and asserts the safety panel ends before transport and transport ends at least 8 pt above the footer.",
+    "A five-pictogram regression proves all five approved assets render exactly once; the previous fixed four-item slice was removed.",
+    "The footer NFPA symbol has data-nfpa-role supplemental and is not represented as a stand-alone NFPA facility placard."
+  ],
+  "assignment": "Inspect the exact final diff for material defects, regressions, content loss, or misleading compliance behavior. Focus on required OSHA/GHS field preservation, all required pictogram rendering, adaptive dense-layout geometry, transport ID validation and sizing, compact DOT flag/reference-image separation, and the supplemental NFPA boundary. Report all critical, high, or medium defects in one batch with file and line evidence. Do not edit files, deploy, or rerun the full test suite.",
+  "constraints": [
+    "Required source-backed safety and transport content must not be omitted to make optional content fit.",
+    "Only approved GHS and DOT assets may render.",
+    "The product-label DOT image is a reference; the separate approved 135 mm sheet is the exterior DOT label output.",
+    "The compact NFPA footer symbol is supplemental and is not a substitute for an NFPA 704 facility placard.",
+    "No production deployment and no independent legal or regulatory compliance certification."
+  ],
+  "return_contract": "Return exactly one raw JSON object with only these top-level keys: kind, summary, acceptable, findings, evidence_used, could_not_verify, recommendation. Each finding must contain only severity, location, defect, and reasoning. Do not include markdown fences, a preface, trailing prose, extra finding keys, or a meta key. Set acceptable=true only when there are no critical, high, or medium defects."
+}

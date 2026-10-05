@@ -1,0 +1,65 @@
+{
+  "kind": "review",
+  "summary": "Reviewed the final geometry-hardening surface (app/label_stub.py fitter/template/sample renderer and the new tests in tests/test_label_stub.py). The horizontal-fit guard cannot silently drop required content: `_format_all_statements` (app/label_stub.py:950-981) emits every statement with no clipping, the guard only rejects candidates, and exhaustion raises `LabelContentDoesNotFitError` (app/label_stub.py:1138-1141) which `app/label_pipeline.py:1405-1411` converts into a visible HTTP 400 with remediation text. The revised reserve `height - 117` (app/label_stub.py:1628-1634) is 15 pt above the footer rule at `height - 94` and 13 pt above the NFPA panel top at `height - 96`, and leaves ~249 pt for a 19-statement dense pail/vertical case, so supported SilaCure/SilaPox cases retain headroom. Sample GHS bounds now hold in all three branches (6 pictograms end at x=408 and y=150 inside the frame at x<=413.4, y<=173.4; 9 pictograms end at y=169). One medium issue: the new narrow-column regression test is vacuous \u2014 it is rejected on block height alone and never exercises the new horizontal_fit guard. Four low geometry margins remain. Bash is disabled in this session, so the literal `git diff ec48fa8..de42622` could not be produced; findings rest on the final state of the named surface.",
+  "acceptable": false,
+  "findings": [
+    {
+      "severity": "medium",
+      "location": "tests/test_label_stub.py:1022-1041",
+      "defect": "`test_compact_safety_layout_rejects_a_height_fit_with_overlapping_columns` does not exercise the new `horizontal_fit` guard. With width=612, available_height=75, 30 single-character precautionary statements and 4-character codes, every surviving candidate is already rejected by `block_height <= available_height`: the 6-precaution-column case is skipped by `if line_width < 18: continue` (app/label_stub.py:1062, line_width=17 at cw=81.71), and the best remaining case (5 precaution columns, font 6.0/6.6, 6 statements per column) yields block_height = 34 + 5*8.6 + 6.6 = 83.6 > 75. Short codes also keep `first_line_width` off the `max(8, ...)` clamp in app/label_stub.py:963, so `horizontal_fit` is True for those candidates. The test passes identically if lines 1097-1111 are deleted.",
+      "reasoning": "The guard added at app/label_stub.py:1097-1111 is the delta's main new logic and the handoff cites this test as its regression protection. As written it proves only the pre-existing height check, so a future removal or inversion of the horizontal check would ship undetected, re-admitting column-crossing text. Minimal fix: give the fitter enough height that only the horizontal check can reject (e.g. available_height around 400) and use long combination codes such as `P301+P310+P330` with a width that forces narrow columns, so the `max(8, line_width - len(code) - 2)` clamp triggers; or assert `candidate[\"horizontal_fit\"]`/`fits` directly on a constructed narrow-column candidate."
+    },
+    {
+      "severity": "low",
+      "location": "app/label_stub.py:255-260 and app/label_stub.py:305-306 (non-compact DOT branch of SVG_TEMPLATE); tests/test_label_stub.py:1533-1546",
+      "defect": "The reference-only caption was moved clear of the purple header in the compact branch only. Compact: header rect bottom is y_offset+28 (app/label_stub.py:221) and the caption baseline is y_offset+34 (app/label_stub.py:242), a 6 pt gap. Non-compact (used by the vertical 9x12 label, since `compact_compliance_layout` requires width > height at app/label_stub.py:1543-1547): header rect bottom is y_offset+35 (app/label_stub.py:255, y=y_offset+5, height=30) and the caption baseline is y_offset+40, leaving only 5 pt; at font-size 6.5 the cap top sits at ~y_offset+35.35, i.e. 0.35 pt (~0.12 mm) of clearance. The regression test guards `caption.y >= band_bottom + 6` only inside `if orientation == \"horizontal\"`.",
+      "reasoning": "The stated objective is that the caption sit fully below the purple header on the shipped label; the vertical orientation is a shipped required output and satisfies that by 0.35 pt, which is within glyph-hinting and rasterizer tolerance, and the asymmetric test scope will not detect a regression there. Minimal fix: raise the non-compact caption baseline to y_offset+41 (or lower the header) and drop the `if orientation == \"horizontal\"` restriction so both branches assert the same clearance."
+    },
+    {
+      "severity": "low",
+      "location": "app/label_stub.py:1608-1610 and app/label_stub.py:1784-1787",
+      "defect": "For `shipped_safety_layout` that is not `dense_safety_layout`, the pictogram row overflows its own symbols band. `symbols_band_height` is 90 for any shipped layout (app/label_stub.py:1608) while `pictogram_y_offset` is 27 and `pictogram_size` is 64 (app/label_stub.py:1785, 1596), so the pictogram bottom is y_offset+91 against a band rect bottom of y_offset+90 (stroke 1.5 centred, template app/label_stub.py:102-103). The same 1 pt overrun repeats per row because `pictogram_row_spacing` is `pictogram_size + 4`. The dense case (24+64=88) and the workplace case (36+58=94 vs 96) stay inside. The new test at tests/test_label_stub.py:1549-1576 produces exactly this non-dense shipped case and asserts only the signal/pictogram gap.",
+      "reasoning": "The spacing change that created the 6 pt signal-to-pictogram gap (27-21 and 24-18 both equal 6) leaves the non-dense shipped pictogram crossing the band border. No content is lost or clipped (SVG does not clip, and the next block begins 5 pt lower at y_offset+96 via `symbols_advance`), so this is a visible border artefact rather than data loss, but it contradicts the delta's intent of keeping pictograms inside their frame. Minimal fix: make the shipped band `pictogram_y_offset + pictogram_size + 2` (i.e. 93 for the non-dense case) instead of a flat 90."
+    },
+    {
+      "severity": "low",
+      "location": "app/label_stub.py:1097-1111",
+      "defect": "The new horizontal check uses a flat 0.56 em advance for all glyphs while the module already has a per-character estimator (`_estimated_text_width_units`, app/label_stub.py:621). The first line is rendered with a bold `{{ statement.code }}:` tspan (template app/label_stub.py:157); Arial Bold uppercase `P`/`H` is ~0.667 em and `+` ~0.584 em, so a 14-character combination code is underestimated by roughly 3 pt at font-size 7.2. The permitted bound is also `column_width - 8`, while the next column's divider rule is drawn at `group.x - 10` (template app/label_stub.py:145-147), i.e. `group.x + column_width - 10`, so an accepted line may extend 2 pt past that rule.",
+      "reasoning": "The guard is a strict improvement over having no horizontal check, and the 2 pt encroachment only reaches the 1 pt decorative divider, not the next column's text origin at `group.x + column_width`. But a borderline candidate can still be accepted and print a code touching the divider, which is the exact class of defect this check was added to prevent. Minimal fix: measure the first line with `_estimated_text_width_units` (adding a bold factor for the code) and tighten the bound to `column_width - 12`."
+    },
+    {
+      "severity": "low",
+      "location": "app/label_stub.py:311-314 and app/label_stub.py:1325",
+      "defect": "In the non-compact DOT panel the reference diamond is placed at y=y_offset+42 with height 110, so its bottom is y_offset+152, and the background polygon's lower vertex is also y_offset+152 (app/label_stub.py:308). `dot_panel_height` is `max(154, 45 + cursor_y + 15)` (app/label_stub.py:1325); with stroke-width 4 centred on y_offset+154 the panel's inner edge is also y_offset+152, so clearance is 0 pt. The compact branch keeps 2 pt (image bottom y_offset+130 against height 132).",
+      "reasoning": "The diamond art touches the inner edge of the panel border on the vertical label; any future reduction of the 154 pt floor or increase of the detail stack pushes the approved DOT artwork onto or through its own frame. Visible content is preserved today only because `preserveAspectRatio=\"xMidYMid meet\"` leaves padding inside the 110x110 viewport. Minimal fix: raise the `max()` floor to 158 or reduce the image height to 106."
+    }
+  ],
+  "evidence_used": [
+    "app/label_stub.py:1097-1111 (new horizontal_fit guard), 1112-1142 (candidate selection and LabelContentDoesNotFitError), 950-981 (_format_all_statements emits every statement, lines[0] always present so no IndexError), 963 (max(8, ...) first-line clamp that makes the guard fire for long combination codes), 1062 (line_width < 18 skip).",
+    "app/label_pipeline.py:1390-1411 - LabelContentDoesNotFitError is surfaced as HTTP 400 'LABEL_CONTENT_DOES_NOT_FIT ... Choose a larger label size or horizontal orientation', confirming fail-closed rather than silent truncation.",
+    "app/label_stub.py:1628-1634 (available_safety_height = height - 117 - safety_top - product_uses_advance - transport_height) against template chain app/label_stub.py:168 (+safety_block_height+8), 319 (+dot_panel_height+10), 344 (footer rule at height-94), 360 (NFPA panel top at height-96): 15 pt above the footer rule, 13 pt above the NFPA panel.",
+    "Reserve-vs-render consistency: block_height padding 34/40 (app/label_stub.py:1047) minus safety_text_y_offset 28/34 (app/label_stub.py:1802) plus one line_height leaves ~14 pt below the last baseline; app/label_stub.py:1620-1622 product_uses_advance matches template app/label_stub.py:136; app/label_stub.py:1625-1627 transport_height matches template rect heights at app/label_stub.py:219 and 322.",
+    "Supported-case headroom computed from app/label_stub.py:1596-1611, 1552-1555, 1567-1571, 1288-1326: pail/vertical 612x792, dense, 2 pictograms, 2-line shipping name gives safety_top=242, dot_panel_height=156, available=249 pt, satisfied at 3 precaution columns (column_width 143, line_width 28, ~164 pt).",
+    "app/label_stub.py:1402-1431 and 1455-1474 (sample label): frame rect x=18,y=108,w=396,h=66; 4-pictogram branch ends x=390/y=158, 6-pictogram branch ends x=408/y=150, 9-pictogram branch ends x=394/y=169 - all inside the 1.2 pt-stroked frame (inner edges 413.4 and 173.4).",
+    "app/label_stub.py:1437-1441 sample signal text (x=24, y=145, 22 pt) versus 'COMPACT GHS' baseline 126 (app/label_stub.py:1467) and the >6-pictogram row origin x=174: ~3 pt vertical and ~55 pt horizontal clearance.",
+    "tests/test_label_stub.py:22-40 (assert_safety_transport_footer_clearance bound footer_y - 8), 970-1019 (saturated reserve test, exact -15 equality consistent with the height-117 reserve), 1022-1041, 1504-1546, 1549-1576."
+  ],
+  "could_not_verify": [
+    "The literal diff. Bash is disabled in this session ('Error: No such tool available: Bash'), so `git diff ec48fa8..de42622` could not be run and the working tree could not be confirmed clean at de42622. All findings are derived from the final state of the named surface; attribution of any individual line to this delta rather than to ec48fa8 is inferred from the stated change list, not from the diff. In particular I could not confirm whether the 1 pt pictogram band overrun was introduced by this delta's signal/pictogram spacing change or pre-dated it.",
+    "Glyph-level rendering. No application code was run, so the 0.35 pt caption clearance, the 0 pt DOT-diamond clearance, and the 1 pt pictogram overrun are computed from nominal Arial metrics (cap height 0.716 em, advance 0.56-0.667 em) rather than from the actual rasterizer; the cited actual-size PNG inspection reports no visible overlap and is consistent with all four low findings being sub-visible today.",
+    "Whether the `max(8, line_width - len(code) - 2)` clamp is reachable for the real SilaPox statement set. I verified it is reachable at 5-6 precaution columns for 14-character combination codes, but I did not enumerate the actual SilaPox code lengths, and I did not rerun any suite."
+  ],
+  "recommendation": "Fix the vacuous narrow-column test (tests/test_label_stub.py:1022-1041) so it fails when the horizontal_fit guard at app/label_stub.py:1097-1111 is removed - use a generous available_height plus long combination codes and a width that forces narrow columns - then rerun the renderer suite only; that change is test-only and does not invalidate the release verification at de42622. The four low geometry margins (non-compact caption 0.35 pt, shipped non-dense pictogram band 1 pt, 0.56 em bold-code estimate and column_width-8 bound, non-compact DOT diamond 0 pt) are safe to batch into a follow-up. The renderer's content guarantees hold as claimed: no required signal word, pictogram, H/P statement or DOT field can be silently dropped, and the 15 pt reserve preserves supported cases.",
+  "meta": {
+    "vendor": "claude",
+    "model": "opus",
+    "tier": "frontier",
+    "exit_code": 0,
+    "duration_s": 367.1,
+    "cost_usd": 1.5392795000000001,
+    "turns": 24,
+    "depth": 1,
+    "raw_ref": "/var/folders/cf/xt2t1kr95tl5hkp3yxfdqbfr0000gn/T/ai-ask-claude.bki0mq7q",
+    "error": null
+  }
+}

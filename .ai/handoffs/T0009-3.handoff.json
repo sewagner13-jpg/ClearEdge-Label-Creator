@@ -1,0 +1,35 @@
+{
+  "task_id": "T0009",
+  "repo": "/Users/seanwagner/Documents/Playground/ClearEdge-Label-Creator",
+  "kind": "review",
+  "tier": "frontier",
+  "objective": "Review the exact correction delta that closes the material findings from the prior T0009 review while preserving source-backed US OSHA/GHS and DOT label content and actual-size print legibility.",
+  "current_state": "Branch codex/T0009-us-label-legibility is at commit ec48fa8. Review only the correction delta 57a6c73..ec48fa8 and its interaction with the final renderer. Production was not deployed.",
+  "relevant_surface": [
+    "git diff 57a6c73..ec48fa8 -- app/label_stub.py app/label_pipeline.py tests/test_label_stub.py tests/test_label_pipeline_source_review.py",
+    "app/label_stub.py typed fit error, standard and compact DOT branches, sample 4x6 renderer, portrait and landscape shipped/DOT layout",
+    "app/label_pipeline.py renderer error translation",
+    "tests/test_label_stub.py portrait dense-layout, sample all-pictogram, NFPA caption, DOT flag, and reference-image regressions",
+    "tests/test_label_pipeline_source_review.py typed LABEL_CONTENT_DOES_NOT_FIT response regression"
+  ],
+  "changes": "The delta applies the adaptive all-statement fitter to portrait shipped/DOT labels, uses a 48 pt identification-number font and wider box in portrait output, aligns compact DOT flags inside the detail coordinate group, visibly marks the product-label DOT image as reference-only, renders all approved sample-label pictograms using adaptive rows, visibly marks NFPA as supplemental, and returns a typed 400 LABEL_CONTENT_DOES_NOT_FIT error with remediation.",
+  "evidence": [
+    "PYTHON_BIN=./.venv/bin/python ./scripts/release.sh --verify-only passed at exact commit ec48fa8: 240 tests, browser E2E, 86 percent coverage, static verification, and local Railway-parity startup; no deployment was performed.",
+    "Focused renderer/pipeline/validator suites passed 93 tests.",
+    "Fresh source-exact CE SilaCure SC horizontal 12 x 9 inch and vertical 9 x 12 inch PDFs retain Danger, GHS05/GHS07, all 4 SDS hazard statements, all 15 SDS precautionary statements, UN2735, the proper shipping name, Class 8, PG III, responsible-party data, emergency phone, and source NFPA 3-1-0 without overlap or clipping.",
+    "Both product-label orientations render UN2735 at 48 pt; pdfplumber measures a 48 pt word box, about 16.9 mm, above the adopted 12 mm character-height threshold.",
+    "Both approved GHS images render at 64 x 64 pt, about 22.6 x 22.6 mm, with red diamond frames and clear symbol contrast.",
+    "The separate DOT sheet is US Letter landscape with two approved Class 8 stickers, each exactly 135 mm per side, above the 100 mm minimum.",
+    "Visual inspection of horizontal, vertical, and DOT-sheet PNGs found no overlap, clipping, or unreadable text at actual output dimensions.",
+    "The compact NFPA 3-1-0 symbol is 25.4 mm and visibly labeled supplemental; it is not represented as a stand-alone NFPA facility placard or a replacement for GHS/DOT content."
+  ],
+  "assignment": "Inspect the exact correction delta for critical, high, or medium defects. Confirm each prior material finding is actually corrected: portrait dense-layout fit, portrait identification-number size, compact DOT flag coordinate alignment, visible DOT reference marking, complete sample pictograms, typed fit failure, and visible NFPA supplemental wording. Also check that required source-backed GHS/DOT fields remain intact and no new overlap or content loss was introduced. Report all material findings in one batch with file and line evidence. Do not edit files, deploy, or rerun the full test suite.",
+  "constraints": [
+    "Required source-backed safety and transport content must not be omitted to make optional content fit.",
+    "Only approved GHS and DOT assets may render.",
+    "The small product-label DOT image is explicitly reference-only; the separate approved 135 mm sheet is the exterior DOT label output.",
+    "The compact NFPA footer symbol is supplemental and is not a substitute for an NFPA 704 facility placard.",
+    "No production deployment and no independent legal or regulatory compliance certification."
+  ],
+  "return_contract": "Return exactly one raw JSON object with only these top-level keys: kind, summary, acceptable, findings, evidence_used, could_not_verify, recommendation. Each finding must contain only severity, location, defect, and reasoning. Do not include markdown fences, a preface, trailing prose, extra finding keys, or a meta key. Set acceptable=true only when there are no critical, high, or medium defects."
+}

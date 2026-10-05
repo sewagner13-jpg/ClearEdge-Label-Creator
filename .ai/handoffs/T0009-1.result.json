@@ -1,0 +1,23 @@
+{
+  "kind": "review",
+  "summary": "Specialist returned an invalid result; no verdict accepted.",
+  "acceptable": null,
+  "findings": [],
+  "evidence_used": [],
+  "could_not_verify": [
+    "invalid result schema: result.findings[2]: unexpected fields"
+  ],
+  "recommendation": "Retry with the required result contract.",
+  "meta": {
+    "vendor": "claude",
+    "model": "opus",
+    "tier": "frontier",
+    "exit_code": 0,
+    "duration_s": 357.5,
+    "cost_usd": 1.404076,
+    "turns": 13,
+    "depth": 1,
+    "raw_ref": "/var/folders/cf/xt2t1kr95tl5hkp3yxfdqbfr0000gn/T/ai-ask-claude.93_r1qjh",
+    "error": "invalid result schema: result.findings[2]: unexpected fields"
+  }
+}

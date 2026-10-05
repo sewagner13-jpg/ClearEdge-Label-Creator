@@ -1,0 +1,40 @@
+{
+  "kind": "review",
+  "summary": "Hand-traced the fitter over the new test inputs (width=320, available_height=50, dense=True, 1 H-statement + 4 P301+P310+P330, all texts 8 chars). The decisive rejection now happens in the horizontal_fit guard, not the height check: at font 6.4 pt / 2 precaution columns the block height is exactly 50.0 (= available_height, so the height condition passes) while horizontal_fit is False, and the fitter falls through to the 6.0 pt / 2-column candidate (height 49.2, horizontal_fit True), which is what the test asserts. Prior medium finding is closed. No critical/high/medium defect in the delta; one low brittleness note.",
+  "acceptable": true,
+  "findings": [
+    {
+      "severity": "low",
+      "location": "tests/test_label_stub.py:1021-1045",
+      "defect": "The test only asserts the final outcome (font_size == 6.0, block_height <= 50); it never asserts that the rejected 6.4 pt candidate actually fit vertically. The two margins that make it a horizontal-guard test are razor-thin: at 6.4 pt / 2 precaution columns block_height is exactly 50.0 against available_height 50 (app/label_stub.py:1112,1132) and the first-line width is 86.016 pt against a 85.333 pt limit (app/label_stub.py:1097-1103), a 0.68 pt margin. Any future change to padding (34), the dense line_height ladder (7.0/6.6), or the 0.56 glyph-width factor can silently push the 6.4 pt candidate over 50 pt in height, at which point the test still passes but once again proves nothing about horizontal_fit \u2014 the exact regression the prior review flagged.",
+      "reasoning": "A guard regression test that can degrade into a pass-for-the-wrong-reason without failing gives false confidence about column-overlap protection. Minimal fix: assert the intermediate state directly, e.g. compute the 6.4 pt / 2-column candidate (or temporarily relax the horizontal guard) and assert its block_height <= 50, so the test fails loudly if the vertical path becomes the rejecting condition."
+    }
+  ],
+  "evidence_used": [
+    "app/label_stub.py:1038-1142 (_build_compact_safety_layout): dense padding 34, dense font ladder [(7.2,7.8),(6.8,7.4),(6.4,7.0),(6.0,6.6)], column_width=(width-40)/(1+pcc), continuation_indent=min(22,max(14,cw*0.14)), line_width<18 skip, fits = block_height <= available_height AND horizontal_fit",
+    "app/label_stub.py:1097-1111 (horizontal_fit): first-line test (len(code)+2+len(lines[0]))*font*0.56 <= column_width-8; continuation test against column_width-continuation_indent-8",
+    "app/label_stub.py:950-988 (_format_all_statements/_statement_column_height): first_line_width = max(8, line_width-len(code)-2), so every 8-char text is exactly one line; column height = n*line_height + 2*(n-1)",
+    "app/label_stub.py:925-948, 999-1036 (_wrap_all_lines/_split_statements_balanced_columns): 4 P-statements at columns=2 split 2/2, each weight 1.25",
+    "tests/test_label_stub.py:1021-1045 (new/corrected regression): width=320, available_height=50, dense=True, H314 'ABCDEFGH' + 4x P301+P310+P330 'ABCDEFGH'; asserts font_size == 6.0 and block_height <= 50",
+    "Traced candidate walk: 7.2/pcc1 height 71.2 fail-height (pcc>=2 skipped, line_width 17); 6.8/pcc1 height 69.6 fail, 6.8/pcc2 height 50.8 fail-height; 6.4/pcc1 height 68 fail, 6.4/pcc2 height exactly 50.0 passes height but horizontal 24*3.584=86.016 > 85.333 fails -> guard rejects; 6.0/pcc2 height 49.2 and horizontal 24*3.36=80.64 <= 85.333 -> returned",
+    "Reused as given: corrected targeted regression passed; 55-test renderer suite passed; de42622 application code previously passed the full release gate (244 tests, browser E2E, 86% coverage, static verification, Railway-parity startup)"
+  ],
+  "could_not_verify": [
+    "The git delta boundaries themselves (git diff de42622..53a63f1 -- tests/test_label_stub.py) \u2014 no shell/git tool was available in this session, so that the delta is test-only and that the worktree equals 53a63f1 is taken from the handoff, not independently confirmed. Nothing in app/label_stub.py as read contradicts the 'application code unchanged' claim.",
+    "Test execution and suite results (not rerun per instructions); the pass/fail trace above is analytic, derived from the source arithmetic.",
+    "Whether the exact-equality height case (block_height == available_height == 50.0) is stable across floating-point accumulation on other platforms; the sum 34 + (2*7.0 + 2) is exact in binary floating point here, but the 6.8 pt neighbor (50.8) shows how little slack exists."
+  ],
+  "recommendation": "Accept the test-only correction as closing the prior medium finding. Optionally tighten the regression by asserting the rejected 6.4 pt candidate's vertical fit so the test cannot silently revert to exercising the height check.",
+  "meta": {
+    "vendor": "claude",
+    "model": "opus",
+    "tier": "frontier",
+    "exit_code": 0,
+    "duration_s": 84.3,
+    "cost_usd": 0.372883,
+    "turns": 7,
+    "depth": 1,
+    "raw_ref": "/var/folders/cf/xt2t1kr95tl5hkp3yxfdqbfr0000gn/T/ai-ask-claude.n697kl5y",
+    "error": null
+  }
+}

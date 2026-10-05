@@ -1,0 +1,25 @@
+{
+  "task_id": "T0009",
+  "repo": "/Users/seanwagner/Documents/Playground/ClearEdge-Label-Creator",
+  "kind": "review",
+  "tier": "frontier",
+  "objective": "Verify that the exact test-only correction closes the sole medium finding from the final T0009 geometry review.",
+  "current_state": "Branch codex/T0009-us-label-legibility is at commit 53a63f1. Review only de42622..53a63f1. Production was not deployed.",
+  "relevant_surface": [
+    "git diff de42622..53a63f1 -- tests/test_label_stub.py",
+    "tests/test_label_stub.py compact-safety horizontal-fit regression",
+    "app/label_stub.py:1097-1111 horizontal_fit guard for behavioral context only"
+  ],
+  "changes": "The prior reviewer found that the narrow-column test passed through the height guard instead of the new horizontal-fit guard. The test now uses width 320, available height 50, four P301+P310+P330 statements with eight-character first-line text, and asserts that the fitter rejects the vertically fitting 6.4 pt candidate and selects the safe 6.0 pt candidate. Application code is unchanged from reviewed commit de42622.",
+  "evidence": [
+    "The corrected targeted regression passed.",
+    "The complete renderer suite passed 55 tests after the test-only correction.",
+    "The exact application-code commit de42622 previously passed the full release gate: 244 tests, browser E2E, 86 percent coverage, static verification, and local Railway-parity startup; the subsequent commit changes only the regression test."
+  ],
+  "assignment": "Inspect the exact test-only delta and determine whether it specifically exercises the horizontal_fit guard rather than passing through the pre-existing height check. Set acceptable=true if the prior medium finding is closed and no new critical, high, or medium defect exists. Do not edit files, deploy, or rerun tests.",
+  "constraints": [
+    "Application behavior and regulatory content are unchanged in this delta.",
+    "No production deployment and no compliance certification."
+  ],
+  "return_contract": "Return exactly one raw JSON object with only these top-level keys: kind, summary, acceptable, findings, evidence_used, could_not_verify, recommendation. Each finding must contain only severity, location, defect, and reasoning. Do not include markdown fences, a preface, trailing prose, extra finding keys, or a meta key. Set acceptable=true only when there are no critical, high, or medium defects."
+}

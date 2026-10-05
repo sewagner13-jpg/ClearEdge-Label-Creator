@@ -7,7 +7,7 @@
 - Current two-up DOT sticker release verified from code commit `75ea2daeadd7d66d3e71253c32a6ba448d27038f`.
 
 ## Active Ticket
-- `T0009` is in progress on task branch `codex/T0009-us-label-legibility`.
+- `T0009` is complete locally on task branch `codex/T0009-us-label-legibility`; merge and production deployment remain explicit owner decisions.
 
 ## Open Defects
 - None.
@@ -16,6 +16,7 @@
 - Preserve all CE SilaCure SC source-backed US label content while adding actual-print-size guardrails for GHS pictograms, the DOT identification number, the DOT reference image, and the supplemental NFPA symbol.
 
 ## Verification State
+- `T0009` exact application commit `de42622` passed `scripts/release.sh --verify-only`: 244 tests, browser E2E, 86% coverage, static verification, and local Railway parity. Test-only commit `53a63f1` strengthened the horizontal-overlap regression; the targeted test and 55-test renderer suite passed. Independent Claude review accepted the final correction with no critical, high, or medium findings. Fresh source-exact CE SilaCure SC 12 x 9 and 9 x 12 product-label artifacts retain Danger, GHS05/GHS07, all 4 H and 15 P statements, UN2735, Class 8, PG III, responsible-party/emergency details, and supplemental NFPA 3-1-0. The separate US Letter sheet contains two approved 135 mm Class 8 labels. No deployment was performed.
 - `T0008` release verify-only gate passed: 227 tests, 86% coverage, browser E2E, static checks, local Railway parity, and 12 x 9 inch artifact geometry inspection. No deployment performed.
 - `scripts/release.sh --deploy` passed for commit `75ea2daeadd7d66d3e71253c32a6ba448d27038f`: 221 tests, 86% coverage, browser E2E, static checks, local Railway parity, exact-commit production wait, and live Edgemer generation `label_EdgemerE618_6c63e32f`.
 - Live SilaPox generation `label_CESilaPoxEF_d94319fa` returned a two-page preview and full PDF. Page 2 is US Letter landscape with exactly one Class 9 label and one marine-pollutant mark, both 135 mm square; the separate DOT PDF contains the same sheet.
@@ -62,4 +63,4 @@
 - None.
 
 ## Next Action
-- Review the local T0008 preview; merge or production deployment remains an explicit owner decision.
+- Review the local T0009 CE SilaCure SC preview; merge and production deployment remain explicit owner decisions.

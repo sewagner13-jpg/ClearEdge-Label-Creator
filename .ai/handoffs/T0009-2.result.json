@@ -1,0 +1,85 @@
+{
+  "kind": "review",
+  "summary": "Reviewed the final T0009 surface in the worktree (app/label_stub.py, app/validator.py, tests/test_label_stub.py, tests/test_validator.py). Git was unavailable in this session, so the review is of the final state of the named files rather than the literal 2c7f2fd..57a6c73 patch text. The compact landscape path does what the objective claims: all statements are preserved without ellipsis (label_stub.py:915-1118), every approved pictogram renders (label_stub.py:108-114, 1543-1558), the identification number reaches 48 pt (label_stub.py:224, 1642-1650), compact DOT flags are width-bounded away from the reference diamond (label_stub.py:1651-1662), and the identification-number format is now blocked when malformed (validator.py:132-142). However, both the legibility fix and the dense-layout overlap fix are gated on width > height (label_stub.py:1495-1499), so the default vertical orientation keeps the old unbounded, undersized behaviour; the compact DOT flags are placed in the wrong coordinate space; the sample 4x6 path still truncates pictograms; and the task's own 'DOT image is visibly a reference' acceptance item is unimplemented.",
+  "acceptable": false,
+  "findings": [
+    {
+      "severity": "high",
+      "location": "app/label_stub.py:1495-1499, 1131-1145, 1604-1637",
+      "defect": "The adaptive all-statement layout is only selected when compact_compliance_layout is true, which requires width > height (line 1497). For vertical shipped_dot labels _fit_safety_statements_for_page returns _format_all_statements unconditionally (lines 1131-1145) with no height budget, and safety_block_height is then computed from the resulting column height with no clamp (lines 1630-1637). Worked example for drum vertical (648x864) with 4 H and 18 P statements of the length used in tests/test_label_stub.py:888: safety top = 160 (symbols_y_with_signal) + 104 (symbols_advance) = 264, precautionary column height \u2248 18 x ((2 x 9.0) + 2) = 360, block \u2248 398, so the safety rect ends near y=662 and the DOT transport panel (dot_panel_height = max(154, ...) at line 1301) is emitted from \u2248670 to \u2248824 while the footer line is at height-94 = 770 \u2014 the required transport panel overlaps the supplier/NFPA/emergency footer, and with product_uses present it runs past the 864 pt page edge and is clipped.",
+      "reasoning": "Orientation is user-selectable and vertical is the default (app/main.py:312, app/label_pipeline.py:210), so the most common shipped path still loses or obscures required DOT transport content exactly as the task set out to prevent. No test covers it: every dense/clearance regression passes orientation=\"horizontal\" (tests/test_label_stub.py:853, 928, 1235), and assert_safety_transport_footer_clearance (tests/test_label_stub.py:21-39) is never invoked for a vertical shipped label. Minimal fix: apply the adaptive fitter (or the candidate/footer_limit clamp already present at lines 1158-1185) to shipped_dot in portrait as well, instead of returning all statements unbudgeted."
+    },
+    {
+      "severity": "high",
+      "location": "app/label_stub.py:259-262 and 1641-1650",
+      "defect": "The enlarged identification number only exists in the compact branch (template line 224 consumes identification_number_font_size). The standard branch hardcodes font-size=\"28\" (line 261) and never uses the computed identification_number_font_size, so a vertical shipped label prints digits with a cap height of about 28 x 0.716 = 20 pt \u2248 7.1 mm.",
+      "reasoning": "The task scope and acceptance explicitly adopt the 12 mm character-height rule for packages over 30 kg / 30 L (.ai/tasks/T0009.md:12, 25), and drum (208 L) and tote are selectable in the default vertical orientation, where the mark stays at \u22487 mm. The cited pdftotext evidence (53.568 pt \u2248 18.9 mm) only measures the 12x9 inch landscape artifact, so the requirement is unverified and unmet for the portrait output. Minimal fix: drive the standard branch's identification-number font size from identification_number_font_size with the same minimum-height floor used by the compact branch, and widen the 145 pt box (line 257) accordingly."
+    },
+    {
+      "severity": "medium",
+      "location": "app/label_stub.py:234-235 (with 225 and 1528-1536, 1651-1662)",
+      "defect": "The compact DOT flag texts use absolute y values built from group-local offsets: y=\"{{ y_offset + compact_hazard_class_y }}\" and y=\"{{ y_offset + compact_packing_group_y }}\", while the Hazard Class / Packing Group rows they mirror are inside <g transform=\"translate(215, y_offset + 35)\"> (line 225). The flags therefore render 35 pt above the rows they are aligned with, landing in the proper-shipping-name band: for a one-line name the flags sit at y_offset+41 and y_offset+55 while the name label and line 1 are at y_offset+46 and y_offset+59; for a two-line name the flags are at y_offset+52 and y_offset+66 against name lines at y_offset+59 and y_offset+70. Horizontally the flags start at the fixed compact_flag_x = 545 (line 1651) while shipping-name lines start at x=215 and are wrapped at 68 characters (line 1517) at font-size 8.6, which for an upper-case name reaches roughly x=600-640.",
+      "reasoning": "Vertical gaps of 4-7 pt between 8.6 pt and 9.2 pt text plus horizontal overlap means an optional marine-pollutant / limited-quantity flag can print on top of the proper shipping name, which is required DOT content; only the right-hand clearance to the reference diamond is bounded and tested (tests/test_label_stub.py:1301-1338, whose shipping name is short enough to hide the collision). Minimal fix: emit the flags inside the same translated group (or add the +35 offset) so they align with the Hazard Class / Packing Group rows, and assert vertical separation from shipping_name_lines in the regression."
+    },
+    {
+      "severity": "medium",
+      "location": "app/label_stub.py:236-243 and 297-308",
+      "defect": "Nothing marks the product-label DOT diamond as a reference: there is no caption and no data attribute analogous to data-nfpa-role=\"supplemental\" (line 351). A grep of app/ for \"reference\" finds only the module docstring of app/dot_sticker_sheet.py:3.",
+      "reasoning": "The task acceptance states \"The product-label DOT image is visibly a reference\" (.ai/tasks/T0009.md:26) and the review constraint repeats it. A 96 pt (\u224834 mm) Class 8 diamond printed on the product label with no qualifier can be read as the exterior transport label, which must be at least 100 mm per side \u2014 misleading compliance behaviour of the same class that the NFPA footer marking was corrected for. Minimal fix: add a short visible qualifier next to the diamond (for example \"Reference only - apply the 135 mm DOT label\") plus a data-dot-role=\"reference\" attribute, and assert both."
+    },
+    {
+      "severity": "medium",
+      "location": "app/label_stub.py:1378-1383",
+      "defect": "The sample_4x6 renderer still slices pictograms[:4] when building pictogram_images, silently dropping the fifth and later approved pictograms.",
+      "reasoning": "The stated change and evidence claim \"the previous fixed four-item slice was removed\" and that every approved required pictogram now renders, but the five-pictogram regression (tests/test_label_stub.py:867-885) exercises only the standard template at orientation=\"horizontal\". The sample label still carries a signal word and GHS pictogram block, so dropping a required pictogram is source-backed content loss on a second rendered artifact. Minimal fix: lay out all formatted pictograms in the sample band (wrap to a second row or reduce spacing) and extend the five-pictogram regression to size=\"sample_4x6\"."
+    },
+    {
+      "severity": "medium",
+      "location": "app/label_stub.py:1114-1117 and 1578-1595, surfaced at app/label_pipeline.py:1389-1406",
+      "defect": "When no font/column candidate fits, _build_compact_safety_layout raises ValueError; generate_svg retries once after discarding product_uses and otherwise re-raises, and the pipeline converts it to LabelPipelineError(500, \"LABEL_RENDERING_FAILED: ...\"). available_safety_height for pail landscape (792x612) is 612 - 110 - 246 - 132 = 124 pt with no product uses (line 1571), which a real dense SDS of roughly 20 long statements exceeds even at the smallest candidate (6.0 pt / 6.6 pt line height, 7 columns).",
+      "reasoning": "A data-driven, operator-correctable condition (label too small for this SDS) is reported as a 500 server error after the full OpenAI extraction has already run, with no guidance to choose a larger size or horizontal orientation; the correct content-preserving behaviour exists but is unreachable by the user. Minimal fix: raise a typed 400-class pipeline error with the remediation hint (larger size / orientation) instead of letting ValueError fall into the 500 handler."
+    },
+    {
+      "severity": "low",
+      "location": "app/label_stub.py:350-356",
+      "defect": "The supplemental qualifier for the NFPA footer symbol exists only as the SVG attribute data-nfpa-role=\"supplemental\"; the visible print content is the unqualified heading \"NFPA 704\" (line 355-356).",
+      "reasoning": "PDF and PNG artifacts produced by cairosvg (generate_pdf at line 1813) drop SVG data attributes, so the printed deliverables that a worker actually sees carry no indication that the 25.4 mm diamond is supplemental and not a facility placard. Minimal fix: add a short visible qualifier line (for example \"Supplemental - not a facility placard\") inside the footer panel."
+    },
+    {
+      "severity": "low",
+      "location": "app/label_stub.py:101-104 and 108-114 (with 1724-1726)",
+      "defect": "In the non-dense compact layout the signal word baseline is y_offset+21 at font-size 18 (signal_word_y_offset = 21, signal_word_font_size = 18 at lines 1724-1725) while the first pictogram box starts at y_offset+22 at the same x=20, so a descender (for example the \"g\" in \"Danger\") intrudes about 3 pt into the first pictogram cell.",
+      "reasoning": "Minor legibility degradation of the signal word, which is required OSHA content, in the layout the task was supposed to make more readable. Minimal fix: increase pictogram_y_offset (or decrease signal_word_y_offset) by a few points in the non-dense compact case."
+    }
+  ],
+  "evidence_used": [
+    "Read app/label_stub.py lines 1-1272 and 1273-1888: SVG template compact and standard DOT branches (211-311), footer/NFPA block (334-407), compact safety fitter (1030-1118), _fit_safety_statements_for_page (1120-1185), sample 4x6 renderer (1332-1427), generate_svg layout computation (1429-1798).",
+    "Read app/validator.py lines 1-307: identification-number regex and error at 132-142; supported DOT sticker checks at 206-226.",
+    "Read tests/test_label_stub.py lines 1-60 (assert_safety_transport_footer_clearance), 196-263, 640-1039, 1180-1339: dense-layout, five-pictogram, identification-number, compact-flag, and NFPA regressions, all dense cases using orientation=\"horizontal\".",
+    "Grep of tests/test_label_stub.py for orientation usage: dense and clearance regressions at lines 853, 928, 1235, 1325 are horizontal; the only vertical shipped cases are lines 239 and 1262 (header spacing, DOT field offsets).",
+    "Grep of tests/test_validator.py: malformed/multiple identification-number parametrization at lines 42-60 confirms UN1234/UN5678, UN123, UN12A4, UN12345 are rejected.",
+    "Grep of app/ for reference/supplemental markers: only app/dot_sticker_sheet.py:3 docstring and app/label_stub.py:351 data-nfpa-role.",
+    "app/main.py:312 and app/label_pipeline.py:210, 244-246, 1389-1406: orientation defaults to vertical and renderer ValueError maps to HTTP 500 LABEL_RENDERING_FAILED.",
+    ".ai/tasks/T0009.md lines 7-28: objective, 12 mm scope item, and the acceptance item requiring the product-label DOT image to be visibly a reference.",
+    "Reused without rerun: release.sh --verify-only pass at 57a6c73 (236 tests, E2E, 86 percent coverage), 74 renderer/validator tests, pdftotext 53.568 pt measurement of UN2735 on the 12x9 inch landscape artifact, two-up 135 mm DOT sheet output."
+  ],
+  "could_not_verify": [
+    "The literal patch text of 2c7f2fd..57a6c73: Bash (including git read commands) is disabled in this session, so I could not run git diff/log. I reviewed the final worktree state of the named files; consequently I cannot attribute each defect to this range versus a pre-existing state. The vertical shipped_dot unbounded-statement path and the sample_4x6 pictograms[:4] slice may predate the range, but both fall inside the stated objective.",
+    "Runtime confirmation of the geometry arithmetic in findings 1, 2, and 3: I did not execute the renderer, so the overlap/off-page coordinates and the 7.1 mm cap-height figure are derived from the template offsets, _statement_column_height, and _estimated_text_width_units rather than from a rendered artifact or measured PDF.",
+    "Whether any UI copy outside app/ (templates/static) already presents the product-label DOT diamond as a reference or the NFPA footer symbol as supplemental; I only searched app/.",
+    "Any regulatory determination of which marking sizes apply to each container; this review uses only the thresholds already written into .ai/tasks/T0009.md."
+  ],
+  "recommendation": "Do not close T0009. Address the two high findings first: extend the adaptive all-statement fitter and the identification-number sizing to the vertical shipped_dot path (the default orientation), and add a vertical-orientation dense regression that reuses assert_safety_transport_footer_clearance plus a minimum identification-number font-size assertion. Then correct the compact DOT flag y coordinate space (add the +35 group offset or move the flags inside the translated group, with a shipping-name separation assertion), add the visible 'reference' marking for the product-label DOT diamond required by the task's own acceptance list, remove the sample_4x6 pictograms[:4] slice, and convert the does-not-fit ValueError into a 400-class error with remediation guidance. Re-run the renderer and validator suites plus one actual-size visual check of a vertical drum shipped label before requesting another review.",
+  "meta": {
+    "vendor": "claude",
+    "model": "opus",
+    "tier": "frontier",
+    "exit_code": 0,
+    "duration_s": 357.7,
+    "cost_usd": 1.8420320000000003,
+    "turns": 20,
+    "depth": 1,
+    "raw_ref": "/var/folders/cf/xt2t1kr95tl5hkp3yxfdqbfr0000gn/T/ai-ask-claude.m5o5f7l4",
+    "error": null
+  }
+}

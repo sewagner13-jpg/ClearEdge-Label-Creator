@@ -1,0 +1,35 @@
+{
+  "task_id": "T0009",
+  "repo": "/Users/seanwagner/Documents/Playground/ClearEdge-Label-Creator",
+  "kind": "review",
+  "tier": "frontier",
+  "objective": "Review the exact committed T0009 change that improves actual-print legibility for a US OSHA/GHS and DOT drum label while preserving every source-backed safety statement.",
+  "current_state": "Commit 5b97df5 on codex/T0009-us-label-legibility enlarges compact GHS pictograms to 64 pt, enlarges the UN identification number to 48 pt, enlarges the product-label DOT reference to 96 pt, enlarges the supplemental NFPA footer symbol to 25.4 mm overall, and reflows exceptionally dense H/P content without omission. Production was not deployed.",
+  "relevant_surface": [
+    "git show --stat --oneline 5b97df5",
+    "git diff 5b97df5^ 5b97df5 -- app/label_stub.py tests/test_label_stub.py .ai/tasks/T0009.md docs/STATE.md",
+    "app/label_stub.py compact shipped/DOT template and dense safety layout",
+    "tests/test_label_stub.py dense SilaCure and SilaPox regressions",
+    "app/dot_sticker_sheet.py approved two-up 135 mm DOT sheet behavior"
+  ],
+  "changes": "Review only commit 5b97df5 relative to its parent 2c7f2fd. The separate exterior DOT sheet implementation is unchanged and already renders two approved 135 mm labels per letter-landscape page.",
+  "evidence": [
+    "Full release verify-only gate passed: 228 tests, browser E2E, 86 percent coverage, static checks, and local Railway-parity startup.",
+    "Focused renderer and DOT suite passed 52 tests.",
+    "The CE SilaCure 12 x 9 inch PDF retains Danger, GHS05/GHS07, all supplied H/P statements, UN2735, proper shipping name, Class 8, PG III, supplier/address/phone, emergency phone, and NFPA 3-1-0.",
+    "pdftotext bounding-box output measured rendered UN2735 at 53.568 pt or about 18.9 mm high, exceeding the 12 mm requirement for this package.",
+    "The separate DOT sheet remains letter landscape with two 135 mm Class 8 labels; 49 CFR 172.407 requires at least 100 mm per side.",
+    "OSHA 1910.1200 does not prescribe an absolute GHS pictogram dimension; it requires the red frame to be sufficiently wide and clearly visible. Dense pictograms now render 64 pt square.",
+    "Actual-size PNG inspection found no overlap or clipping in SilaCure; the extreme 29-statement SilaPox case reflows to five columns and suppresses only optional product-use copy.",
+    "The 25.4 mm NFPA footer symbol is supplemental and is not claimed to be a stand-alone NFPA facility placard."
+  ],
+  "assignment": "Inspect the exact diff for material correctness or regression risk. Focus on whether all required GHS/DOT text remains present, whether the changed sizes and coordinates can overlap or clip across dense labels, whether long H/P codes wrap without corrupting words, whether the very-dense grouping can lose/reorder statements, and whether any code or metadata misleadingly claims the compact NFPA symbol is a compliant facility placard. Report every critical, high, or medium issue in one batch with file/line evidence. Do not edit files or rerun broad tests.",
+  "constraints": [
+    "Required safety and transport content must never be omitted to make optional content fit.",
+    "Only approved GHS and DOT assets may render.",
+    "The page-1 DOT image is a visual reference; compliance-size exterior labels come from the unchanged 135 mm sticker sheet.",
+    "NFPA remains supplemental; do not equate it with OSHA or DOT package-label requirements.",
+    "No production deployment and no independent compliance certification."
+  ],
+  "return_contract": "Return exactly one raw JSON object conforming to result.schema.json, with no markdown fence, preface, or trailing prose. Set acceptable=true only when there are no critical, high, or medium defects."
+}

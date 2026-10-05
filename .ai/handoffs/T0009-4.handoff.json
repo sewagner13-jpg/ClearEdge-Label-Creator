@@ -1,0 +1,30 @@
+{
+  "task_id": "T0009",
+  "repo": "/Users/seanwagner/Documents/Playground/ClearEdge-Label-Creator",
+  "kind": "review",
+  "tier": "frontier",
+  "objective": "Review the exact final geometry-hardening delta for the US chemical label renderer after the prior T0009 review was accepted.",
+  "current_state": "Branch codex/T0009-us-label-legibility is at commit de42622. Review only ec48fa8..de42622. The prior independent review accepted ec48fa8 with no critical, high, or medium findings; this delta addresses its remaining low geometry margins. Production was not deployed.",
+  "relevant_surface": [
+    "git diff ec48fa8..de42622 -- app/label_stub.py tests/test_label_stub.py",
+    "app/label_stub.py compact safety fitter, sample GHS layout, shipped-label height reserve, signal/pictogram spacing, and DOT reference caption",
+    "tests/test_label_stub.py new narrow-column, saturated-footer, sample bounds, signal clearance, and caption clearance regressions"
+  ],
+  "changes": "The delta rejects compact safety candidates whose required text would cross a column boundary, increases the saturated transport-to-footer margin from 8 to 15 pt, moves the reference-only DOT instruction fully below the purple header, keeps six sample pictograms inside the GHS frame, gives the nine-pictogram sample grid more bottom clearance, and separates the signal-word baseline from the pictogram row. It does not change extracted classifications, wording, GHS/DOT assets, label dimensions, transport fields, or download behavior.",
+  "evidence": [
+    "Focused renderer/pipeline/validator suites passed 97 tests at de42622.",
+    "PYTHON_BIN=./.venv/bin/python ./scripts/release.sh --verify-only passed at exact commit de42622: 244 tests, browser E2E, 86 percent coverage, static verification, and local Railway-parity startup; no deployment was performed.",
+    "Fresh source-exact CE SilaCure SC horizontal 12 x 9 inch and vertical 9 x 12 inch PDFs retain Danger, approved GHS05/GHS07, all 4 SDS H statements, all 15 SDS P statements, UN2735, the proper shipping name, Class 8, PG III, responsible-party details, emergency phone, and source NFPA 3-1-0.",
+    "Both product-label orientations render the two GHS marks at 64 x 64 pt and UN2735 at 48 pt; the separate US Letter DOT sheet renders two approved Class 8 labels at exactly 135 mm per side.",
+    "Actual-size PNG inspection of the final horizontal label, vertical label, and DOT sheet found no overlap, clipping, or content loss."
+  ],
+  "assignment": "Inspect only the final delta and its direct renderer interactions for any critical, high, or medium defect. Confirm that the added horizontal-fit check cannot silently discard required content, the revised height reserve does not make supported SilaCure/SilaPox cases fail, and the spacing changes do not clip the reference caption, signal word, sample pictograms, transport panel, or footer. Report material findings in one batch with file and line evidence. Do not edit files, deploy, or rerun the full test suite.",
+  "constraints": [
+    "Required source-backed signal word, GHS pictograms, H/P statements, and DOT fields must remain present.",
+    "The large product label and separate 135 mm exterior Class 8 sticker are complementary required outputs for this workflow.",
+    "Only approved GHS and DOT assets may render.",
+    "The compact NFPA 3-1-0 footer diamond is supplemental, source-transcribed information, not an independent classification or stand-alone facility placard.",
+    "No production deployment and no legal or regulatory compliance certification."
+  ],
+  "return_contract": "Return exactly one raw JSON object with only these top-level keys: kind, summary, acceptable, findings, evidence_used, could_not_verify, recommendation. Each finding must contain only severity, location, defect, and reasoning. Do not include markdown fences, a preface, trailing prose, extra finding keys, or a meta key. Set acceptable=true only when there are no critical, high, or medium defects."
+}
