@@ -737,6 +737,18 @@ def test_all_ghs_assets_are_derived_from_approved_table_file():
             assert rgba.getpixel((0, 0))[3] == 0
             assert rgba.getpixel((rgba.width - 1, rgba.height - 1))[3] == 0
             assert rgba.getpixel((rgba.width // 2, rgba.height // 2))[3] == 255
+            interior = rgba.crop(
+                (
+                    rgba.width // 4,
+                    rgba.height // 4,
+                    (rgba.width * 3) // 4,
+                    (rgba.height * 3) // 4,
+                )
+            )
+            assert any(
+                alpha == 255 and min(red, green, blue) >= 240
+                for red, green, blue, alpha in interior.getdata()
+            )
 
 
 def test_nfpa_704_diamond_is_not_rendered_on_product_labels():
@@ -785,6 +797,8 @@ def test_source_backed_nfpa_values_render_in_standard_orientation():
     assert "#0072BC" in svg
     assert "#ED1C24" in svg
     assert "#FFF200" in svg
+    assert "NFPA 704" not in svg
+    assert "SUPPLEMENTAL" not in svg
     nfpa_group = re.search(r'<g id="nfpa-704"[\s\S]*?>(?P<body>[\s\S]*?)</g>', svg)
     assert nfpa_group
     assert "NFPA 704" not in nfpa_group.group("body")
@@ -1145,9 +1159,12 @@ def test_nfpa_footer_reserves_space_for_emergency_contact_and_clearedge_mark():
     data = ExtractedData(
         product=ProductInfo(
             name="Customer NFPA Product",
-            supplier_name="Customer Chemical Co.",
-            supplier_address="200 Customer Lane, Charlotte, NC",
-            supplier_phone="704-555-0199",
+            supplier_name="Customer Chemical Manufacturing and Distribution Company International",
+            supplier_address=(
+                "200 Customer Industrial Manufacturing and Distribution Lane, "
+                "Charlotte, North Carolina 28202"
+            ),
+            supplier_phone="+1 (704) 555-0199 extension 123456",
             emergency_phone="800-555-0111",
         ),
         ghs=GHSClassification(),
@@ -1194,6 +1211,22 @@ def test_nfpa_footer_reserves_space_for_emergency_contact_and_clearedge_mark():
             process_mark_x = float(process_mark.group("x"))
             assert emergency_right + 12 <= nfpa_x
             assert nfpa_x + 104 + 12 <= process_mark_x
+
+            for element_id, font_size in (
+                ("supplier-name", 10.5),
+                ("supplier-address", 8.0),
+                ("supplier-phone", 8.5),
+            ):
+                supplier = re.search(
+                    rf'id="{element_id}"[^>]*>(?P<value>[^<]*)</text>',
+                    svg,
+                )
+                assert supplier
+                rendered_width = (
+                    generator._estimated_text_width_units(supplier.group("value").strip())
+                    * font_size
+                )
+                assert 20 + rendered_width + 8 <= nfpa_x
 
 
 def test_silapox_horizontal_label_renders_all_source_h_and_p_statements_without_nfpa():

@@ -347,13 +347,13 @@ class LabelGenerator:
           stroke="{{ brand_purple }}" stroke-width="2"/>
 
     <!-- Supplier Information -->
-    <text x="20" y="{{ height - 77 }}" font-size="10.5" font-weight="bold" fill="{{ text_color }}">
+    <text id="supplier-name" x="20" y="{{ height - 77 }}" font-size="10.5" font-weight="bold" fill="{{ text_color }}">
       {{ supplier_name or 'ClearEdge Solutions' }}
     </text>
-    <text x="20" y="{{ height - 63 }}" font-size="8" fill="{{ text_color }}" opacity="0.75">
+    <text id="supplier-address" x="20" y="{{ height - 63 }}" font-size="8" fill="{{ text_color }}" opacity="0.75">
       {{ supplier_address or '14301 CR Koon Highway, Newberry, SC 29108' }}
     </text>
-    <text x="20" y="{{ height - 50 }}" font-size="8.5" fill="{{ text_color }}" opacity="0.75">
+    <text id="supplier-phone" x="20" y="{{ height - 50 }}" font-size="8.5" fill="{{ text_color }}" opacity="0.75">
       {{ supplier_phone }}
     </text>
 
@@ -516,12 +516,27 @@ class LabelGenerator:
         return f"data:image/png;base64,{encoded}"
 
     @staticmethod
-    @lru_cache(maxsize=16)
     def _edge_transparent_png_data_uri(path: Path) -> Optional[str]:
-        """Clear only the outer white crop while preserving the enclosed GHS white field."""
+        """Clear only the outer white crop and refresh when an approved asset changes."""
         if not path.exists():
             logger.warning("GHS pictogram asset not found: %s", path)
             return None
+
+        metadata = path.stat()
+        return LabelGenerator._edge_transparent_png_data_uri_cached(
+            path,
+            metadata.st_mtime_ns,
+            metadata.st_size,
+        )
+
+    @staticmethod
+    @lru_cache(maxsize=16)
+    def _edge_transparent_png_data_uri_cached(
+        path: Path,
+        _mtime_ns: int,
+        _size: int,
+    ) -> str:
+        """Return transformed bytes keyed by approved-asset identity and revision."""
 
         with Image.open(path) as source:
             image = source.convert("RGBA")
@@ -1575,9 +1590,17 @@ class LabelGenerator:
             else width - nfpa_panel_width - 20
         )
         reserved_footer_width = nfpa_panel_width + 12 if show_nfpa else 0
-        if resolved_branding.get("show_clearedge_mark", False):
+        show_clearedge_mark = resolved_branding.get("show_clearedge_mark", False)
+        if show_clearedge_mark:
             reserved_footer_width += process_mark_width + 12
         emergency_box_width = min(370, max(220, width - 40 - reserved_footer_width))
+        if show_nfpa:
+            supplier_right_boundary = nfpa_panel_x
+        elif show_clearedge_mark:
+            supplier_right_boundary = process_mark_x
+        else:
+            supplier_right_boundary = width - 20
+        supplier_max_width = max(60, supplier_right_boundary - 28)
         product_area_x = 20 + logo_width + 24
         product_area_width = width - product_area_x - 22
         shipment_spacing = self._shipment_header_spacing(width, product_area_x)
@@ -1865,20 +1888,32 @@ class LabelGenerator:
             "compact_limited_quantity_text": compact_limited_quantity_text,
             "compact_dot_panel": compact_compliance_layout,
             **transport_layout,
-            "supplier_name": self._fit_text(
-                resolved_branding["supplier_name"],
-                50,
-                self.CLEAREDGE_SUPPLIER_NAME if resolved_branding["is_clearedge"] else "Custom Label",
+            "supplier_name": self._fit_text_for_width(
+                self._fit_text(
+                    resolved_branding["supplier_name"],
+                    50,
+                    self.CLEAREDGE_SUPPLIER_NAME if resolved_branding["is_clearedge"] else "Custom Label",
+                ),
+                max_width=supplier_max_width,
+                font_size=10.5,
             ),
-            "supplier_address": self._fit_text(
-                resolved_branding["supplier_address"],
-                70,
-                self.CLEAREDGE_SUPPLIER_ADDRESS if resolved_branding["is_clearedge"] else "",
+            "supplier_address": self._fit_text_for_width(
+                self._fit_text(
+                    resolved_branding["supplier_address"],
+                    70,
+                    self.CLEAREDGE_SUPPLIER_ADDRESS if resolved_branding["is_clearedge"] else "",
+                ),
+                max_width=supplier_max_width,
+                font_size=8,
             ),
-            "supplier_phone": self._fit_text(
-                resolved_branding["supplier_phone"],
-                35,
-                self.CLEAREDGE_SUPPLIER_PHONE if resolved_branding["is_clearedge"] else "",
+            "supplier_phone": self._fit_text_for_width(
+                self._fit_text(
+                    resolved_branding["supplier_phone"],
+                    35,
+                    self.CLEAREDGE_SUPPLIER_PHONE if resolved_branding["is_clearedge"] else "",
+                ),
+                max_width=supplier_max_width,
+                font_size=8.5,
             ),
             "emergency_phone": self._fit_text(data.product.emergency_phone, 45, "") if data.product.emergency_phone else None,
             "emergency_box_width": emergency_box_width,
