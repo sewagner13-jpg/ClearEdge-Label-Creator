@@ -159,6 +159,24 @@ def test_sample_4x6_label_renders_compact_sales_contact_and_thermal_page_size():
     assert "PRECAUTIONARY STATEMENTS" not in svg
 
 
+def test_sample_4x6_label_renders_every_approved_required_pictogram():
+    generator = LabelGenerator()
+    pictograms = [
+        "GHS01", "GHS02", "GHS03", "GHS04", "GHS05",
+        "GHS06", "GHS07", "GHS08", "GHS09",
+    ]
+    data = ExtractedData(
+        product=ProductInfo(name="Five Mark Sample"),
+        ghs=GHSClassification(signal_word="Danger", pictograms=pictograms),
+        transport=TransportClassification(),
+    )
+
+    svg = generator.generate_svg(data, mode="workplace", size="sample_4x6")
+
+    for code in pictograms:
+        assert svg.count(f'id="pictogram-{code}"') == 1
+
+
 def test_sample_4x6_product_name_fits_right_header_space():
     heading = LabelGenerator._format_sample_product_heading("NovAdd D-5104E")
 
@@ -739,6 +757,7 @@ def test_source_backed_nfpa_values_render_in_standard_orientation():
     assert "#0072BC" in svg
     assert "#ED1C24" in svg
     assert "#FFF200" in svg
+    assert "NFPA 704 - SUPPLEMENTAL" in svg
 
 
 def test_silacure_nfpa_panel_preserves_required_us_label_content():
@@ -883,6 +902,46 @@ def test_standard_label_renders_every_approved_required_pictogram():
 
     for code in pictograms:
         assert svg.count(f'id="pictogram-{code}"') == 1
+
+
+def test_dense_vertical_us_shipped_label_keeps_safety_and_transport_marks_print_legible():
+    generator = LabelGenerator()
+    hazard_statements = [
+        HazardStatement(code=f"H31{index}", text="Source-backed hazard statement")
+        for index in range(4)
+    ]
+    precautionary_statements = [
+        PrecautionaryStatement(code=f"P2{index:02d}", text="Source-backed precautionary statement")
+        for index in range(18)
+    ]
+    data = ExtractedData(
+        product=ProductInfo(name="Dense Portrait Product", product_uses=["Industrial coating additive"]),
+        shipment=ShipmentInfo(fill_amount="441 lb", container_type="drum"),
+        ghs=GHSClassification(
+            signal_word="Danger",
+            pictograms=["GHS05", "GHS07", "GHS08"],
+            hazard_statements=hazard_statements,
+            precautionary_statements=precautionary_statements,
+        ),
+        transport=TransportClassification(
+            un_number="UN2735",
+            proper_shipping_name="AMINES, LIQUID, CORROSIVE, N.O.S. (Amidoamine)",
+            hazard_class="8",
+            packing_group="III",
+        ),
+    )
+
+    svg = generator.generate_svg(
+        data,
+        mode="shipped_dot",
+        size="drum",
+        orientation="vertical",
+    )
+
+    for statement in [*hazard_statements, *precautionary_statements]:
+        assert statement.code in svg
+    assert re.search(r'id="un-identification-number"[^>]*font-size="48"', svg)
+    assert_safety_transport_footer_clearance(svg)
 
 
 def test_long_dense_safety_text_stays_above_transport_and_footer():
@@ -1326,13 +1385,50 @@ def test_compact_dot_flags_respect_the_space_before_the_reference_diamond():
     )
 
     flags = re.findall(
-        r'<text class="compact-dot-flag" x="(?P<x>[\d.]+)"[^>]*'
+        r'<text class="compact-dot-flag" x="(?P<x>[\d.]+)" y="(?P<y>[\d.]+)"[^>]*'
+        r'data-absolute-x="(?P<absolute_x>[\d.]+)"[^>]*'
         r'data-max-width="(?P<max_width>[\d.]+)"[^>]*>(?P<text>[^<]+)</text>',
         svg,
     )
-    dot_image = re.search(r'id="dot-label-3" x="(?P<x>[\d.]+)"', svg)
+    dot_image = re.search(r'id="dot-label-3"[^>]* x="(?P<x>[\d.]+)"', svg)
     assert len(flags) == 2
     assert dot_image
-    for x, max_width, text in flags:
-        assert float(x) + float(max_width) <= float(dot_image.group("x")) - 8
+    for _x, _y, absolute_x, max_width, text in flags:
+        assert float(absolute_x) + float(max_width) <= float(dot_image.group("x")) - 8
         assert text.strip()
+
+    hazard_y = re.search(r'data-row="hazard-class"[^>]* y="(?P<y>[\d.]+)"', svg)
+    packing_y = re.search(r'data-row="packing-group"[^>]* y="(?P<y>[\d.]+)"', svg)
+    assert hazard_y and packing_y
+    assert float(flags[0][1]) == float(hazard_y.group("y"))
+    assert float(flags[1][1]) == float(packing_y.group("y"))
+
+
+def test_product_label_dot_art_is_visibly_marked_as_reference_only():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="Reference Marking Product"),
+        shipment=ShipmentInfo(fill_amount="441 lb", container_type="drum"),
+        ghs=GHSClassification(
+            signal_word="Warning",
+            pictograms=["GHS07"],
+            hazard_statements=[HazardStatement(code="H315", text="Causes skin irritation")],
+        ),
+        transport=TransportClassification(
+            un_number="UN1993",
+            proper_shipping_name="FLAMMABLE LIQUIDS, N.O.S.",
+            hazard_class="3",
+            packing_group="II",
+        ),
+    )
+
+    for orientation in ("horizontal", "vertical"):
+        svg = generator.generate_svg(
+            data,
+            mode="shipped_dot",
+            size="drum",
+            orientation=orientation,
+        )
+        assert 'data-dot-role="reference"' in svg
+        assert "REFERENCE ONLY" in svg
+        assert "APPLY SEPARATE DOT LABEL" in svg

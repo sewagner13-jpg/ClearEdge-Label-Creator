@@ -6,7 +6,7 @@ from pypdf import PdfReader, PdfWriter
 
 from app import label_pipeline
 from app.dot_sticker_sheet import US_LETTER_HEIGHT_PT, US_LETTER_WIDTH_PT
-from app.label_stub import LabelGenerator
+from app.label_stub import LabelContentDoesNotFitError, LabelGenerator
 from app.label_pipeline import LabelPipeline, LabelPipelineError
 from app.validator import ComplianceValidator
 from app.schema import (
@@ -417,6 +417,28 @@ async def test_pipeline_requires_fill_amount_for_non_sample_labels(tmp_path, mon
 
     assert exc_info.value.status_code == 400
     assert "MISSING_FILL_AMOUNT" in exc_info.value.detail
+
+
+def test_pipeline_returns_actionable_error_when_required_label_content_cannot_fit(tmp_path):
+    class DoesNotFitGenerator(FakeLabelGenerator):
+        def generate_svg(self, *args, **kwargs):
+            raise LabelContentDoesNotFitError("Required SDS statements exceed the available label area")
+
+    pipeline, _store = make_pipeline(tmp_path, base_extracted(un_number="UN1263"))
+    pipeline.label_generator = DoesNotFitGenerator()
+
+    with pytest.raises(LabelPipelineError) as exc_info:
+        pipeline._render_pdf(
+            "label_too_dense",
+            base_extracted(un_number="UN1263"),
+            mode="shipped_dot",
+            size="drum",
+            orientation="vertical",
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "LABEL_CONTENT_DOES_NOT_FIT" in exc_info.value.detail
+    assert "horizontal orientation" in exc_info.value.detail
 
 
 @pytest.mark.asyncio

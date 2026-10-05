@@ -28,6 +28,7 @@ from .dot_sticker_sheet import (
     sticker_size_mm_for,
     unsupported_dot_sticker_classes,
 )
+from .label_stub import LabelContentDoesNotFitError
 from .rule_based_extractor import RuleBasedExtractor
 from .schema import Evidence, ExtractedData, FieldConfidence, ValidationError, ValidationResult
 from .source_review import disabled_source_review, unavailable_source_review
@@ -1401,6 +1402,13 @@ class LabelPipeline:
             preview_path.write_text(svg_content)
             label_path.write_bytes(pdf_content)
             return label_path
+        except LabelContentDoesNotFitError as exc:
+            logger.warning("Label content does not fit for %s: %s", label_id, exc)
+            raise LabelPipelineError(
+                400,
+                "LABEL_CONTENT_DOES_NOT_FIT: "
+                f"{exc}. Choose a larger label size or horizontal orientation.",
+            ) from exc
         except Exception as exc:
             logger.error("Label rendering failed for %s: %s", label_id, exc, exc_info=True)
             raise LabelPipelineError(500, f"LABEL_RENDERING_FAILED: {exc}") from exc

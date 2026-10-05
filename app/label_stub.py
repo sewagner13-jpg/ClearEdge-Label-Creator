@@ -20,6 +20,10 @@ from .schema import ExtractedData
 logger = logging.getLogger(__name__)
 
 
+class LabelContentDoesNotFitError(ValueError):
+    """Required source-backed content cannot fit inside the selected label page."""
+
+
 class LabelGenerator:
     """Generate SVG and PDF labels from extracted product data."""
 
@@ -227,15 +231,17 @@ class LabelGenerator:
       {% for line in shipping_name_lines %}
       <text x="0" y="{{ 24 + (loop.index0 * 11) }}" font-size="8.6" fill="{{ text_color }}">{{ line }}</text>
       {% endfor %}
-      <text x="0" y="{{ compact_hazard_class_y }}" font-size="9.2" fill="{{ text_color }}"><tspan font-weight="bold">Hazard Class:</tspan> {{ hazard_class or 'N/A' }}</text>
-      {% if packing_group %}<text x="0" y="{{ compact_packing_group_y }}" font-size="9.2" fill="{{ text_color }}"><tspan font-weight="bold">Packing Group:</tspan> {{ packing_group }}</text>{% endif %}
+      <text data-row="hazard-class" x="0" y="{{ compact_hazard_class_y }}" font-size="9.2" fill="{{ text_color }}"><tspan font-weight="bold">Hazard Class:</tspan> {{ hazard_class or 'N/A' }}</text>
+      {% if packing_group %}<text data-row="packing-group" x="0" y="{{ compact_packing_group_y }}" font-size="9.2" fill="{{ text_color }}"><tspan font-weight="bold">Packing Group:</tspan> {{ packing_group }}</text>{% endif %}
       <text x="0" y="{{ compact_dot_label_y }}" font-size="9.2" fill="{{ text_color }}"><tspan font-weight="bold">DOT Label:</tspan> {{ dot_label_name or 'Review required' }}</text>
+      {% if compact_marine_pollutant_text %}<text class="compact-dot-flag" x="{{ compact_flag_local_x }}" y="{{ compact_hazard_class_y }}" font-size="9.2" font-weight="bold" fill="{{ text_color }}" data-absolute-x="{{ compact_flag_absolute_x }}" data-max-width="{{ compact_flag_max_width }}">{{ compact_marine_pollutant_text }}</text>{% endif %}
+      {% if compact_limited_quantity_text %}<text class="compact-dot-flag" x="{{ compact_flag_local_x }}" y="{{ compact_packing_group_y }}" font-size="9.2" font-weight="bold" fill="{{ text_color }}" data-absolute-x="{{ compact_flag_absolute_x }}" data-max-width="{{ compact_flag_max_width }}">{{ compact_limited_quantity_text }}</text>{% endif %}
     </g>
-    {% if compact_marine_pollutant_text %}<text class="compact-dot-flag" x="{{ compact_flag_x }}" y="{{ y_offset + compact_hazard_class_y }}" font-size="9.2" font-weight="bold" fill="{{ text_color }}" data-max-width="{{ compact_flag_max_width }}">{{ compact_marine_pollutant_text }}</text>{% endif %}
-    {% if compact_limited_quantity_text %}<text class="compact-dot-flag" x="{{ compact_flag_x }}" y="{{ y_offset + compact_packing_group_y }}" font-size="9.2" font-weight="bold" fill="{{ text_color }}" data-max-width="{{ compact_flag_max_width }}">{{ compact_limited_quantity_text }}</text>{% endif %}
     {% if dot_labels %}
     {% for dot_label in dot_labels[:1] %}
-    <image id="dot-label-{{ dot_label.hazard_class }}" x="{{ width - 115 }}" y="{{ y_offset + 34 }}"
+    <text x="{{ width - 20 }}" y="{{ y_offset + 32 }}" font-size="6.5" font-weight="bold"
+          fill="{{ brand_purple }}" text-anchor="end">REFERENCE ONLY - APPLY SEPARATE DOT LABEL</text>
+    <image id="dot-label-{{ dot_label.hazard_class }}" data-dot-role="reference" x="{{ width - 115 }}" y="{{ y_offset + 34 }}"
            width="96" height="96"
            href="{{ dot_label.data_uri }}" xlink:href="{{ dot_label.data_uri }}"
            preserveAspectRatio="xMidYMid meet"/>
@@ -254,15 +260,15 @@ class LabelGenerator:
     </text>
 
     <!-- Identification number (large and prominent) -->
-    <rect x="20" y="{{ y_offset + 45 }}" width="145" height="70"
+    <rect x="20" y="{{ y_offset + 45 }}" width="180" height="70"
           fill="{{ brand_purple_light }}" stroke="{{ brand_purple }}" stroke-width="3" rx="5"/>
-    <text x="92" y="{{ y_offset + 70 }}" font-size="14" font-weight="bold"
+    <text x="110" y="{{ y_offset + 70 }}" font-size="14" font-weight="bold"
           fill="{{ brand_purple }}" text-anchor="middle">UN/NA ID:</text>
-    <text x="92" y="{{ y_offset + 100 }}" font-size="28" font-weight="bold"
+    <text id="un-identification-number" x="110" y="{{ y_offset + 105 }}" font-size="{{ identification_number_font_size }}" font-weight="bold"
           fill="{{ brand_purple }}" text-anchor="middle">{{ identification_number }}</text>
 
     <!-- Shipping Details -->
-    <g transform="translate(180, {{ y_offset + 45 }})">
+    <g transform="translate(215, {{ y_offset + 45 }})">
       <text x="0" y="15" font-size="11" fill="{{ text_color }}">
         <tspan font-weight="bold">Proper Shipping Name:</tspan>
       </text>
@@ -296,11 +302,13 @@ class LabelGenerator:
 
     {% if dot_labels %}
     {% for dot_label in dot_labels[:1] %}
+    <text x="{{ width - 20 }}" y="{{ y_offset + 40 }}" font-size="6.5" font-weight="bold"
+          fill="{{ brand_purple }}" text-anchor="end">REFERENCE ONLY - APPLY SEPARATE DOT LABEL</text>
     {% if dot_label.background %}
     <polygon points="{{ width - 90 }},{{ y_offset + 42 }} {{ width - 35 }},{{ y_offset + 97 }} {{ width - 90 }},{{ y_offset + 152 }} {{ width - 145 }},{{ y_offset + 97 }}"
              fill="{{ dot_label.background }}"/>
     {% endif %}
-    <image id="dot-label-{{ dot_label.hazard_class }}" x="{{ width - 145 }}" y="{{ y_offset + 42 }}"
+    <image id="dot-label-{{ dot_label.hazard_class }}" data-dot-role="reference" x="{{ width - 145 }}" y="{{ y_offset + 42 }}"
            width="110" height="110"
            href="{{ dot_label.data_uri }}" xlink:href="{{ dot_label.data_uri }}"
            preserveAspectRatio="xMidYMid meet"/>
@@ -352,8 +360,8 @@ class LabelGenerator:
        transform="translate({{ nfpa_panel_x }}, {{ height - 96 }})">
       <rect x="0" y="0" width="{{ nfpa_panel_width }}" height="88" fill="#FFFFFF"
             stroke="#D8D3E6" stroke-width="1" rx="3"/>
-      <text x="{{ nfpa_panel_width / 2 }}" y="11" font-size="8.5" font-weight="bold"
-            fill="{{ text_color }}" text-anchor="middle">NFPA 704</text>
+      <text x="{{ nfpa_panel_width / 2 }}" y="11" font-size="6.2" font-weight="bold"
+            fill="{{ text_color }}" text-anchor="middle">NFPA 704 - SUPPLEMENTAL</text>
       <polygon data-quadrant="flammability" points="52,14 70,32 52,50 34,32"
                fill="#ED1C24" stroke="#111111" stroke-width="1.8"/>
       <polygon data-quadrant="instability" points="70,32 88,50 70,68 52,50"
@@ -1112,7 +1120,7 @@ class LabelGenerator:
                     return candidate
 
         if best is None or not best["fits"]:
-            raise ValueError(
+            raise LabelContentDoesNotFitError(
                 "Required hazard and precautionary statements do not fit the selected label size"
             )
         return best
@@ -1375,11 +1383,35 @@ class LabelGenerator:
             f'{self._svg_text(line)}</text>'
             for index, line in enumerate(product_lines)
         )
+        if len(pictograms) <= 4:
+            sample_pictogram_size = 42
+            sample_pictogram_spacing = 48
+            sample_pictogram_start_x = 204
+            sample_pictogram_columns = 4
+            sample_pictogram_start_y = 116
+            sample_pictogram_row_spacing = 42
+        elif len(pictograms) <= 6:
+            sample_pictogram_size = 34
+            sample_pictogram_spacing = 38
+            sample_pictogram_start_x = 194
+            sample_pictogram_columns = 6
+            sample_pictogram_start_y = 116
+            sample_pictogram_row_spacing = 34
+        else:
+            sample_pictogram_size = 28
+            sample_pictogram_spacing = 32
+            sample_pictogram_start_x = 174
+            sample_pictogram_columns = 7
+            sample_pictogram_start_y = 111
+            sample_pictogram_row_spacing = 30
         pictogram_images = "\n".join(
-            f'<image id="pictogram-{self._svg_text(icon["code"])}" x="{204 + index * 48}" y="116" '
-            f'width="42" height="42" href="{icon["data_uri"]}" xlink:href="{icon["data_uri"]}" '
+            f'<image id="pictogram-{self._svg_text(icon["code"])}" '
+            f'x="{sample_pictogram_start_x + (index % sample_pictogram_columns) * sample_pictogram_spacing}" '
+            f'y="{sample_pictogram_start_y + (index // sample_pictogram_columns) * sample_pictogram_row_spacing}" '
+            f'width="{sample_pictogram_size}" height="{sample_pictogram_size}" '
+            f'href="{icon["data_uri"]}" xlink:href="{icon["data_uri"]}" '
             f'preserveAspectRatio="xMidYMid meet"/>'
-            for index, icon in enumerate(pictograms[:4])
+            for index, icon in enumerate(pictograms)
         )
         weight_text = (
             f'<text x="392" y="87" font-size="10" font-weight="bold" fill="{self.brand_palette["text"]}" '
@@ -1497,8 +1529,12 @@ class LabelGenerator:
             and width > height
             and bool(data.ghs.hazard_statements or data.ghs.precautionary_statements)
         )
+        shipped_safety_layout = (
+            mode == "shipped_dot"
+            and bool(data.ghs.hazard_statements or data.ghs.precautionary_statements)
+        )
         dense_safety_layout = (
-            compact_compliance_layout
+            shipped_safety_layout
             and len(data.ghs.hazard_statements) + len(data.ghs.precautionary_statements) > 16
         )
         very_dense_safety_layout = (
@@ -1506,7 +1542,7 @@ class LabelGenerator:
             and len(data.ghs.hazard_statements) + len(data.ghs.precautionary_statements) > 24
         )
         product_uses = self._format_product_uses(data.product.product_uses, width=width)
-        if compact_compliance_layout:
+        if shipped_safety_layout:
             product_uses = product_uses[:1]
         if very_dense_safety_layout:
             product_uses = []
@@ -1541,8 +1577,8 @@ class LabelGenerator:
                 "compact_dot_label_y": 0,
             })
         pictogram_icons = self._format_pictograms(data.ghs.pictograms)
-        pictogram_size = 64 if compact_compliance_layout else 58
-        pictogram_spacing = 72 if compact_compliance_layout else 64
+        pictogram_size = 64 if shipped_safety_layout else 58
+        pictogram_spacing = 72 if shipped_safety_layout else 64
         pictogram_row_spacing = pictogram_size + 4
         available_pictogram_width = width - 40
         pictogram_columns = max(
@@ -1553,14 +1589,14 @@ class LabelGenerator:
             ),
         )
         pictogram_rows = max(1, (len(pictogram_icons) + pictogram_columns - 1) // pictogram_columns)
-        symbols_band_height = (90 if compact_compliance_layout else 96) + (
+        symbols_band_height = (90 if shipped_safety_layout else 96) + (
             (pictogram_rows - 1) * pictogram_row_spacing
         )
-        symbols_advance = symbols_band_height + (6 if compact_compliance_layout else 8)
+        symbols_advance = symbols_band_height + (6 if shipped_safety_layout else 8)
 
         safety_columns = mode == "shipped_dot"
-        safety_font_size = 7.2 if dense_safety_layout else (7.4 if compact_compliance_layout else 7.8)
-        if compact_compliance_layout:
+        safety_font_size = 7.2 if dense_safety_layout else (7.4 if shipped_safety_layout else 7.8)
+        if shipped_safety_layout:
             symbols_top = 146 if (data.ghs.signal_word and dense_safety_layout) else 150
             safety_top = symbols_top + symbols_advance
             product_uses_advance = 0
@@ -1568,12 +1604,17 @@ class LabelGenerator:
                 product_uses_advance = (24 if dense_safety_layout else 28) + (
                     4 if dense_safety_layout else 6
                 )
+            transport_height = 0
+            if data.transport.un_number:
+                transport_height = transport_layout["dot_panel_height"]
+            elif self._is_not_regulated_for_transport(data.transport):
+                transport_height = 70
             available_safety_height = (
                 height
                 - 110
                 - safety_top
                 - product_uses_advance
-                - transport_layout["dot_panel_height"]
+                - transport_height
             )
             try:
                 compact_safety = self._build_compact_safety_layout(
@@ -1582,7 +1623,7 @@ class LabelGenerator:
                     available_height=available_safety_height,
                     dense=dense_safety_layout,
                 )
-            except ValueError:
+            except LabelContentDoesNotFitError:
                 if not product_uses:
                     raise
                 product_uses = []
@@ -1620,14 +1661,14 @@ class LabelGenerator:
             safety_block_height = 0
 
         visible_safety_groups = [group for group in safety_groups if group["statements"]]
-        if not compact_compliance_layout:
+        if not shipped_safety_layout:
             safety_column_width = (width - 40) / max(1, len(visible_safety_groups))
         for index, group in enumerate(visible_safety_groups):
             group["x"] = 20 + (index * safety_column_width)
             group["continuation_x"] = group["x"] + continuation_indent
         safety_groups = visible_safety_groups
         safety_block_padding = 34 if dense_safety_layout else 40
-        if not compact_compliance_layout:
+        if not shipped_safety_layout:
             safety_block_height = safety_block_padding + max(
                 (
                     self._statement_column_height(group["statements"], safety_line_height)
@@ -1639,17 +1680,18 @@ class LabelGenerator:
             safety_block_height = 0
 
         identification_number = self._format_identification_number(data.transport.un_number)
-        if compact_compliance_layout and len(identification_number) <= 6:
+        if identification_number and len(identification_number) <= 6:
             identification_number_font_size = 48
         else:
             identification_number_font_size = self._fit_font_size_for_width(
                 [identification_number],
-                max_width=170 if compact_compliance_layout else 135,
-                preferred_size=48 if compact_compliance_layout else 28,
+                max_width=170,
+                preferred_size=48,
                 minimum_size=18,
-            ) if identification_number else (48 if compact_compliance_layout else 28)
-        compact_flag_x = 545
-        compact_flag_max_width = max(0, (width - 115) - compact_flag_x - 8)
+            ) if identification_number else 48
+        compact_flag_absolute_x = 545
+        compact_flag_local_x = compact_flag_absolute_x - 215
+        compact_flag_max_width = max(0, (width - 115) - compact_flag_absolute_x - 8)
         compact_marine_pollutant_text = self._fit_text_for_width(
             f"Marine Pollutant: {marine_pollutant_display}" if marine_pollutant_display else None,
             max_width=compact_flag_max_width,
@@ -1716,14 +1758,14 @@ class LabelGenerator:
                 shipment_spacing["fill_max_chars"],
             ),
             "signal_word": data.ghs.signal_word,
-            "signal_strip_height": 18 if dense_safety_layout else (22 if compact_compliance_layout else 30),
-            "symbols_y_with_signal": 146 if dense_safety_layout else (150 if compact_compliance_layout else 160),
+            "signal_strip_height": 18 if dense_safety_layout else (22 if shipped_safety_layout else 30),
+            "symbols_y_with_signal": 146 if dense_safety_layout else (150 if shipped_safety_layout else 160),
             "symbols_y_without_signal": 124,
             "symbols_band_height": symbols_band_height,
             "symbols_advance": symbols_advance,
-            "signal_word_y_offset": 18 if dense_safety_layout else (21 if compact_compliance_layout else 30),
-            "signal_word_font_size": 16 if dense_safety_layout else (18 if compact_compliance_layout else 21),
-            "pictogram_y_offset": 22 if compact_compliance_layout else 36,
+            "signal_word_y_offset": 18 if dense_safety_layout else (21 if shipped_safety_layout else 30),
+            "signal_word_font_size": 16 if dense_safety_layout else (18 if shipped_safety_layout else 21),
+            "pictogram_y_offset": 22 if shipped_safety_layout else 36,
             "pictogram_size": pictogram_size,
             "pictogram_spacing": pictogram_spacing,
             "pictogram_columns": pictogram_columns,
@@ -1731,8 +1773,8 @@ class LabelGenerator:
             "pictograms": data.ghs.pictograms,
             "pictogram_icons": pictogram_icons,
             "product_uses": product_uses,
-            "product_uses_block_height": 24 if dense_safety_layout else (28 if compact_compliance_layout else 40),
-            "product_uses_gap": 4 if dense_safety_layout else (6 if compact_compliance_layout else 8),
+            "product_uses_block_height": 24 if dense_safety_layout else (28 if shipped_safety_layout else 40),
+            "product_uses_gap": 4 if dense_safety_layout else (6 if shipped_safety_layout else 8),
             "safety_columns": safety_columns,
             "safety_groups": safety_groups,
             "safety_block_height": safety_block_height,
@@ -1756,7 +1798,8 @@ class LabelGenerator:
             "dot_label_name": dot_labels[0]["name"] if dot_labels else None,
             "marine_pollutant_display": marine_pollutant_display,
             "limited_quantity_display": limited_quantity_display,
-            "compact_flag_x": compact_flag_x,
+            "compact_flag_absolute_x": compact_flag_absolute_x,
+            "compact_flag_local_x": compact_flag_local_x,
             "compact_flag_max_width": compact_flag_max_width,
             "compact_marine_pollutant_text": compact_marine_pollutant_text,
             "compact_limited_quantity_text": compact_limited_quantity_text,
