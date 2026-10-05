@@ -779,6 +779,68 @@ def test_silacure_nfpa_panel_preserves_required_us_label_content():
     assert "P260" in svg and "P280" in svg
 
 
+def test_dense_us_shipped_label_keeps_safety_and_transport_marks_print_legible():
+    generator = LabelGenerator()
+    hazard_statements = [
+        HazardStatement(code="H314", text="Causes severe skin burns and eye damage"),
+        HazardStatement(code="H317", text="May cause an allergic skin reaction"),
+        HazardStatement(code="H318", text="Causes serious eye damage"),
+        HazardStatement(code="H402", text="Harmful to aquatic life"),
+    ]
+    precautionary_codes = [
+        "P260", "P264", "P272", "P273", "P280", "P301+P330+P331", "P310",
+        "P302+P352", "P303+P361+P353", "P304+P340", "P305+P351+P338", "P321",
+        "P333+P313", "P363", "P405", "P501",
+    ]
+    precautionary_statements = [
+        PrecautionaryStatement(code=code, text=f"Source-backed precaution {index}")
+        for index, code in enumerate(precautionary_codes, start=1)
+    ]
+    data = ExtractedData(
+        product=ProductInfo(
+            name="CE SilaCure SC",
+            supplier_name="ClearEdge Solutions",
+            supplier_address="14301 CR Koon Highway, Newberry, SC 29108",
+            supplier_phone="704-799-5769",
+            emergency_phone="704-799-5769",
+        ),
+        shipment=ShipmentInfo(fill_amount="441 lb", container_type="drum"),
+        ghs=GHSClassification(
+            signal_word="Danger",
+            pictograms=["GHS05", "GHS07"],
+            hazard_statements=hazard_statements,
+            precautionary_statements=precautionary_statements,
+        ),
+        transport=TransportClassification(
+            un_number="UN2735",
+            proper_shipping_name="AMINES, LIQUID, CORROSIVE, N.O.S. (Amidoamine)",
+            hazard_class="8",
+            packing_group="III",
+        ),
+        nfpa=NFPA704Ratings(
+            health=3,
+            flammability=1,
+            instability=0,
+            source="sds",
+        ),
+    )
+
+    svg = generator.generate_svg(
+        data,
+        mode="shipped_dot",
+        size="drum",
+        orientation="horizontal",
+    )
+
+    assert re.search(r'id="pictogram-GHS05"[^>]*width="64" height="64"', svg)
+    assert re.search(r'id="pictogram-GHS07"[^>]*width="64" height="64"', svg)
+    assert re.search(r'id="un-identification-number"[^>]*font-size="48"', svg)
+    assert re.search(r'id="dot-label-8"[^>]*width="96" height="96"', svg)
+    assert 'data-overall-size-mm="25.4"' in svg
+    for statement in [*hazard_statements, *precautionary_statements]:
+        assert statement.code in svg
+
+
 def test_nfpa_footer_reserves_space_for_emergency_contact_and_clearedge_mark():
     generator = LabelGenerator()
     data = ExtractedData(
@@ -832,7 +894,7 @@ def test_nfpa_footer_reserves_space_for_emergency_contact_and_clearedge_mark():
             nfpa_x = float(nfpa.group("x"))
             process_mark_x = float(process_mark.group("x"))
             assert emergency_right + 12 <= nfpa_x
-            assert nfpa_x + 88 + 12 <= process_mark_x
+            assert nfpa_x + 104 + 12 <= process_mark_x
 
 
 def test_silapox_horizontal_label_renders_all_source_h_and_p_statements_without_nfpa():
@@ -899,7 +961,8 @@ def test_silapox_horizontal_label_renders_all_source_h_and_p_statements_without_
 
     assert 'id="nfpa-704"' not in svg
     assert 'id="safety-statements"' in svg
-    assert 'data-safety-columns="3"' in svg
+    assert 'data-safety-columns="5"' in svg
+    assert "High-temperature coatings" not in svg
     for code, text in hazards + precautions:
         assert code in svg
         assert text in svg

@@ -7,13 +7,13 @@
 - Current two-up DOT sticker release verified from code commit `75ea2daeadd7d66d3e71253c32a6ba448d27038f`.
 
 ## Active Ticket
-- None. `T0008` is complete on task branch `codex/T0008-silacure-nfpa-panel`.
+- `T0009` is in progress on task branch `codex/T0009-us-label-legibility`.
 
 ## Open Defects
 - None.
 
 ## Current Objective
-- Await operator review of the CE SilaCure SC NFPA 3-1-0 preview.
+- Preserve all CE SilaCure SC source-backed US label content while adding actual-print-size guardrails for GHS pictograms, the DOT identification number, the DOT reference image, and the supplemental NFPA symbol.
 
 ## Verification State
 - `T0008` release verify-only gate passed: 227 tests, 86% coverage, browser E2E, static checks, local Railway parity, and 12 x 9 inch artifact geometry inspection. No deployment performed.
