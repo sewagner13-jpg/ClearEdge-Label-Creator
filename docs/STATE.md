@@ -7,15 +7,16 @@
 - Current two-up DOT sticker release verified from code commit `75ea2daeadd7d66d3e71253c32a6ba448d27038f`.
 
 ## Active Ticket
-- None. `T0007` is complete.
+- None. `T0008` is complete on task branch `codex/T0008-silacure-nfpa-panel`.
 
 ## Open Defects
 - None.
 
 ## Current Objective
-- Await operator review of the maximum-size two-up DOT sticker sheet.
+- Await operator review of the CE SilaCure SC NFPA 3-1-0 preview.
 
 ## Verification State
+- `T0008` release verify-only gate passed: 227 tests, 86% coverage, browser E2E, static checks, local Railway parity, and 12 x 9 inch artifact geometry inspection. No deployment performed.
 - `scripts/release.sh --deploy` passed for commit `75ea2daeadd7d66d3e71253c32a6ba448d27038f`: 221 tests, 86% coverage, browser E2E, static checks, local Railway parity, exact-commit production wait, and live Edgemer generation `label_EdgemerE618_6c63e32f`.
 - Live SilaPox generation `label_CESilaPoxEF_d94319fa` returned a two-page preview and full PDF. Page 2 is US Letter landscape with exactly one Class 9 label and one marine-pollutant mark, both 135 mm square; the separate DOT PDF contains the same sheet.
 - The one-type duplication, two-type one-each, and three-type pagination regressions were proven red against the old four-up renderer before all focused and full tests passed. Visual proof: `test_output/browser/T0007-two-up-dot-sheet.png`; release artifacts: `test_output/release/75ea2daeadd7/`.
@@ -61,4 +62,4 @@
 - None.
 
 ## Next Action
-- Review the live SilaPox two-up preview and continue with the next operator label.
+- Review the local T0008 preview; merge or production deployment remains an explicit owner decision.

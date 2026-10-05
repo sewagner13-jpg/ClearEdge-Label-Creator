@@ -375,16 +375,79 @@ class RuleBasedExtractor:
     @classmethod
     def _extract_nfpa_fields(cls, data: ExtractedData, sources) -> None:
         found_nfpa = False
-        for field_path, pattern in (
-            ("nfpa.health", r"NFPA\s*(?:Health|Blue)\s*:?\s*([0-4])"),
-            ("nfpa.flammability", r"NFPA\s*(?:Flammability|Red)\s*:?\s*([0-4])"),
-            ("nfpa.instability", r"NFPA\s*(?:Instability|Reactivity|Yellow)\s*:?\s*([0-4])"),
-        ):
-            match = cls._find_regex(pattern, sources, flags=re.IGNORECASE)
-            if match:
+        labeled_patterns = (
+            ("nfpa.health", re.compile(r"\bHealth\s*:\s*\*?\s*([0-4])\b", re.IGNORECASE)),
+            ("nfpa.flammability", re.compile(r"\bFlammability\s*:\s*([0-4])\b", re.IGNORECASE)),
+            (
+                "nfpa.instability",
+                re.compile(r"\b(?:Instability|Reactivity)\s*:\s*([0-4])\b", re.IGNORECASE),
+            ),
+        )
+        nfpa_start_pattern = re.compile(
+            r"\bNFPA(?:\s*704)?\s*:",
+            flags=re.IGNORECASE,
+        )
+        nfpa_block_stop_pattern = re.compile(
+            r"[\r\n]+\s*(?:HMIS\b|Disclaimer\b|SECTION\b)",
+            flags=re.IGNORECASE,
+        )
+        summary_pattern = re.compile(
+            r"\bNFPA(?:\s*704)?\s*:\s*([0-4])\s*[-/]\s*([0-4])\s*[-/]\s*([0-4])\b",
+            flags=re.IGNORECASE,
+        )
+        for doc, page, text in sources:
+            nfpa_start = nfpa_start_pattern.search(text)
+            if not nfpa_start:
+                continue
+            row_text = text[nfpa_start.start():nfpa_start.start() + 500]
+            stop = nfpa_block_stop_pattern.search(row_text)
+            if stop:
+                row_text = row_text[:stop.start()]
+            labeled = [
+                (field_path, pattern.search(row_text))
+                for field_path, pattern in labeled_patterns
+            ]
+            if all(match for _field_path, match in labeled):
                 found_nfpa = True
-                cls._set_field(data, field_path, int(match["match"]))
-                cls._add_evidence(data, field_path, match["match"], match)
+                evidence = {
+                    "doc": doc,
+                    "page": page,
+                    "quote": row_text,
+                }
+                for field_path, match in labeled:
+                    value = match.group(1)
+                    cls._set_field(data, field_path, int(value))
+                    cls._add_evidence(data, field_path, value, evidence)
+                break
+
+            summary = summary_pattern.search(row_text)
+            if not summary:
+                continue
+            found_nfpa = True
+            evidence = {
+                "doc": doc,
+                "page": page,
+                "quote": row_text,
+            }
+            for field_path, value in zip(
+                ("nfpa.health", "nfpa.flammability", "nfpa.instability"),
+                summary.groups(),
+            ):
+                cls._set_field(data, field_path, int(value))
+                cls._add_evidence(data, field_path, value, evidence)
+            break
+
+        if not found_nfpa:
+            for field_path, pattern in (
+                ("nfpa.health", r"NFPA\s*(?:Health|Blue)\s*:?\s*([0-4])"),
+                ("nfpa.flammability", r"NFPA\s*(?:Flammability|Red)\s*:?\s*([0-4])"),
+                ("nfpa.instability", r"NFPA\s*(?:Instability|Reactivity|Yellow)\s*:?\s*([0-4])"),
+            ):
+                match = cls._find_regex(pattern, sources, flags=re.IGNORECASE)
+                if match:
+                    found_nfpa = True
+                    cls._set_field(data, field_path, int(match["match"]))
+                    cls._add_evidence(data, field_path, match["match"], match)
 
         if found_nfpa:
             data.nfpa.source = "sds"

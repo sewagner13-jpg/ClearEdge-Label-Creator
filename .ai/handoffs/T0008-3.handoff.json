@@ -1,0 +1,30 @@
+{
+  "task_id": "T0008-final-review",
+  "repo": "/Users/seanwagner/Documents/Playground/ClearEdge-Label-Creator",
+  "kind": "review",
+  "tier": "fast_read",
+  "objective": "Return a final schema-valid verdict on the corrected source-backed NFPA parser and footer panel.",
+  "current_state": "All prior material findings have corrections: complete explicit NFPA labels override ambiguous triplet ordering on one line or wrapped lines; triplet-only input still parses; current pail, drum, and tote layouts have automated NFPA/emergency/co-brand spacing checks in both orientations. No deployment occurred.",
+  "relevant_surface": [
+    "app/rule_based_extractor.py _extract_nfpa_fields",
+    "app/label_stub.py footer SVG and geometry",
+    "tests/test_rule_based_extractor.py NFPA regressions",
+    "tests/test_label_stub.py NFPA footer and required-content regressions",
+    "git diff -- app/label_stub.py app/rule_based_extractor.py tests/test_label_stub.py tests/test_rule_based_extractor.py"
+  ],
+  "changes": "Review the current uncommitted diff relative to HEAD 4dd5a04368d6d2982757bd58bef0b36a5046d3e6. The prior wrapped-line parser gap is now covered by a regression and a bounded 500-character NFPA block that stops at HMIS, Disclaimer, or SECTION headings.",
+  "evidence": [
+    "Four focused compact, ambiguous-order, wrapped-label, and triplet-only NFPA parser tests pass.",
+    "The broader parser/pipeline/renderer suite passed 71 tests before the wrapped-line addition; only the bounded parser branch and its two focused tests changed afterward.",
+    "The supplied PDF extracts 3-1-0 with source=sds and explicit page-6 evidence.",
+    "Prior full release gate passed 223 tests, browser E2E, static checks, local Railway parity, and 86 percent coverage."
+  ],
+  "assignment": "Confirm there is no remaining critical, high, or medium correctness defect in the scoped NFPA parser/rendering change. Check source isolation, explicit-label precedence, triplet-only fallback, source gating, no product-specific hard-coding, and preservation of DOT/GHS/footer content. Do not edit files or rerun broad tests.",
+  "constraints": [
+    "NFPA is supplemental and source-backed only.",
+    "No classification or wording changes.",
+    "No deployment.",
+    "Return raw JSON only, with no markdown fence, preface, or trailing prose."
+  ],
+  "return_contract": "Return exactly one raw JSON object conforming to result.schema.json with all required fields: kind, summary, acceptable, findings, evidence_used, could_not_verify, recommendation. No markdown fences or prose. Set acceptable=true only if there are no critical, high, or medium findings."
+}

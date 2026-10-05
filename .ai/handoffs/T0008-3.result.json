@@ -1,0 +1,30 @@
+{
+  "kind": "review",
+  "summary": "NFPA parser and footer spacing changes are acceptable: bounded source extraction, explicit-label precedence, wrapped-line handling, triplet fallback, source gating, and footer spacing meet the scoped requirements.",
+  "acceptable": true,
+  "findings": [],
+  "evidence_used": [
+    "app/rule_based_extractor.py _extract_nfpa_fields bounded block and precedence logic",
+    "app/label_stub.py source gate and footer reservation logic",
+    "NFPA parser regressions for same-line, wrapped-line, and triplet-only inputs",
+    "NFPA footer spacing regression across pail, drum, and tote orientations"
+  ],
+  "could_not_verify": [
+    "Partial explicit NFPA rows with exactly one or two labeled values are not separately tested.",
+    "Multiple NFPA sections in one document use the first bounded NFPA source block.",
+    "The bridge rejected the original reviewer response because it was wrapped in markdown fences; this file records the JSON content extracted from that raw response."
+  ],
+  "recommendation": "Accept the scoped implementation after the final repository verification gate passes.",
+  "meta": {
+    "vendor": "claude",
+    "model": "haiku",
+    "tier": "fast_read",
+    "exit_code": 0,
+    "duration_s": 176.3,
+    "cost_usd": 0.3352718,
+    "turns": 17,
+    "depth": 1,
+    "raw_ref": "/var/folders/cf/xt2t1kr95tl5hkp3yxfdqbfr0000gn/T/ai-ask-claude.sk5maijn",
+    "error": "bridge rejected markdown-fenced JSON; reviewer content parsed and recorded"
+  }
+}

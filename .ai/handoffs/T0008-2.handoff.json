@@ -1,0 +1,31 @@
+{
+  "task_id": "T0008-rereview",
+  "repo": "/Users/seanwagner/Documents/Playground/ClearEdge-Label-Creator",
+  "kind": "review",
+  "tier": "engineering",
+  "objective": "Re-review the T0008 NFPA change after corrections for every material finding in T0008-1.result.json.",
+  "current_state": "The parser now prefers a complete explicit Health/Flammability/Instability set from the NFPA row over its compact triplet, and a regression proves an ambiguous 1-3-0 triplet is overridden by explicit 3/1/0 labels. The emergency contact box now has a stable SVG id, and a regression checks 12-point separation from NFPA and ClearEdge co-brand panels for pail, drum, and tote in vertical and horizontal orientations. No deployment occurred.",
+  "relevant_surface": [
+    "app/rule_based_extractor.py _extract_nfpa_fields",
+    "app/label_stub.py footer SVG and geometry",
+    "tests/test_rule_based_extractor.py compact and ambiguous-order NFPA tests",
+    "tests/test_label_stub.py footer non-overlap test",
+    ".ai/handoffs/T0008-1.result.json",
+    "git diff -- app/label_stub.py app/rule_based_extractor.py tests/test_label_stub.py tests/test_rule_based_extractor.py"
+  ],
+  "changes": "Review the current uncommitted diff relative to HEAD 4dd5a04368d6d2982757bd58bef0b36a5046d3e6, focusing on whether the prior high and medium findings are closed without regressions.",
+  "evidence": [
+    "Focused parser/pipeline/renderer suite now passes 71 tests.",
+    "The real supplied PDF still extracts 3-1-0 with source=sds and the full explicit NFPA row as page-6 evidence.",
+    "The prior full release verify-only gate passed 223 tests, browser E2E, 86 percent coverage, static checks, and local Railway-parity startup before the focused review corrections.",
+    "Static syntax and diff checks pass after the corrections."
+  ],
+  "assignment": "Confirm the prior high and medium findings are closed. Check that explicit NFPA labels take precedence only within an NFPA row, compact triplet-only rows still parse, default unsourced ratings remain hidden, and the geometry test meaningfully covers supported non-sample templates and co-branding. Report any remaining critical, high, or medium defect in one batch. Do not edit files or rerun broad tests.",
+  "constraints": [
+    "NFPA remains supplemental and source-backed.",
+    "No classification or other label-content changes.",
+    "No SilaCure-specific production hard-coding.",
+    "No production deployment."
+  ],
+  "return_contract": "Return only one raw JSON object conforming exactly to result.schema.json. Set acceptable=true only if the prior high and medium findings are closed and no new material defect exists."
+}

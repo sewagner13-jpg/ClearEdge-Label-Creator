@@ -1,0 +1,48 @@
+{
+  "kind": "review",
+  "summary": "NFPA orientation, source gating, and hard-coding scope were correct, but explicit NFPA field labels needed precedence over ambiguous compact triplet ordering and footer non-overlap needed an automated invariant.",
+  "acceptable": false,
+  "findings": [
+    {
+      "severity": "high",
+      "location": "app/rule_based_extractor.py:_extract_nfpa_fields",
+      "defect": "The compact NFPA triplet was mapped positionally without preferring explicit Health, Flammability, and Instability labels in the same row.",
+      "reasoning": "A vendor using another triplet order could silently transpose source ratings."
+    },
+    {
+      "severity": "medium",
+      "location": "app/label_stub.py footer geometry and tests/test_label_stub.py",
+      "defect": "Footer spacing relied on fixed arithmetic without an automated non-overlap invariant across size, orientation, and co-brand combinations.",
+      "reasoning": "Future template changes could crowd the emergency contact without a regression failure."
+    },
+    {
+      "severity": "low",
+      "location": "app/label_stub.py NFPA numeral colors",
+      "defect": "Red and blue quadrants use white numerals while yellow and white use dark numerals.",
+      "reasoning": "This is a visual-fidelity nuance; the current treatment remains high contrast."
+    }
+  ],
+  "evidence_used": [
+    "Current working-tree source and tests",
+    "Reported 223-test release gate and browser geometry evidence",
+    "Supplied SDS NFPA 3-1-0 row"
+  ],
+  "could_not_verify": [
+    "Independent browser geometry rerun",
+    "Independent regulatory validation",
+    "Whether other catalog SDS files use a non-H-F-I triplet"
+  ],
+  "recommendation": "Prefer explicit labeled NFPA values when present and add a footer non-overlap regression across supported templates.",
+  "meta": {
+    "vendor": "claude",
+    "model": "sonnet",
+    "tier": "engineering",
+    "exit_code": 0,
+    "duration_s": 203.6,
+    "cost_usd": 0.6080496,
+    "turns": 14,
+    "depth": 1,
+    "raw_ref": "/var/folders/cf/xt2t1kr95tl5hkp3yxfdqbfr0000gn/T/ai-ask-claude.dyaef9x7",
+    "error": null
+  }
+}

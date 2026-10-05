@@ -479,3 +479,86 @@ def test_rule_based_extractor_captures_novadd_plain_hazard_sections_and_tds_uses
     assert extracted.nfpa.flammability == 1
     assert extracted.nfpa.instability == 0
     assert any("HMIS" in warning for warning in extracted.warnings)
+
+
+def test_extracts_compact_nfpa_summary_from_silacure_sds():
+    sds = """
+    SECTION 16 - Other Information
+    HMIS: 3-1-0; Health: *3; Flammability: 1; Physical Hazard: 0
+    NFPA: 3-1-0; Health: 3; Flammability: 1; Instability: 0
+    """
+
+    extracted = RuleBasedExtractor.extract(
+        sds_text=_text(sds),
+        tds_text=None,
+        product_name="CE SilaCure SC",
+        warning=None,
+    )
+
+    assert extracted.nfpa.health == 3
+    assert extracted.nfpa.flammability == 1
+    assert extracted.nfpa.instability == 0
+    assert extracted.nfpa.special is None
+    assert extracted.nfpa.source == "sds"
+
+
+def test_explicit_nfpa_labels_override_ambiguous_triplet_order():
+    sds = """
+    SECTION 16 - Other Information
+    NFPA: 1-3-0; Health: 3; Flammability: 1; Instability: 0
+    """
+
+    extracted = RuleBasedExtractor.extract(
+        sds_text=_text(sds),
+        tds_text=None,
+        product_name="Vendor Ordered NFPA",
+        warning=None,
+    )
+
+    assert extracted.nfpa.health == 3
+    assert extracted.nfpa.flammability == 1
+    assert extracted.nfpa.instability == 0
+    assert extracted.nfpa.source == "sds"
+
+
+def test_explicit_nfpa_labels_override_triplet_when_wrapped_across_lines():
+    sds = """
+    SECTION 16 - Other Information
+    NFPA: 1-3-0;
+    Health: 3;
+    Flammability: 1;
+    Instability: 0
+    Disclaimer: Ratings transcribed from the supplier SDS.
+    """
+
+    extracted = RuleBasedExtractor.extract(
+        sds_text=_text(sds),
+        tds_text=None,
+        product_name="Wrapped Vendor NFPA",
+        warning=None,
+    )
+
+    assert extracted.nfpa.health == 3
+    assert extracted.nfpa.flammability == 1
+    assert extracted.nfpa.instability == 0
+    assert extracted.nfpa.source == "sds"
+
+
+def test_compact_nfpa_triplet_without_labeled_values_still_parses():
+    sds = """
+    SECTION 16 - Other Information
+    NFPA: 3-1-0
+    Disclaimer: Ratings transcribed from the supplier SDS.
+    """
+
+    extracted = RuleBasedExtractor.extract(
+        sds_text=_text(sds),
+        tds_text=None,
+        product_name="Compact Vendor NFPA",
+        warning=None,
+    )
+
+    assert extracted.nfpa.health == 3
+    assert extracted.nfpa.flammability == 1
+    assert extracted.nfpa.instability == 0
+    assert extracted.nfpa.source == "sds"

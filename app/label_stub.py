@@ -233,6 +233,14 @@ class LabelGenerator:
       {% if marine_pollutant_display %}<text x="330" y="{{ compact_hazard_class_y }}" font-size="9.2" fill="{{ text_color }}"><tspan font-weight="bold">Marine Pollutant:</tspan> {{ marine_pollutant_display }}</text>{% endif %}
       {% if limited_quantity_display %}<text x="330" y="{{ compact_packing_group_y }}" font-size="9.2" fill="{{ text_color }}"><tspan font-weight="bold">Limited Quantity:</tspan> {{ limited_quantity_display }}</text>{% endif %}
     </g>
+    {% if dot_labels %}
+    {% for dot_label in dot_labels[:1] %}
+    <image id="dot-label-{{ dot_label.hazard_class }}" x="{{ width - 103 }}" y="{{ y_offset + 33 }}"
+           width="84" height="84"
+           href="{{ dot_label.data_uri }}" xlink:href="{{ dot_label.data_uri }}"
+           preserveAspectRatio="xMidYMid meet"/>
+    {% endfor %}
+    {% endif %}
     {% else %}
     <rect x="10" y="{{ y_offset }}" width="{{ width - 20 }}" height="{{ dot_panel_height }}"
           fill="#FFF" stroke="{{ brand_purple }}" stroke-width="4" rx="5"/>
@@ -339,6 +347,32 @@ class LabelGenerator:
       {{ supplier_phone }}
     </text>
 
+    {% if show_nfpa %}
+    <g id="nfpa-704" data-nfpa-source="{{ nfpa_source }}"
+       transform="translate({{ nfpa_panel_x }}, {{ height - 90 }})">
+      <rect x="0" y="0" width="{{ nfpa_panel_width }}" height="78" fill="#FFFFFF"
+            stroke="#D8D3E6" stroke-width="1" rx="3"/>
+      <text x="{{ nfpa_panel_width / 2 }}" y="11" font-size="8.5" font-weight="bold"
+            fill="{{ text_color }}" text-anchor="middle">NFPA 704</text>
+      <polygon data-quadrant="flammability" points="44,16 59,31 44,46 29,31"
+               fill="#ED1C24" stroke="#111111" stroke-width="1.8"/>
+      <polygon data-quadrant="instability" points="59,31 74,46 59,61 44,46"
+               fill="#FFF200" stroke="#111111" stroke-width="1.8"/>
+      <polygon data-quadrant="special" points="44,46 59,61 44,76 29,61"
+               fill="#FFFFFF" stroke="#111111" stroke-width="1.8"/>
+      <polygon data-quadrant="health" points="29,31 44,46 29,61 14,46"
+               fill="#0072BC" stroke="#111111" stroke-width="1.8"/>
+      <text x="44" y="35" font-size="11" font-weight="bold" fill="#FFFFFF"
+            text-anchor="middle" data-rating="flammability">{{ nfpa_flammability }}</text>
+      <text x="59" y="50" font-size="11" font-weight="bold" fill="#111111"
+            text-anchor="middle" data-rating="instability">{{ nfpa_instability }}</text>
+      <text x="29" y="50" font-size="11" font-weight="bold" fill="#FFFFFF"
+            text-anchor="middle" data-rating="health">{{ nfpa_health }}</text>
+      <text x="44" y="65" font-size="8.5" font-weight="bold" fill="#111111"
+            text-anchor="middle" data-rating="special">{{ nfpa_special }}</text>
+    </g>
+    {% endif %}
+
     {% if show_clearedge_mark %}
     <g id="clearedge-process-mark" transform="translate({{ process_mark_x }}, {{ height - process_mark_bottom_offset }})">
       <rect x="0" y="0" width="{{ process_mark_width }}" height="{{ process_mark_height }}" fill="#FFFFFF" stroke="{{ brand_purple }}" stroke-width="1.2" rx="4"/>
@@ -356,7 +390,7 @@ class LabelGenerator:
 
     <!-- Emergency Contact (prominent) -->
     {% if emergency_phone %}
-    <rect x="20" y="{{ height - 40 }}" width="{{ emergency_box_width }}" height="26"
+    <rect id="emergency-contact-box" x="20" y="{{ height - 40 }}" width="{{ emergency_box_width }}" height="26"
           fill="{{ brand_purple }}" rx="4"/>
     <text x="30" y="{{ height - 23 }}" font-size="10" font-weight="bold" fill="white">
       24-HR EMERGENCY: {{ emergency_phone }}
@@ -1313,6 +1347,18 @@ class LabelGenerator:
         process_mark_logo_width = process_mark_width - 20
         process_mark_logo_height = process_mark_height - 12
         process_mark_bottom_offset = process_mark_height + 13
+        show_nfpa = data.nfpa.source in {"sds", "hmis", "operator"}
+        nfpa_panel_width = 88
+        process_mark_x = width - process_mark_width - 20
+        nfpa_panel_x = (
+            process_mark_x - nfpa_panel_width - 12
+            if resolved_branding.get("show_clearedge_mark", False)
+            else width - nfpa_panel_width - 20
+        )
+        reserved_footer_width = nfpa_panel_width + 12 if show_nfpa else 0
+        if resolved_branding.get("show_clearedge_mark", False):
+            reserved_footer_width += process_mark_width + 12
+        emergency_box_width = min(370, max(220, width - 40 - reserved_footer_width))
         product_area_x = 20 + logo_width + 24
         product_area_width = width - product_area_x - 22
         shipment_spacing = self._shipment_header_spacing(width, product_area_x)
@@ -1437,7 +1483,7 @@ class LabelGenerator:
             "clearedge_mark_logo_data_uri": self.logo_data_uri,
             "show_clearedge_mark": resolved_branding.get("show_clearedge_mark", False),
             "process_mark_width": process_mark_width,
-            "process_mark_x": width - process_mark_width - 20,
+            "process_mark_x": process_mark_x,
             "process_mark_height": process_mark_height,
             "process_mark_bottom_offset": process_mark_bottom_offset,
             "process_mark_logo_width": process_mark_logo_width,
@@ -1531,8 +1577,11 @@ class LabelGenerator:
                 self.CLEAREDGE_SUPPLIER_PHONE if resolved_branding["is_clearedge"] else "",
             ),
             "emergency_phone": self._fit_text(data.product.emergency_phone, 45, "") if data.product.emergency_phone else None,
-            "emergency_box_width": min(width - 40, 370),
+            "emergency_box_width": emergency_box_width,
             "revision_date": data.product.revision_date,
+            "show_nfpa": show_nfpa,
+            "nfpa_panel_width": nfpa_panel_width,
+            "nfpa_panel_x": nfpa_panel_x,
             "nfpa_health": data.nfpa.health,
             "nfpa_flammability": data.nfpa.flammability,
             "nfpa_instability": data.nfpa.instability,

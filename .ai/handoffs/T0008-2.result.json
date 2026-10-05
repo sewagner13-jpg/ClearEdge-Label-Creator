@@ -1,0 +1,23 @@
+{
+  "kind": "review",
+  "summary": "Specialist returned a fenced JSON result that the bridge rejected; no verdict was accepted.",
+  "acceptable": null,
+  "findings": [],
+  "evidence_used": [],
+  "could_not_verify": [
+    "Bridge schema validation failed because the specialist wrapped the JSON in prose and a code fence."
+  ],
+  "recommendation": "Retry with raw JSON only after addressing the wrapped-line parser observation contained in the rejected response.",
+  "meta": {
+    "vendor": "claude",
+    "model": "sonnet",
+    "tier": "engineering",
+    "exit_code": 0,
+    "duration_s": 184.1,
+    "cost_usd": 0.4770854,
+    "turns": 22,
+    "depth": 1,
+    "raw_ref": "/var/folders/cf/xt2t1kr95tl5hkp3yxfdqbfr0000gn/T/ai-ask-claude.gh0h_2to",
+    "error": "invalid result schema: result: missing required fields"
+  }
+}

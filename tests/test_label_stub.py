@@ -687,7 +687,7 @@ def test_nfpa_704_diamond_is_not_rendered_on_product_labels():
     assert "SDS not listed; default 0" not in svg
 
 
-def test_nfpa_source_values_remain_metadata_only_and_are_not_rendered():
+def test_source_backed_nfpa_values_render_in_standard_orientation():
     generator = LabelGenerator()
     data = ExtractedData(
         product=ProductInfo(name="ClearEdge NFPA Rated Test"),
@@ -704,9 +704,135 @@ def test_nfpa_source_values_remain_metadata_only_and_are_not_rendered():
 
     svg = generator.generate_svg(data, mode="workplace", size="pail")
 
-    assert 'id="nfpa-704"' not in svg
-    assert "NFPA 704" not in svg
-    assert "0=min 4=severe" not in svg
+    assert 'id="nfpa-704"' in svg
+    assert "NFPA 704" in svg
+    assert 'data-nfpa-source="sds"' in svg
+    assert 'data-quadrant="health"' in svg
+    assert 'data-quadrant="flammability"' in svg
+    assert 'data-quadrant="instability"' in svg
+    assert 'data-quadrant="special"' in svg
+    assert 'data-rating="health">2</text>' in svg
+    assert 'data-rating="flammability">3</text>' in svg
+    assert 'data-rating="instability">1</text>' in svg
+    assert 'data-rating="special">OX</text>' in svg
+    assert "#0072BC" in svg
+    assert "#ED1C24" in svg
+    assert "#FFF200" in svg
+
+
+def test_silacure_nfpa_panel_preserves_required_us_label_content():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(
+            name="CE SilaCure SC",
+            emergency_phone="704-799-5769",
+            revision_date="2026-09-02",
+        ),
+        shipment=ShipmentInfo(fill_amount="441 lb", container_type="drum"),
+        ghs=GHSClassification(
+            signal_word="Danger",
+            pictograms=["GHS05", "GHS07"],
+            hazard_statements=[
+                HazardStatement(code="H314", text="Causes severe skin burns and eye damage"),
+                HazardStatement(code="H317", text="May cause an allergic skin reaction"),
+            ],
+            precautionary_statements=[
+                PrecautionaryStatement(code="P260", text="Do not breathe vapors"),
+                PrecautionaryStatement(code="P280", text="Wear protective gloves and eye protection"),
+            ],
+        ),
+        transport=TransportClassification(
+            un_number="UN2735",
+            proper_shipping_name="AMINES, LIQUID, CORROSIVE, N.O.S. (Amidoamine)",
+            hazard_class="8",
+            packing_group="III",
+            marine_pollutant=False,
+        ),
+        nfpa=NFPA704Ratings(
+            health=3,
+            flammability=1,
+            instability=0,
+            special=None,
+            source="sds",
+        ),
+    )
+
+    svg = generator.generate_svg(
+        data,
+        mode="shipped_dot",
+        size="drum",
+        orientation="horizontal",
+    )
+
+    assert 'id="nfpa-704"' in svg
+    assert 'data-rating="health">3</text>' in svg
+    assert 'data-rating="flammability">1</text>' in svg
+    assert 'data-rating="instability">0</text>' in svg
+    assert 'data-rating="special"></text>' in svg
+    assert 'id="dot-label-8"' in svg
+    assert "UN2735" in svg
+    assert "AMINES, LIQUID, CORROSIVE, N.O.S. (Amidoamine)" in svg
+    assert 'id="pictogram-GHS05"' in svg
+    assert 'id="pictogram-GHS07"' in svg
+    assert "Danger" in svg
+    assert "H314" in svg and "H317" in svg
+    assert "P260" in svg and "P280" in svg
+
+
+def test_nfpa_footer_reserves_space_for_emergency_contact_and_clearedge_mark():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(
+            name="Customer NFPA Product",
+            supplier_name="Customer Chemical Co.",
+            supplier_address="200 Customer Lane, Charlotte, NC",
+            supplier_phone="704-555-0199",
+            emergency_phone="800-555-0111",
+        ),
+        ghs=GHSClassification(),
+        transport=TransportClassification(),
+        nfpa=NFPA704Ratings(
+            health=3,
+            flammability=1,
+            instability=0,
+            source="sds",
+        ),
+    )
+    branding = {
+        "mode": "custom",
+        "logo_data_uri": "data:image/png;base64,Y3VzdG9tLWxvZ28=",
+        "show_clearedge_mark": True,
+    }
+
+    for size in ("pail", "drum", "tote"):
+        for orientation in ("vertical", "horizontal"):
+            svg = generator.generate_svg(
+                data,
+                mode="workplace",
+                size=size,
+                orientation=orientation,
+                branding=branding,
+            )
+            emergency = re.search(
+                r'id="emergency-contact-box" x="(?P<x>[\d.]+)"[^>]*'
+                r'width="(?P<width>[\d.]+)"',
+                svg,
+            )
+            nfpa = re.search(
+                r'id="nfpa-704"[^>]*transform="translate\((?P<x>[\d.]+),',
+                svg,
+            )
+            process_mark = re.search(
+                r'id="clearedge-process-mark"[^>]*transform="translate\((?P<x>[\d.]+),',
+                svg,
+            )
+
+            assert emergency and nfpa and process_mark
+            emergency_right = float(emergency.group("x")) + float(emergency.group("width"))
+            nfpa_x = float(nfpa.group("x"))
+            process_mark_x = float(process_mark.group("x"))
+            assert emergency_right + 12 <= nfpa_x
+            assert nfpa_x + 88 + 12 <= process_mark_x
 
 
 def test_silapox_horizontal_label_renders_all_source_h_and_p_statements_without_nfpa():

@@ -1,0 +1,34 @@
+{
+  "task_id": "T0008",
+  "repo": "/Users/seanwagner/Documents/Playground/ClearEdge-Label-Creator",
+  "kind": "review",
+  "tier": "engineering",
+  "objective": "Review the scoped addition of a compact source-backed NFPA 704 panel to the CE SilaCure SC label without disrupting existing DOT, GHS, hazard, precautionary, supplier, or emergency content.",
+  "current_state": "Uncommitted task-branch diff on codex/T0008-silacure-nfpa-panel. The renderer now shows NFPA only for sds, hmis, or operator sources; the deterministic parser recognizes the supplied SDS compact NFPA 3-1-0 summary. A 12 x 9 inch preview was browser-inspected with no footer overlap. No production deployment was performed.",
+  "relevant_surface": [
+    "app/label_stub.py NFPA footer SVG and generate_svg footer geometry",
+    "app/rule_based_extractor.py _extract_nfpa_fields",
+    "tests/test_label_stub.py source-backed NFPA and SilaCure preservation tests",
+    "tests/test_rule_based_extractor.py compact SilaCure NFPA summary regression",
+    ".ai/tasks/T0008.md",
+    "git diff -- app/label_stub.py app/rule_based_extractor.py tests/test_label_stub.py tests/test_rule_based_extractor.py"
+  ],
+  "changes": "Review the current uncommitted diff relative to HEAD 4dd5a04368d6d2982757bd58bef0b36a5046d3e6. The approved Class 8 image was also restored in the existing compact DOT branch because the SilaCure regression exposed that required mark as missing in dense layouts.",
+  "evidence": [
+    "Supplied SDS PDF page 6 text contains NFPA: 3-1-0; Health: 3; Flammability: 1; Instability: 0.",
+    "RuleBasedExtractor on the supplied PDF returns health=3, flammability=1, instability=0, source=sds with page-6 evidence.",
+    "Focused parser/pipeline/renderer suite: 69 passed.",
+    "Repository release verify-only gate: 223 passed, browser E2E passed, 86 percent coverage, static checks passed, local Railway-parity startup passed.",
+    "Generated PDF mediabox is 864 x 648 points, exactly 12 x 9 inches.",
+    "Browser DOM geometry found zero intersections between the NFPA group and footer peers; PNG visual inspection found no NFPA-related clipping or crowding."
+  ],
+  "assignment": "Read the exact diff and identify any material correctness, source-provenance, cross-product hard-coding, SVG/PDF geometry, required-content preservation, or regression-test gap. Verify that standard NFPA orientation/colors are correct, the white quadrant remains blank, unsourced default 0-0-0 stays hidden, and SilaCure values are not globally hard-coded. Do not edit files or rerun broad tests.",
+  "constraints": [
+    "NFPA is supplemental and must not replace or crowd DOT/GHS content.",
+    "Do not change classifications, wording, or other label content.",
+    "Do not hard-code SilaCure ratings for other products.",
+    "No production deployment.",
+    "Review only; report concrete defects with file and line evidence."
+  ],
+  "return_contract": "Return only one raw JSON object conforming exactly to result.schema.json. Set acceptable=true only if there are no critical, high, or medium defects. Include all material findings in one batch and name any visual or regulatory matter you could not independently verify."
+}
