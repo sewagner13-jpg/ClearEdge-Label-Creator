@@ -3,10 +3,9 @@ import base64
 from io import BytesIO
 import re
 
-import pytest
 from pypdf import PdfReader
 
-from app.label_stub import LabelContentDoesNotFitError, LabelGenerator
+from app.label_stub import LabelGenerator
 from app.schema import (
     ExtractedData,
     GHSClassification,
@@ -1024,21 +1023,26 @@ def test_compact_safety_layout_rejects_a_height_fit_with_overlapping_columns():
     data = ExtractedData(
         product=ProductInfo(name="Narrow Column Product"),
         ghs=GHSClassification(
-            hazard_statements=[HazardStatement(code=f"H{i:03d}", text="A") for i in range(4)],
+            hazard_statements=[HazardStatement(code="H314", text="ABCDEFGH")],
             precautionary_statements=[
-                PrecautionaryStatement(code=f"P{i:03d}", text="B") for i in range(30)
+                PrecautionaryStatement(code="P301+P310+P330", text="ABCDEFGH")
+                for _ in range(4)
             ],
         ),
         transport=TransportClassification(),
     )
 
-    with pytest.raises(LabelContentDoesNotFitError):
-        generator._build_compact_safety_layout(
-            data,
-            width=612,
-            available_height=75,
-            dense=True,
-        )
+    layout = generator._build_compact_safety_layout(
+        data,
+        width=320,
+        available_height=50,
+        dense=True,
+    )
+
+    # At 6.4 pt the block fits vertically but the combination code crosses
+    # the column boundary. The horizontal guard must select the safe 6.0 pt candidate.
+    assert layout["font_size"] == 6.0
+    assert layout["block_height"] <= 50
 
 
 def test_long_dense_safety_text_stays_above_transport_and_footer():
