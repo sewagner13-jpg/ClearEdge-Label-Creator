@@ -6,6 +6,7 @@ Generates DOT/OSHA-compliant labels from extracted data.
 import io
 import logging
 import base64
+from functools import lru_cache
 from html import escape as html_escape
 from pathlib import Path
 from typing import Optional
@@ -13,6 +14,7 @@ import svgwrite
 from jinja2 import Environment
 import qrcode
 import cairosvg
+from PIL import Image
 
 from .config import settings
 from .schema import ExtractedData
@@ -358,10 +360,6 @@ class LabelGenerator:
     {% if show_nfpa %}
     <g id="nfpa-704" data-nfpa-source="{{ nfpa_source }}" data-nfpa-diamond-size-mm="25.4" data-nfpa-role="supplemental"
        transform="translate({{ nfpa_panel_x }}, {{ height - 96 }})">
-      <rect x="0" y="0" width="{{ nfpa_panel_width }}" height="88" fill="#FFFFFF"
-            stroke="#D8D3E6" stroke-width="1" rx="3"/>
-      <text x="{{ nfpa_panel_width / 2 }}" y="11" font-size="6.2" font-weight="bold"
-            fill="{{ text_color }}" text-anchor="middle">NFPA 704 - SUPPLEMENTAL</text>
       <polygon data-quadrant="flammability" points="52,14 70,32 52,50 34,32"
                fill="#ED1C24" stroke="#111111" stroke-width="1.8"/>
       <polygon data-quadrant="instability" points="70,32 88,50 70,68 52,50"
@@ -517,6 +515,50 @@ class LabelGenerator:
         encoded = base64.b64encode(png_bytes).decode("ascii")
         return f"data:image/png;base64,{encoded}"
 
+    @staticmethod
+    @lru_cache(maxsize=16)
+    def _edge_transparent_png_data_uri(path: Path) -> Optional[str]:
+        """Clear only the outer white crop while preserving the enclosed GHS white field."""
+        if not path.exists():
+            logger.warning("GHS pictogram asset not found: %s", path)
+            return None
+
+        with Image.open(path) as source:
+            image = source.convert("RGBA")
+        width, height = image.size
+        pixels = image.load()
+        visited = bytearray(width * height)
+        stack = [
+            *((x, 0) for x in range(width)),
+            *((x, height - 1) for x in range(width)),
+            *((0, y) for y in range(1, height - 1)),
+            *((width - 1, y) for y in range(1, height - 1)),
+        ]
+
+        while stack:
+            x, y = stack.pop()
+            index = (y * width) + x
+            if visited[index]:
+                continue
+            visited[index] = 1
+            red, green, blue, alpha = pixels[x, y]
+            if alpha == 0 or min(red, green, blue) < 240:
+                continue
+            pixels[x, y] = (red, green, blue, 0)
+            if x > 0:
+                stack.append((x - 1, y))
+            if x + 1 < width:
+                stack.append((x + 1, y))
+            if y > 0:
+                stack.append((x, y - 1))
+            if y + 1 < height:
+                stack.append((x, y + 1))
+
+        output = io.BytesIO()
+        image.save(output, format="PNG", optimize=True)
+        encoded = base64.b64encode(output.getvalue()).decode("ascii")
+        return f"data:image/png;base64,{encoded}"
+
     @classmethod
     def _load_dot_label_assets(cls) -> dict:
         """Load DOT hazard label SVGs based on 49 CFR Part 172 examples."""
@@ -559,7 +601,7 @@ class LabelGenerator:
         }
         loaded = {}
         for code, (name, path) in pictogram_files.items():
-            data_uri = cls._asset_data_uri(path, "image/png")
+            data_uri = cls._edge_transparent_png_data_uri(path)
             if data_uri:
                 loaded[code] = {
                     "code": code,

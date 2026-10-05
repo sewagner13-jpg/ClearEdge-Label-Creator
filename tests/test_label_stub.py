@@ -3,6 +3,7 @@ import base64
 from io import BytesIO
 import re
 
+from PIL import Image
 from pypdf import PdfReader
 
 from app.label_stub import LabelGenerator
@@ -730,6 +731,12 @@ def test_all_ghs_assets_are_derived_from_approved_table_file():
     for asset in generator.ghs_pictogram_assets.values():
         assert asset["data_uri"].startswith("data:image/png;base64,")
         assert asset["source"] == "GHS Pictogram Table.png"
+        image_bytes = base64.b64decode(asset["data_uri"].split(",", 1)[1])
+        with Image.open(BytesIO(image_bytes)) as image:
+            rgba = image.convert("RGBA")
+            assert rgba.getpixel((0, 0))[3] == 0
+            assert rgba.getpixel((rgba.width - 1, rgba.height - 1))[3] == 0
+            assert rgba.getpixel((rgba.width // 2, rgba.height // 2))[3] == 255
 
 
 def test_nfpa_704_diamond_is_not_rendered_on_product_labels():
@@ -766,7 +773,6 @@ def test_source_backed_nfpa_values_render_in_standard_orientation():
     svg = generator.generate_svg(data, mode="workplace", size="pail")
 
     assert 'id="nfpa-704"' in svg
-    assert "NFPA 704" in svg
     assert 'data-nfpa-source="sds"' in svg
     assert 'data-quadrant="health"' in svg
     assert 'data-quadrant="flammability"' in svg
@@ -779,7 +785,11 @@ def test_source_backed_nfpa_values_render_in_standard_orientation():
     assert "#0072BC" in svg
     assert "#ED1C24" in svg
     assert "#FFF200" in svg
-    assert "NFPA 704 - SUPPLEMENTAL" in svg
+    nfpa_group = re.search(r'<g id="nfpa-704"[\s\S]*?>(?P<body>[\s\S]*?)</g>', svg)
+    assert nfpa_group
+    assert "NFPA 704" not in nfpa_group.group("body")
+    assert "SUPPLEMENTAL" not in nfpa_group.group("body")
+    assert "<rect" not in nfpa_group.group("body")
 
 
 def test_silacure_nfpa_panel_preserves_required_us_label_content():
