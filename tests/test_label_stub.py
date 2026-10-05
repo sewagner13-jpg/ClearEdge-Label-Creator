@@ -18,6 +18,27 @@ from app.schema import (
 )
 
 
+def assert_safety_transport_footer_clearance(svg: str) -> None:
+    safety_block = re.search(
+        r'<g id="safety-statements"[^>]*>[\s\S]*?'
+        r'<rect x="10" y="(?P<y>[\d.]+)" width="[\d.]+" height="(?P<height>[\d.]+)"',
+        svg,
+    )
+    transport_block = re.search(
+        r'<g id="transport-info">[\s\S]*?'
+        r'<rect x="10" y="(?P<y>[\d.]+)" width="[\d.]+" height="(?P<height>[\d.]+)"',
+        svg,
+    )
+    footer_line = re.search(r'<g id="footer">[\s\S]*?<line x1="10" y1="(?P<y>[\d.]+)"', svg)
+
+    assert safety_block and transport_block and footer_line
+    safety_bottom = float(safety_block.group("y")) + float(safety_block.group("height"))
+    transport_top = float(transport_block.group("y"))
+    transport_bottom = transport_top + float(transport_block.group("height"))
+    assert safety_bottom < transport_top
+    assert transport_bottom <= float(footer_line.group("y")) - 8
+
+
 def test_template_registry_has_phase2_templates():
     generator = LabelGenerator()
     assert "clearedge_pail_v1" in generator.templates
@@ -836,9 +857,117 @@ def test_dense_us_shipped_label_keeps_safety_and_transport_marks_print_legible()
     assert re.search(r'id="pictogram-GHS07"[^>]*width="64" height="64"', svg)
     assert re.search(r'id="un-identification-number"[^>]*font-size="48"', svg)
     assert re.search(r'id="dot-label-8"[^>]*width="96" height="96"', svg)
-    assert 'data-overall-size-mm="25.4"' in svg
+    assert 'data-nfpa-diamond-size-mm="25.4"' in svg
+    assert 'data-nfpa-role="supplemental"' in svg
     for statement in [*hazard_statements, *precautionary_statements]:
         assert statement.code in svg
+    assert_safety_transport_footer_clearance(svg)
+
+
+def test_standard_label_renders_every_approved_required_pictogram():
+    generator = LabelGenerator()
+    pictograms = ["GHS02", "GHS05", "GHS06", "GHS07", "GHS08"]
+    data = ExtractedData(
+        product=ProductInfo(name="Five Mark Product"),
+        shipment=ShipmentInfo(fill_amount="441 lb", container_type="drum"),
+        ghs=GHSClassification(signal_word="Danger", pictograms=pictograms),
+        transport=TransportClassification(not_regulated=True),
+    )
+
+    svg = generator.generate_svg(
+        data,
+        mode="shipped_dot",
+        size="drum",
+        orientation="horizontal",
+    )
+
+    for code in pictograms:
+        assert svg.count(f'id="pictogram-{code}"') == 1
+
+
+def test_long_dense_safety_text_stays_above_transport_and_footer():
+    generator = LabelGenerator()
+    hazards = [
+        HazardStatement(
+            code=f"H31{index}",
+            text="Causes serious adverse health effects after exposure and requires immediate attention",
+        )
+        for index in range(4)
+    ]
+    precautions = [
+        PrecautionaryStatement(
+            code=f"P2{index:02d}",
+            text=(
+                "Obtain and follow all source safety instructions, wear suitable protective equipment, "
+                "and obtain medical attention when exposure symptoms occur"
+            ),
+        )
+        for index in range(18)
+    ]
+    data = ExtractedData(
+        product=ProductInfo(name="Dense Source-Backed Product", product_uses=["Industrial coating additive"]),
+        shipment=ShipmentInfo(fill_amount="441 lb", container_type="drum"),
+        ghs=GHSClassification(
+            signal_word="Danger",
+            pictograms=["GHS05", "GHS07", "GHS08"],
+            hazard_statements=hazards,
+            precautionary_statements=precautions,
+        ),
+        transport=TransportClassification(
+            un_number="UN2735",
+            proper_shipping_name="AMINES, LIQUID, CORROSIVE, N.O.S. (Amidoamine)",
+            hazard_class="8",
+            packing_group="III",
+        ),
+    )
+
+    svg = generator.generate_svg(
+        data,
+        mode="shipped_dot",
+        size="drum",
+        orientation="horizontal",
+    )
+
+    for statement in [*hazards, *precautions]:
+        assert statement.code in svg
+        assert statement.text in svg
+    assert_safety_transport_footer_clearance(svg)
+
+
+def test_transport_identification_number_is_not_ellipsized_and_uses_fitted_font_size():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="Invalid Multi-ID Product"),
+        shipment=ShipmentInfo(fill_amount="441 lb", container_type="drum"),
+        ghs=GHSClassification(
+            signal_word="Warning",
+            pictograms=["GHS07"],
+            hazard_statements=[HazardStatement(code="H315", text="Causes skin irritation")],
+        ),
+        transport=TransportClassification(
+            un_number="UN1234/UN5678",
+            proper_shipping_name="TEST MATERIAL",
+            hazard_class="8",
+            packing_group="III",
+        ),
+    )
+
+    svg = generator.generate_svg(
+        data,
+        mode="shipped_dot",
+        size="drum",
+        orientation="horizontal",
+    )
+    match = re.search(
+        r'id="un-identification-number"[^>]*font-size="(?P<size>[\d.]+)"[^>]*>'
+        r'(?P<value>[^<]+)</text>',
+        svg,
+    )
+
+    assert match
+    assert match.group("value") == "UN1234/UN5678"
+    assert "..." not in match.group("value")
+    assert float(match.group("size")) < 48
 
 
 def test_nfpa_footer_reserves_space_for_emergency_contact_and_clearedge_mark():
@@ -1167,3 +1296,43 @@ def test_dot_transport_panel_renders_optional_dot_marking_fields():
 
     assert "Marine Pollutant:" in svg
     assert "Limited Quantity:" in svg
+
+
+def test_compact_dot_flags_respect_the_space_before_the_reference_diamond():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="Compact Flag Layout"),
+        shipment=ShipmentInfo(fill_amount="50 lb", container_type="pail"),
+        ghs=GHSClassification(
+            signal_word="Warning",
+            pictograms=["GHS07"],
+            hazard_statements=[HazardStatement(code="H315", text="Causes skin irritation")],
+        ),
+        transport=TransportClassification(
+            un_number="UN1993",
+            proper_shipping_name="FLAMMABLE LIQUIDS, N.O.S. (xylene)",
+            hazard_class="3",
+            packing_group="II",
+            marine_pollutant=True,
+            limited_quantity="5 L inner packaging",
+        ),
+    )
+
+    svg = generator.generate_svg(
+        data,
+        mode="shipped_dot",
+        size="pail",
+        orientation="horizontal",
+    )
+
+    flags = re.findall(
+        r'<text class="compact-dot-flag" x="(?P<x>[\d.]+)"[^>]*'
+        r'data-max-width="(?P<max_width>[\d.]+)"[^>]*>(?P<text>[^<]+)</text>',
+        svg,
+    )
+    dot_image = re.search(r'id="dot-label-3" x="(?P<x>[\d.]+)"', svg)
+    assert len(flags) == 2
+    assert dot_image
+    for x, max_width, text in flags:
+        assert float(x) + float(max_width) <= float(dot_image.group("x")) - 8
+        assert text.strip()

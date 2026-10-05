@@ -39,6 +39,28 @@ class TestComplianceValidator:
         error_fields = [e.field for e in result.errors]
         assert "transport.un_number" in error_fields
 
+    @pytest.mark.parametrize("un_number", ["UN1234/UN5678", "UN123", "UN12A4", "UN12345"])
+    def test_shipped_dot_rejects_malformed_or_multiple_identification_numbers(self, validator, un_number):
+        data = ExtractedData(
+            product=ProductInfo(name="Invalid ID Product", emergency_phone="704-799-5769"),
+            shipment=ShipmentInfo(fill_amount="441 lb", container_type="drum"),
+            ghs=GHSClassification(),
+            transport=TransportClassification(
+                un_number=un_number,
+                proper_shipping_name="CORROSIVE LIQUID, N.O.S. (amine)",
+                hazard_class="8",
+                packing_group="III",
+            ),
+        )
+
+        result = validator.validate(data, mode="shipped_dot")
+
+        assert result.passed is False
+        assert any(
+            error.field == "transport.un_number" and "one UN, NA, or ID prefix" in error.message
+            for error in result.errors
+        )
+
     def test_shipped_dot_requires_shipping_name(self, validator, minimal_product_data):
         """Shipped DOT mode requires proper shipping name."""
         result = validator.validate(minimal_product_data, mode="shipped_dot")

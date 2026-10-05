@@ -4,6 +4,7 @@ Validates extracted data against mode-specific rules.
 """
 
 import logging
+import re
 from typing import List
 
 from .schema import (
@@ -128,6 +129,17 @@ class ComplianceValidator:
                 message="UN number is required for shipped products",
                 severity="error"
             ))
+        else:
+            normalized_identification_number = "".join(str(data.transport.un_number).upper().split())
+            if not re.fullmatch(r"(?:(?:UN|NA|ID))?\d{4}", normalized_identification_number):
+                errors.append(ValidationError(
+                    field="transport.un_number",
+                    message=(
+                        "Identification number must contain exactly four digits with at most "
+                        "one UN, NA, or ID prefix"
+                    ),
+                    severity="error",
+                ))
 
         if not data.transport.proper_shipping_name:
             errors.append(ValidationError(

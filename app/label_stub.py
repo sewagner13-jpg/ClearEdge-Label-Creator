@@ -105,8 +105,8 @@ class LabelGenerator:
     {% endif %}
 
     <!-- Pictogram images pulled only from the approved GHS pictogram table asset. -->
-    {% for pictogram in pictogram_icons[:4] %}
-    <g transform="translate({{ 20 + (loop.index0 % 4) * pictogram_spacing }}, {{ y_offset + pictogram_y_offset }})">
+    {% for pictogram in pictogram_icons %}
+    <g transform="translate({{ 20 + (loop.index0 % pictogram_columns) * pictogram_spacing }}, {{ y_offset + pictogram_y_offset + (loop.index0 // pictogram_columns) * pictogram_row_spacing }})">
       <image id="pictogram-{{ pictogram.code }}" x="0" y="0" width="{{ pictogram_size }}" height="{{ pictogram_size }}"
              href="{{ pictogram.data_uri }}" xlink:href="{{ pictogram.data_uri }}"
              preserveAspectRatio="xMidYMid meet"/>
@@ -221,7 +221,7 @@ class LabelGenerator:
     <rect x="20" y="{{ y_offset + 35 }}" width="180" height="{{ dot_panel_height - 45 }}"
           fill="{{ brand_purple_light }}" stroke="{{ brand_purple }}" stroke-width="2" rx="4"/>
     <text x="110" y="{{ y_offset + 54 }}" font-size="11" font-weight="bold" fill="{{ brand_purple }}" text-anchor="middle">UN/NA ID:</text>
-    <text id="un-identification-number" x="110" y="{{ y_offset + 106 }}" font-size="48" font-weight="bold" fill="{{ brand_purple }}" text-anchor="middle">{{ identification_number }}</text>
+    <text id="un-identification-number" x="110" y="{{ y_offset + 106 }}" font-size="{{ identification_number_font_size }}" font-weight="bold" fill="{{ brand_purple }}" text-anchor="middle">{{ identification_number }}</text>
     <g transform="translate(215, {{ y_offset + 35 }})">
       <text x="0" y="11" font-size="9.5" fill="{{ text_color }}"><tspan font-weight="bold">Proper Shipping Name:</tspan></text>
       {% for line in shipping_name_lines %}
@@ -230,9 +230,9 @@ class LabelGenerator:
       <text x="0" y="{{ compact_hazard_class_y }}" font-size="9.2" fill="{{ text_color }}"><tspan font-weight="bold">Hazard Class:</tspan> {{ hazard_class or 'N/A' }}</text>
       {% if packing_group %}<text x="0" y="{{ compact_packing_group_y }}" font-size="9.2" fill="{{ text_color }}"><tspan font-weight="bold">Packing Group:</tspan> {{ packing_group }}</text>{% endif %}
       <text x="0" y="{{ compact_dot_label_y }}" font-size="9.2" fill="{{ text_color }}"><tspan font-weight="bold">DOT Label:</tspan> {{ dot_label_name or 'Review required' }}</text>
-      {% if marine_pollutant_display %}<text x="330" y="{{ compact_hazard_class_y }}" font-size="9.2" fill="{{ text_color }}"><tspan font-weight="bold">Marine Pollutant:</tspan> {{ marine_pollutant_display }}</text>{% endif %}
-      {% if limited_quantity_display %}<text x="330" y="{{ compact_packing_group_y }}" font-size="9.2" fill="{{ text_color }}"><tspan font-weight="bold">Limited Quantity:</tspan> {{ limited_quantity_display }}</text>{% endif %}
     </g>
+    {% if compact_marine_pollutant_text %}<text class="compact-dot-flag" x="{{ compact_flag_x }}" y="{{ y_offset + compact_hazard_class_y }}" font-size="9.2" font-weight="bold" fill="{{ text_color }}" data-max-width="{{ compact_flag_max_width }}">{{ compact_marine_pollutant_text }}</text>{% endif %}
+    {% if compact_limited_quantity_text %}<text class="compact-dot-flag" x="{{ compact_flag_x }}" y="{{ y_offset + compact_packing_group_y }}" font-size="9.2" font-weight="bold" fill="{{ text_color }}" data-max-width="{{ compact_flag_max_width }}">{{ compact_limited_quantity_text }}</text>{% endif %}
     {% if dot_labels %}
     {% for dot_label in dot_labels[:1] %}
     <image id="dot-label-{{ dot_label.hazard_class }}" x="{{ width - 115 }}" y="{{ y_offset + 34 }}"
@@ -348,7 +348,7 @@ class LabelGenerator:
     </text>
 
     {% if show_nfpa %}
-    <g id="nfpa-704" data-nfpa-source="{{ nfpa_source }}" data-overall-size-mm="25.4"
+    <g id="nfpa-704" data-nfpa-source="{{ nfpa_source }}" data-nfpa-diamond-size-mm="25.4" data-nfpa-role="supplemental"
        transform="translate({{ nfpa_panel_x }}, {{ height - 96 }})">
       <rect x="0" y="0" width="{{ nfpa_panel_width }}" height="88" fill="#FFFFFF"
             stroke="#D8D3E6" stroke-width="1" rx="3"/>
@@ -858,12 +858,12 @@ class LabelGenerator:
 
         clean = "".join(str(un_number).upper().split())
         if clean.startswith(("UN", "NA", "ID")):
-            return cls._fit_text(clean, 12, clean)
+            return clean
 
         if clean.isdigit():
-            return cls._fit_text(f"UN{clean}", 12, clean)
+            return f"UN{clean}"
 
-        return cls._fit_text(clean, 12, clean)
+        return clean
 
     @staticmethod
     def _format_true_transport_flag(value: Optional[bool]) -> Optional[str]:
@@ -1026,6 +1026,96 @@ class LabelGenerator:
             start = best_cut
         groups.append(items[start:])
         return groups
+
+    def _build_compact_safety_layout(
+        self,
+        data: ExtractedData,
+        *,
+        width: int,
+        available_height: float,
+        dense: bool,
+    ) -> dict:
+        """Fit every SDS statement into columns without entering the DOT/footer area."""
+        padding = 34 if dense else 40
+        font_candidates = (
+            [(7.2, 7.8), (6.8, 7.4), (6.4, 7.0), (6.0, 6.6)]
+            if dense
+            else [(7.4, 8.5), (7.2, 8.0), (6.8, 7.5), (6.4, 7.0)]
+        )
+        best = None
+        for font_size, line_height in font_candidates:
+            for precaution_column_count in range(1, 7):
+                total_columns = 1 + precaution_column_count
+                column_width = (width - 40) / total_columns
+                continuation_indent = min(22.0, max(14.0, column_width * 0.14))
+                line_width = max(
+                    18,
+                    int((column_width - continuation_indent - 8) / (font_size * 0.56)),
+                )
+                hazards = self._format_all_statements(
+                    data.ghs.hazard_statements,
+                    line_width=line_width,
+                    line_height=line_height,
+                )
+                precaution_groups = self._split_statements_balanced_columns(
+                    data.ghs.precautionary_statements,
+                    line_width=line_width,
+                    columns=precaution_column_count,
+                )
+                formatted_precautions = [
+                    self._format_all_statements(
+                        group,
+                        line_width=line_width,
+                        line_height=line_height,
+                    )
+                    for group in precaution_groups
+                ]
+                groups = [
+                    {"heading": "HAZARD STATEMENTS (H)", "statements": hazards},
+                    *[
+                        {
+                            "heading": (
+                                "PRECAUTIONARY STATEMENTS (P)"
+                                if len(formatted_precautions) == 1
+                                else f"PRECAUTIONARY (P) {index}/{len(formatted_precautions)}"
+                            ),
+                            "statements": group,
+                        }
+                        for index, group in enumerate(formatted_precautions, start=1)
+                    ],
+                ]
+                groups = [group for group in groups if group["statements"]]
+                block_height = padding + max(
+                    (
+                        self._statement_column_height(group["statements"], line_height)
+                        for group in groups
+                    ),
+                    default=0,
+                )
+                candidate = {
+                    "hazard_statements": hazards,
+                    "precautionary_statements": [
+                        statement
+                        for group in formatted_precautions
+                        for statement in group
+                    ],
+                    "groups": groups,
+                    "block_height": block_height,
+                    "font_size": font_size,
+                    "line_height": line_height,
+                    "column_width": column_width,
+                    "continuation_indent": continuation_indent,
+                    "fits": block_height <= available_height,
+                }
+                best = candidate
+                if candidate["fits"]:
+                    return candidate
+
+        if best is None or not best["fits"]:
+            raise ValueError(
+                "Required hazard and precautionary statements do not fit the selected label size"
+            )
+        return best
 
     def _fit_safety_statements_for_page(
         self,
@@ -1450,44 +1540,67 @@ class LabelGenerator:
                 "compact_packing_group_y": 0,
                 "compact_dot_label_y": 0,
             })
+        pictogram_icons = self._format_pictograms(data.ghs.pictograms)
+        pictogram_size = 64 if compact_compliance_layout else 58
+        pictogram_spacing = 72 if compact_compliance_layout else 64
+        pictogram_row_spacing = pictogram_size + 4
+        available_pictogram_width = width - 40
+        pictogram_columns = max(
+            1,
+            min(
+                len(pictogram_icons) or 1,
+                int((available_pictogram_width - pictogram_size) / pictogram_spacing) + 1,
+            ),
+        )
+        pictogram_rows = max(1, (len(pictogram_icons) + pictogram_columns - 1) // pictogram_columns)
+        symbols_band_height = (90 if compact_compliance_layout else 96) + (
+            (pictogram_rows - 1) * pictogram_row_spacing
+        )
+        symbols_advance = symbols_band_height + (6 if compact_compliance_layout else 8)
+
         safety_columns = mode == "shipped_dot"
-        if dense_safety_layout:
-            safety_line_height = 7.8
-            safety_line_width = 36 if very_dense_safety_layout else 60
-            hazard_statements = self._format_all_statements(
-                data.ghs.hazard_statements,
-                line_width=safety_line_width,
-                line_height=safety_line_height,
-            )
-            precaution_groups = self._split_statements_balanced_columns(
-                data.ghs.precautionary_statements,
-                line_width=safety_line_width,
-                columns=4 if very_dense_safety_layout else 2,
-            )
-            formatted_precaution_groups = [
-                self._format_all_statements(
-                    group,
-                    line_width=safety_line_width,
-                    line_height=safety_line_height,
+        safety_font_size = 7.2 if dense_safety_layout else (7.4 if compact_compliance_layout else 7.8)
+        if compact_compliance_layout:
+            symbols_top = 146 if (data.ghs.signal_word and dense_safety_layout) else 150
+            safety_top = symbols_top + symbols_advance
+            product_uses_advance = 0
+            if product_uses:
+                product_uses_advance = (24 if dense_safety_layout else 28) + (
+                    4 if dense_safety_layout else 6
                 )
-                for group in precaution_groups
-            ]
-            precautionary_statements = [
-                statement
-                for group in formatted_precaution_groups
-                for statement in group
-            ]
-            precaution_group_count = len(formatted_precaution_groups)
-            safety_groups = [
-                {"heading": "HAZARD STATEMENTS (H)", "statements": hazard_statements},
-                *[
-                    {
-                        "heading": f"PRECAUTIONARY (P) {index}/{precaution_group_count}",
-                        "statements": group,
-                    }
-                    for index, group in enumerate(formatted_precaution_groups, start=1)
-                ],
-            ]
+            available_safety_height = (
+                height
+                - 110
+                - safety_top
+                - product_uses_advance
+                - transport_layout["dot_panel_height"]
+            )
+            try:
+                compact_safety = self._build_compact_safety_layout(
+                    data,
+                    width=width,
+                    available_height=available_safety_height,
+                    dense=dense_safety_layout,
+                )
+            except ValueError:
+                if not product_uses:
+                    raise
+                product_uses = []
+                available_safety_height += product_uses_advance
+                compact_safety = self._build_compact_safety_layout(
+                    data,
+                    width=width,
+                    available_height=available_safety_height,
+                    dense=dense_safety_layout,
+                )
+            hazard_statements = compact_safety["hazard_statements"]
+            precautionary_statements = compact_safety["precautionary_statements"]
+            safety_groups = compact_safety["groups"]
+            safety_block_height = compact_safety["block_height"]
+            safety_font_size = compact_safety["font_size"]
+            safety_line_height = compact_safety["line_height"]
+            safety_column_width = compact_safety["column_width"]
+            continuation_indent = compact_safety["continuation_indent"]
         else:
             hazard_statements, precautionary_statements = self._fit_safety_statements_for_page(
                 data,
@@ -1502,23 +1615,51 @@ class LabelGenerator:
                 {"heading": "HAZARD STATEMENTS (H)", "statements": hazard_statements},
                 {"heading": "PRECAUTIONARY STATEMENTS (P)", "statements": precautionary_statements},
             ] if safety_columns else []
+            safety_column_width = (width - 40) / max(1, len(safety_groups))
+            continuation_indent = 22.0
+            safety_block_height = 0
 
         visible_safety_groups = [group for group in safety_groups if group["statements"]]
-        safety_column_width = (width - 20) / max(1, len(visible_safety_groups))
+        if not compact_compliance_layout:
+            safety_column_width = (width - 40) / max(1, len(visible_safety_groups))
         for index, group in enumerate(visible_safety_groups):
             group["x"] = 20 + (index * safety_column_width)
-            group["continuation_x"] = group["x"] + 22
+            group["continuation_x"] = group["x"] + continuation_indent
         safety_groups = visible_safety_groups
         safety_block_padding = 34 if dense_safety_layout else 40
-        safety_block_height = safety_block_padding + max(
-            (
-                self._statement_column_height(group["statements"], safety_line_height)
-                for group in safety_groups
-            ),
-            default=0,
-        )
+        if not compact_compliance_layout:
+            safety_block_height = safety_block_padding + max(
+                (
+                    self._statement_column_height(group["statements"], safety_line_height)
+                    for group in safety_groups
+                ),
+                default=0,
+            )
         if not hazard_statements and not precautionary_statements:
             safety_block_height = 0
+
+        identification_number = self._format_identification_number(data.transport.un_number)
+        if compact_compliance_layout and len(identification_number) <= 6:
+            identification_number_font_size = 48
+        else:
+            identification_number_font_size = self._fit_font_size_for_width(
+                [identification_number],
+                max_width=170 if compact_compliance_layout else 135,
+                preferred_size=48 if compact_compliance_layout else 28,
+                minimum_size=18,
+            ) if identification_number else (48 if compact_compliance_layout else 28)
+        compact_flag_x = 545
+        compact_flag_max_width = max(0, (width - 115) - compact_flag_x - 8)
+        compact_marine_pollutant_text = self._fit_text_for_width(
+            f"Marine Pollutant: {marine_pollutant_display}" if marine_pollutant_display else None,
+            max_width=compact_flag_max_width,
+            font_size=9.2,
+        )
+        compact_limited_quantity_text = self._fit_text_for_width(
+            f"Limited Quantity: {limited_quantity_display}" if limited_quantity_display else None,
+            max_width=compact_flag_max_width,
+            font_size=9.2,
+        )
 
         # Prepare template context
         context = {
@@ -1578,22 +1719,24 @@ class LabelGenerator:
             "signal_strip_height": 18 if dense_safety_layout else (22 if compact_compliance_layout else 30),
             "symbols_y_with_signal": 146 if dense_safety_layout else (150 if compact_compliance_layout else 160),
             "symbols_y_without_signal": 124,
-            "symbols_band_height": 90 if compact_compliance_layout else 96,
-            "symbols_advance": 96 if compact_compliance_layout else 104,
+            "symbols_band_height": symbols_band_height,
+            "symbols_advance": symbols_advance,
             "signal_word_y_offset": 18 if dense_safety_layout else (21 if compact_compliance_layout else 30),
             "signal_word_font_size": 16 if dense_safety_layout else (18 if compact_compliance_layout else 21),
             "pictogram_y_offset": 22 if compact_compliance_layout else 36,
-            "pictogram_size": 64 if compact_compliance_layout else 58,
-            "pictogram_spacing": 72 if compact_compliance_layout else 64,
+            "pictogram_size": pictogram_size,
+            "pictogram_spacing": pictogram_spacing,
+            "pictogram_columns": pictogram_columns,
+            "pictogram_row_spacing": pictogram_row_spacing,
             "pictograms": data.ghs.pictograms,
-            "pictogram_icons": self._format_pictograms(data.ghs.pictograms),
+            "pictogram_icons": pictogram_icons,
             "product_uses": product_uses,
             "product_uses_block_height": 24 if dense_safety_layout else (28 if compact_compliance_layout else 40),
             "product_uses_gap": 4 if dense_safety_layout else (6 if compact_compliance_layout else 8),
             "safety_columns": safety_columns,
             "safety_groups": safety_groups,
             "safety_block_height": safety_block_height,
-            "safety_font_size": 7.2 if dense_safety_layout else (7.4 if compact_compliance_layout else 7.8),
+            "safety_font_size": safety_font_size,
             "safety_line_height": safety_line_height,
             "safety_heading_y_offset": 15 if dense_safety_layout else 17,
             "safety_text_y_offset": 28 if dense_safety_layout else 34,
@@ -1603,7 +1746,8 @@ class LabelGenerator:
             "precautionary_statements": precautionary_statements,
             "precautionary_block_height": self._statement_block_height(precautionary_statements),
             "un_number": data.transport.un_number,
-            "identification_number": self._format_identification_number(data.transport.un_number),
+            "identification_number": identification_number,
+            "identification_number_font_size": identification_number_font_size,
             "shipping_name_lines": shipping_name_lines,
             "transport_not_regulated": self._is_not_regulated_for_transport(data.transport),
             "hazard_class": data.transport.hazard_class,
@@ -1612,6 +1756,10 @@ class LabelGenerator:
             "dot_label_name": dot_labels[0]["name"] if dot_labels else None,
             "marine_pollutant_display": marine_pollutant_display,
             "limited_quantity_display": limited_quantity_display,
+            "compact_flag_x": compact_flag_x,
+            "compact_flag_max_width": compact_flag_max_width,
+            "compact_marine_pollutant_text": compact_marine_pollutant_text,
+            "compact_limited_quantity_text": compact_limited_quantity_text,
             "compact_dot_panel": compact_compliance_layout,
             **transport_layout,
             "supplier_name": self._fit_text(
