@@ -239,7 +239,7 @@ class LabelGenerator:
     </g>
     {% if dot_labels %}
     {% for dot_label in dot_labels[:1] %}
-    <text x="{{ width - 20 }}" y="{{ y_offset + 32 }}" font-size="6.5" font-weight="bold"
+    <text x="{{ width - 20 }}" y="{{ y_offset + 34 }}" font-size="6.5" font-weight="bold"
           fill="{{ brand_purple }}" text-anchor="end">REFERENCE ONLY - APPLY SEPARATE DOT LABEL</text>
     <image id="dot-label-{{ dot_label.hazard_class }}" data-dot-role="reference" x="{{ width - 115 }}" y="{{ y_offset + 34 }}"
            width="96" height="96"
@@ -1056,10 +1056,11 @@ class LabelGenerator:
                 total_columns = 1 + precaution_column_count
                 column_width = (width - 40) / total_columns
                 continuation_indent = min(22.0, max(14.0, column_width * 0.14))
-                line_width = max(
-                    18,
-                    int((column_width - continuation_indent - 8) / (font_size * 0.56)),
+                line_width = int(
+                    (column_width - continuation_indent - 8) / (font_size * 0.56)
                 )
+                if line_width < 18:
+                    continue
                 hazards = self._format_all_statements(
                     data.ghs.hazard_statements,
                     line_width=line_width,
@@ -1093,6 +1094,21 @@ class LabelGenerator:
                     ],
                 ]
                 groups = [group for group in groups if group["statements"]]
+                horizontal_fit = all(
+                    (
+                        (len(statement["code"]) + 2 + len(statement["lines"][0]))
+                        * font_size
+                        * 0.56
+                        <= column_width - 8
+                    )
+                    and all(
+                        len(line) * font_size * 0.56
+                        <= column_width - continuation_indent - 8
+                        for line in statement["lines"][1:]
+                    )
+                    for group in groups
+                    for statement in group["statements"]
+                )
                 block_height = padding + max(
                     (
                         self._statement_column_height(group["statements"], line_height)
@@ -1113,7 +1129,7 @@ class LabelGenerator:
                     "line_height": line_height,
                     "column_width": column_width,
                     "continuation_indent": continuation_indent,
-                    "fits": block_height <= available_height,
+                    "fits": block_height <= available_height and horizontal_fit,
                 }
                 best = candidate
                 if candidate["fits"]:
@@ -1392,7 +1408,7 @@ class LabelGenerator:
             sample_pictogram_row_spacing = 42
         elif len(pictograms) <= 6:
             sample_pictogram_size = 34
-            sample_pictogram_spacing = 38
+            sample_pictogram_spacing = 36
             sample_pictogram_start_x = 194
             sample_pictogram_columns = 6
             sample_pictogram_start_y = 116
@@ -1447,7 +1463,7 @@ class LabelGenerator:
   <text x="20" y="97" font-size="10" font-weight="bold" fill="{self.brand_palette["primary"]}">PRODUCT USE:</text>
   <text x="104" y="97" font-size="10" fill="{self.brand_palette["text"]}">{self._svg_text(use_line)}</text>
   {weight_text}
-  <rect x="18" y="108" width="{width - 36}" height="62" fill="#FBFAFE" stroke="#D8D3E6" stroke-width="1.2" rx="3"/>
+  <rect x="18" y="108" width="{width - 36}" height="66" fill="#FBFAFE" stroke="#D8D3E6" stroke-width="1.2" rx="3"/>
   <text x="24" y="126" font-size="9" font-weight="bold" fill="{self.brand_palette["primary"]}">COMPACT GHS</text>
   {signal_text}
   {pictogram_images}
@@ -1611,7 +1627,7 @@ class LabelGenerator:
                 transport_height = 70
             available_safety_height = (
                 height
-                - 110
+                - 117
                 - safety_top
                 - product_uses_advance
                 - transport_height
@@ -1765,7 +1781,9 @@ class LabelGenerator:
             "symbols_advance": symbols_advance,
             "signal_word_y_offset": 18 if dense_safety_layout else (21 if shipped_safety_layout else 30),
             "signal_word_font_size": 16 if dense_safety_layout else (18 if shipped_safety_layout else 21),
-            "pictogram_y_offset": 22 if shipped_safety_layout else 36,
+            "pictogram_y_offset": (
+                24 if dense_safety_layout else (27 if shipped_safety_layout else 36)
+            ),
             "pictogram_size": pictogram_size,
             "pictogram_spacing": pictogram_spacing,
             "pictogram_columns": pictogram_columns,

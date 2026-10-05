@@ -3,9 +3,10 @@ import base64
 from io import BytesIO
 import re
 
+import pytest
 from pypdf import PdfReader
 
-from app.label_stub import LabelGenerator
+from app.label_stub import LabelContentDoesNotFitError, LabelGenerator
 from app.schema import (
     ExtractedData,
     GHSClassification,
@@ -175,6 +176,28 @@ def test_sample_4x6_label_renders_every_approved_required_pictogram():
 
     for code in pictograms:
         assert svg.count(f'id="pictogram-{code}"') == 1
+
+
+def test_sample_4x6_six_pictograms_stay_inside_the_ghs_panel():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="Six Mark Sample"),
+        ghs=GHSClassification(
+            signal_word="Danger",
+            pictograms=["GHS01", "GHS02", "GHS03", "GHS04", "GHS05", "GHS06"],
+        ),
+        transport=TransportClassification(),
+    )
+
+    svg = generator.generate_svg(data, mode="workplace", size="sample_4x6")
+    pictograms = re.findall(
+        r'<image id="pictogram-GHS\d{2}" x="(?P<x>[\d.]+)" y="[\d.]+" '
+        r'width="(?P<width>[\d.]+)"',
+        svg,
+    )
+
+    assert len(pictograms) == 6
+    assert max(float(x) + float(width) for x, width in pictograms) <= 414
 
 
 def test_sample_4x6_product_name_fits_right_header_space():
@@ -944,6 +967,80 @@ def test_dense_vertical_us_shipped_label_keeps_safety_and_transport_marks_print_
     assert_safety_transport_footer_clearance(svg)
 
 
+def test_saturated_vertical_layout_reserves_footer_clearance():
+    class SaturatingLabelGenerator(LabelGenerator):
+        def _build_compact_safety_layout(self, data, *, width, available_height, dense):
+            statement = {
+                "code": "H314",
+                "text": "Causes severe skin burns and eye damage",
+                "lines": ["Causes severe skin burns and eye damage"],
+                "y": 0.0,
+            }
+            return {
+                "hazard_statements": [statement],
+                "precautionary_statements": [],
+                "groups": [{"heading": "HAZARD STATEMENTS (H)", "statements": [statement]}],
+                "block_height": available_height,
+                "font_size": 7.2,
+                "line_height": 7.8,
+                "column_width": width - 40,
+                "continuation_indent": 14.0,
+                "fits": True,
+            }
+
+    generator = SaturatingLabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="Saturated Portrait Product"),
+        shipment=ShipmentInfo(fill_amount="441 lb", container_type="drum"),
+        ghs=GHSClassification(
+            signal_word="Danger",
+            pictograms=["GHS05", "GHS07"],
+            hazard_statements=[HazardStatement(code="H314", text="Causes severe skin burns and eye damage")],
+        ),
+        transport=TransportClassification(
+            un_number="UN2735",
+            proper_shipping_name="AMINES, LIQUID, CORROSIVE, N.O.S. (Amidoamine)",
+            hazard_class="8",
+            packing_group="III",
+        ),
+    )
+
+    svg = generator.generate_svg(data, mode="shipped_dot", size="drum", orientation="vertical")
+
+    assert_safety_transport_footer_clearance(svg)
+    transport_block = re.search(
+        r'<g id="transport-info">[\s\S]*?'
+        r'<rect x="10" y="(?P<y>[\d.]+)" width="[\d.]+" height="(?P<height>[\d.]+)"',
+        svg,
+    )
+    footer_line = re.search(r'<g id="footer">[\s\S]*?<line x1="10" y1="(?P<y>[\d.]+)"', svg)
+    assert transport_block and footer_line
+    transport_bottom = float(transport_block.group("y")) + float(transport_block.group("height"))
+    assert transport_bottom <= float(footer_line.group("y")) - 15
+
+
+def test_compact_safety_layout_rejects_a_height_fit_with_overlapping_columns():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="Narrow Column Product"),
+        ghs=GHSClassification(
+            hazard_statements=[HazardStatement(code=f"H{i:03d}", text="A") for i in range(4)],
+            precautionary_statements=[
+                PrecautionaryStatement(code=f"P{i:03d}", text="B") for i in range(30)
+            ],
+        ),
+        transport=TransportClassification(),
+    )
+
+    with pytest.raises(LabelContentDoesNotFitError):
+        generator._build_compact_safety_layout(
+            data,
+            width=612,
+            available_height=75,
+            dense=True,
+        )
+
+
 def test_long_dense_safety_text_stays_above_transport_and_footer():
     generator = LabelGenerator()
     hazards = [
@@ -1432,3 +1529,48 @@ def test_product_label_dot_art_is_visibly_marked_as_reference_only():
         assert 'data-dot-role="reference"' in svg
         assert "REFERENCE ONLY" in svg
         assert "APPLY SEPARATE DOT LABEL" in svg
+
+        if orientation == "horizontal":
+            band = re.search(
+                r'<rect x="15" y="(?P<y>[\d.]+)" width="[\d.]+" height="23" '
+                r'fill="#110251"',
+                svg,
+            )
+            caption = re.search(
+                r'<text x="[\d.]+" y="(?P<y>[\d.]+)" font-size="6.5"[\s\S]*?'
+                r'REFERENCE ONLY',
+                svg,
+            )
+            assert band and caption
+            band_bottom = float(band.group("y")) + 23
+            assert float(caption.group("y")) >= band_bottom + 6
+
+
+def test_signal_word_has_clearance_before_the_pictogram_row():
+    generator = LabelGenerator()
+    data = ExtractedData(
+        product=ProductInfo(name="Signal Clearance Product"),
+        shipment=ShipmentInfo(fill_amount="441 lb", container_type="drum"),
+        ghs=GHSClassification(
+            signal_word="Danger",
+            pictograms=["GHS05"],
+            hazard_statements=[HazardStatement(code="H314", text="Causes severe skin burns")],
+        ),
+        transport=TransportClassification(
+            un_number="UN2735",
+            proper_shipping_name="AMINES, LIQUID, CORROSIVE, N.O.S.",
+            hazard_class="8",
+            packing_group="III",
+        ),
+    )
+
+    svg = generator.generate_svg(data, mode="shipped_dot", size="drum", orientation="vertical")
+    signal = re.search(r'id="signal-word-heading" x="20" y="(?P<y>[\d.]+)"', svg)
+    pictogram = re.search(
+        r'<g transform="translate\(20(?:\.0)?, (?P<y>[\d.]+)\)">\s*'
+        r'<image id="pictogram-GHS05"',
+        svg,
+    )
+
+    assert signal and pictogram
+    assert float(pictogram.group("y")) >= float(signal.group("y")) + 6
